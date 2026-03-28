@@ -205,7 +205,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               focusedBorder: const OutlineInputBorder(
-                                borderRadius: BorderRadius.all(Radius.circular(14)),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(14),
+                                ),
                                 borderSide: BorderSide(
                                   color: Colors.lightBlueAccent,
                                   width: 1.6,
@@ -251,7 +253,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               focusedBorder: const OutlineInputBorder(
-                                borderRadius: BorderRadius.all(Radius.circular(14)),
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(14),
+                                ),
                                 borderSide: BorderSide(
                                   color: Colors.lightBlueAccent,
                                   width: 1.6,
@@ -269,10 +273,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: authProvider.isLoading
                                 ? const Center(
                                     child: CircularProgressIndicator(
-                                      valueColor:
-                                          AlwaysStoppedAnimation<Color>(
-                                            Colors.lightBlueAccent,
-                                          ),
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.lightBlueAccent,
+                                      ),
                                     ),
                                   )
                                 : ElevatedButton(
