@@ -1,8 +1,6 @@
-import 'dart:math';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -12,374 +10,327 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _BagParticle {
-  _BagParticle({
-    required this.x,
-    required this.speed,
-    required this.phase,
-    required this.size,
-    required this.opacity,
-  });
-
-  final double x; // 0..1 (fraction of screen width)
-  final double speed; // relative fall speed
-  final double phase; // starting offset in animation
-  final double size; // icon size
-  final double opacity; // 0..1
-}
-
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-  final GlobalKey _cardKey = GlobalKey();
-  ui.Rect? _cardRect;
-
-  late final AnimationController _rainController;
-  late final List<_BagParticle> _bags;
-
-  @override
-  void initState() {
-    super.initState();
-    _rainController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 15),
-    )..repeat();
-
-    final random = Random();
-    _bags = List.generate(25, (_) {
-      return _BagParticle(
-        x: random.nextDouble(),
-        speed: 0.5 + random.nextDouble(),
-        phase: random.nextDouble(),
-        size: 18 + random.nextDouble() * 22,
-        opacity: 0.3 + random.nextDouble() * 0.5,
-      );
-    });
-  }
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _rainController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _updateCardRect() {
-    final context = _cardKey.currentContext;
-    if (context == null) return;
-
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return;
-
-    final position = box.localToGlobal(Offset.zero);
-    final newRect = ui.Rect.fromLTWH(
-      position.dx,
-      position.dy,
-      box.size.width,
-      box.size.height,
-    );
-
-    if (_cardRect == newRect) return;
-
-    setState(() {
-      _cardRect = newRect;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _updateCardRect());
-    final authProvider = Provider.of<AuthProvider>(context);
     final theme = Theme.of(context);
+    final authProvider = Provider.of<AuthProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Gradient background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF0F172A), Color(0xFF020617)],
-              ),
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF020617), Color(0xFF020617)],
           ),
-
-          // Shopping bag "rain" layer
-          AnimatedBuilder(
-            animation: _rainController,
-            builder: (context, child) {
-              final size = MediaQuery.of(context).size;
-              return IgnorePointer(
-                ignoring: true,
-                child: Stack(
-                  children: _bags.map((bag) {
-                    final progress =
-                        (_rainController.value * bag.speed + bag.phase) % 1.0;
-                    final top = -60 + progress * (size.height + 120);
-
-                    final bagTop = top;
-                    final bagBottom = top + bag.size;
-                    final bagLeft = bag.x * size.width;
-                    final bagRight = bagLeft + bag.size;
-
-                    bool isOverCard = false;
-                    final cardRect = _cardRect;
-                    if (cardRect != null) {
-                      if (bagRight > cardRect.left &&
-                          bagLeft < cardRect.right &&
-                          bagBottom > cardRect.top &&
-                          bagTop < cardRect.bottom) {
-                        isOverCard = true;
-                      }
-                    }
-
-                    if (isOverCard) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return Positioned(
-                      top: top,
-                      left: bag.x * size.width,
-                      child: Opacity(
-                        opacity: bag.opacity,
-                        child: Icon(
-                          Icons.shopping_bag_rounded,
-                          color: Colors.white,
-                          size: bag.size,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              );
-            },
-          ),
-
-          // Foreground content
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Logo / Title area
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(
-                            Icons.shopping_bag_rounded,
-                            color: Colors.white,
-                            size: 40,
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Big shopping bag over cross accent
+                    SizedBox(
+                      height: 220,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Transform.rotate(
+                            angle: -0.6,
+                            child: Container(
+                              width: 220,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                gradient: LinearGradient(
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                  colors: [
+                                    Colors.lightBlueAccent.withOpacity(0.15),
+                                    Colors.cyanAccent.withOpacity(0.05),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                          SizedBox(width: 12),
-                          Text(
-                            'Smart Billing',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
+                          Transform.rotate(
+                            angle: 0.6,
+                            child: Container(
+                              width: 220,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                gradient: LinearGradient(
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                  colors: [
+                                    Colors.cyanAccent.withOpacity(0.12),
+                                    Colors.lightBlueAccent.withOpacity(0.04),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withOpacity(0.06),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.20),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.45),
+                                  blurRadius: 26,
+                                  offset: const Offset(0, 18),
+                                ),
+                              ],
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.shopping_bag_rounded,
+                                color: Colors.white,
+                                size: 60,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Employee portal for smarter billing',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // Centered welcome text
+                    Text(
+                      'Welcome back',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Be smart with RetailPilot',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.lightBlueAccent,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
 
-                      const SizedBox(height: 32),
+                    const SizedBox(height: 28),
 
-                      // Glassmorphism login card
-                      Container(
-                        key: _cardKey,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.12),
+                    // Login card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.12),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.4),
+                            blurRadius: 24,
+                            offset: const Offset(0, 16),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 24,
-                              offset: const Offset(0, 16),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 24,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Login to your account',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
                             ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 24,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Sign in',
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Use your employee credentials to continue.',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
                             ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Use your employee credentials to continue',
-                              style: TextStyle(
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Work email',
+                              prefixIcon: const Icon(
+                                Icons.email_outlined,
                                 color: Colors.white70,
-                                fontSize: 13,
                               ),
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            TextField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: InputDecoration(
-                                labelText: 'Work email',
-                                prefixIcon: const Icon(
-                                  Icons.email_outlined,
-                                  color: Colors.white70,
-                                ),
-                                labelStyle: const TextStyle(
-                                  color: Colors.white70,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: Colors.white.withOpacity(0.25),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(
-                                    color: Colors.lightBlueAccent,
-                                    width: 1.6,
-                                  ),
-                                ),
-                                filled: true,
-                                fillColor: Colors.white.withOpacity(0.03),
+                              labelStyle: const TextStyle(
+                                color: Colors.white70,
                               ),
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            TextField(
-                              controller: _passwordController,
-                              obscureText: true,
-                              style: const TextStyle(color: Colors.white),
-                              decoration: InputDecoration(
-                                labelText: 'Password',
-                                prefixIcon: const Icon(
-                                  Icons.lock_outline,
-                                  color: Colors.white70,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color: Colors.white.withOpacity(0.25),
                                 ),
-                                labelStyle: const TextStyle(
-                                  color: Colors.white70,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: Colors.white.withOpacity(0.25),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(
-                                    color: Colors.lightBlueAccent,
-                                    width: 1.6,
-                                  ),
-                                ),
-                                filled: true,
-                                fillColor: Colors.white.withOpacity(0.03),
                               ),
+                              focusedBorder: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(Radius.circular(14)),
+                                borderSide: BorderSide(
+                                  color: Colors.lightBlueAccent,
+                                  width: 1.6,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.03),
                             ),
+                          ),
 
-                            const SizedBox(height: 24),
+                          const SizedBox(height: 16),
 
-                            SizedBox(
-                              height: 48,
-                              child: authProvider.isLoading
-                                  ? const Center(
-                                      child: CircularProgressIndicator(
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.lightBlueAccent,
-                                            ),
-                                      ),
-                                    )
-                                  : ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.lightBlueAccent,
-                                        foregroundColor: Colors.black,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            14,
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              prefixIcon: const Icon(
+                                Icons.lock_outline,
+                                color: Colors.white70,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  color: Colors.white70,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                              labelStyle: const TextStyle(
+                                color: Colors.white70,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(
+                                  color: Colors.white.withOpacity(0.25),
+                                ),
+                              ),
+                              focusedBorder: const OutlineInputBorder(
+                                borderRadius: BorderRadius.all(Radius.circular(14)),
+                                borderSide: BorderSide(
+                                  color: Colors.lightBlueAccent,
+                                  width: 1.6,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.03),
+                            ),
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          SizedBox(
+                            height: 48,
+                            child: authProvider.isLoading
+                                ? const Center(
+                                    child: CircularProgressIndicator(
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(
+                                            Colors.lightBlueAccent,
                                           ),
-                                        ),
-                                        elevation: 0,
+                                    ),
+                                  )
+                                : ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.lightBlueAccent,
+                                      foregroundColor: Colors.black,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
                                       ),
-                                      onPressed: () async {
-                                        await authProvider.login(
-                                          _emailController.text,
-                                          _passwordController.text,
-                                        );
-                                      },
-                                      child: const Text(
-                                        'Continue',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
-                                        ),
+                                      elevation: 0,
+                                    ),
+                                    onPressed: () async {
+                                      await authProvider.login(
+                                        _emailController.text,
+                                        _passwordController.text,
+                                      );
+                                    },
+                                    child: const Text(
+                                      'Continue',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 16,
                                       ),
                                     ),
-                            ),
-
-                            if (authProvider.errorMessage != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 16.0),
-                                child: Text(
-                                  authProvider.errorMessage!,
-                                  style: const TextStyle(
-                                    color: Colors.redAccent,
-                                    fontSize: 13,
                                   ),
+                          ),
+
+                          if (authProvider.errorMessage != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16.0),
+                              child: Text(
+                                authProvider.errorMessage!,
+                                style: const TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 13,
                                 ),
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
+                    ),
 
-                      const SizedBox(height: 24),
-
-                      const Text(
-                        'By continuing you agree to the smart billing terms of use.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white38, fontSize: 11),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Powered by Daszye',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                        letterSpacing: 1.2,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

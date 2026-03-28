@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA" />
     <application
         android:label="sw_billing_employee_fe"
         android:name="${applicationName}"
