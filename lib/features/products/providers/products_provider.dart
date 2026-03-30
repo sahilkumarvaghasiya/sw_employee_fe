@@ -9,17 +9,21 @@ import '../models/product.dart';
 class ProductsProvider extends ChangeNotifier {
   ProductsProvider({this.pageSize = 20}) {
     _allProducts = _generateDummyProducts(count: 240);
-    _availableBrands = _allProducts.map((p) => p.companyName).toSet().toList()
-      ..sort();
+
+    _availableSizes = _allProducts
+        .map((p) => p.size.trim().toUpperCase())
+        .toSet()
+        .toList();
+    _availableSizes.sort(_compareSizes);
 
     _priceBounds = _computePriceBounds(_allProducts);
     _selectedPriceRange = RangeValues(_priceBounds.$1, _priceBounds.$2);
   }
 
   final int pageSize;
-
-  late final List<String> _availableBrands;
   late final (double, double) _priceBounds;
+
+  late final List<String> _availableSizes;
 
   late List<Product> _allProducts;
   List<Product> _filteredProducts = const [];
@@ -36,7 +40,7 @@ class ProductsProvider extends ChangeNotifier {
   final Set<ProductGender> _selectedGenders = {};
   late RangeValues _selectedPriceRange;
   DateTimeRange? _selectedDateRange;
-  String? _selectedBrand;
+  String? _selectedSize;
 
   bool get isLoadingInitial => _isLoadingInitial;
   bool get isLoadingMore => _isLoadingMore;
@@ -49,16 +53,31 @@ class ProductsProvider extends ChangeNotifier {
   Set<ProductGender> get selectedGenders => Set.unmodifiable(_selectedGenders);
   RangeValues get selectedPriceRange => _selectedPriceRange;
   DateTimeRange? get selectedDateRange => _selectedDateRange;
-  String? get selectedBrand => _selectedBrand;
-  List<String> get availableBrands => List.unmodifiable(_availableBrands);
   (double, double) get priceBounds => _priceBounds;
+
+  List<String> get availableSizes => List.unmodifiable(_availableSizes);
+  String? get selectedSize => _selectedSize;
 
   bool get hasActiveFilters {
     return _selectedGenders.isNotEmpty ||
-        _selectedBrand != null ||
         _selectedDateRange != null ||
+        _selectedSize != null ||
         _selectedPriceRange.start != _priceBounds.$1 ||
         _selectedPriceRange.end != _priceBounds.$2;
+  }
+
+  void setSelectedSize(String? size) {
+    final normalized = (size == null || size.trim().isEmpty)
+        ? null
+        : size.trim().toUpperCase();
+    if (_selectedSize == normalized) return;
+
+    _selectedSize = normalized;
+
+    _error = null;
+    _applyFiltersAndResetPaging();
+    notifyListeners();
+    unawaited(_loadNextPage());
   }
 
   Future<void> init() async {
@@ -103,14 +122,12 @@ class ProductsProvider extends ChangeNotifier {
     required Set<ProductGender> genders,
     required RangeValues priceRange,
     required DateTimeRange? dateRange,
-    required String? brand,
   }) {
     _selectedGenders
       ..clear()
       ..addAll(genders);
     _selectedPriceRange = priceRange;
     _selectedDateRange = dateRange;
-    _selectedBrand = (brand == null || brand.trim().isEmpty) ? null : brand;
 
     _error = null;
     _applyFiltersAndResetPaging();
@@ -120,9 +137,9 @@ class ProductsProvider extends ChangeNotifier {
 
   void resetFilters() {
     _selectedGenders.clear();
-    _selectedBrand = null;
     _selectedDateRange = null;
     _selectedPriceRange = RangeValues(_priceBounds.$1, _priceBounds.$2);
+    _selectedSize = null;
 
     _error = null;
     _applyFiltersAndResetPaging();
@@ -160,16 +177,12 @@ class ProductsProvider extends ChangeNotifier {
         .where((p) {
           if (q.isNotEmpty) {
             final matchesName = p.name.toLowerCase().contains(q);
-            final matchesBarcode = p.barcode.toLowerCase().contains(q);
-            if (!matchesName && !matchesBarcode) return false;
+            final matchesBrand = p.companyName.toLowerCase().contains(q);
+            if (!matchesName && !matchesBrand) return false;
           }
 
           if (_selectedGenders.isNotEmpty &&
               !_selectedGenders.contains(p.gender)) {
-            return false;
-          }
-
-          if (_selectedBrand != null && p.companyName != _selectedBrand) {
             return false;
           }
 
@@ -193,9 +206,44 @@ class ProductsProvider extends ChangeNotifier {
             }
           }
 
+          if (_selectedSize != null &&
+              !p.size.trim().toUpperCase().contains(_selectedSize!)) {
+            return false;
+          }
+
           return true;
         })
         .toList(growable: false);
+  }
+
+  static int _compareSizes(String a, String b) {
+    const order = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+    final aTrim = a.trim();
+    final bTrim = b.trim();
+
+    final ai = order.indexOf(aTrim.toUpperCase());
+    final bi = order.indexOf(bTrim.toUpperCase());
+
+    final aNum = int.tryParse(aTrim);
+    final bNum = int.tryParse(bTrim);
+
+    // If both are numeric sizes, sort numerically.
+    if (aNum != null && bNum != null) {
+      return aNum.compareTo(bNum);
+    }
+
+    // Keep known clothing sizes (XS..XXXL) before other values.
+    if (ai != -1 || bi != -1) {
+      if (ai == -1) return 1;
+      if (bi == -1) return -1;
+      return ai.compareTo(bi);
+    }
+
+    // Keep numeric sizes before other unknown strings.
+    if (aNum != null && bNum == null) return -1;
+    if (aNum == null && bNum != null) return 1;
+
+    return aTrim.toUpperCase().compareTo(bTrim.toUpperCase());
   }
 
   Future<void> _loadNextPage() async {
@@ -242,7 +290,23 @@ class ProductsProvider extends ChangeNotifier {
       'MintMode',
     ];
 
-    const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+    const sizes = [
+      'XS',
+      'S',
+      'M',
+      'L',
+      'XL',
+      'XXL',
+      '28',
+      '30',
+      '32',
+      '34',
+      '36',
+      '38',
+      '40',
+      '42',
+      '44',
+    ];
 
     const productBases = [
       'Cotton T-Shirt',
@@ -274,7 +338,9 @@ class ProductsProvider extends ChangeNotifier {
           ? ProductGender.men
           : genderRoll < 0.84
           ? ProductGender.women
-          : ProductGender.unisex;
+          : genderRoll < 0.92
+          ? ProductGender.boy
+          : ProductGender.girl;
 
       final price = 99 + random.nextInt(4901) + (random.nextInt(99) / 100.0);
       final qty = random.nextInt(160);

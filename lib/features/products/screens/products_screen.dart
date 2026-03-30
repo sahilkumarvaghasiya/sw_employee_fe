@@ -26,8 +26,8 @@ class ProductsScreen extends StatefulWidget {
 class _ProductsScreenState extends State<ProductsScreen> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
-
-  bool _filtersExpanded = false;
+  final TextEditingController _sizeController = TextEditingController();
+  final FocusNode _sizeFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -49,10 +49,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void dispose() {
     _scrollController.dispose();
     _searchController.dispose();
+    _sizeController.dispose();
+    _sizeFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _openFiltersSheet() async {
+    final productsProvider = context.read<ProductsProvider>();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -66,10 +69,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
               bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
               top: 12,
             ),
-            child: ProductsFilterSection(
-              onCloseRequested: () {
-                Navigator.of(context).pop();
-              },
+            child: ChangeNotifierProvider<ProductsProvider>.value(
+              value: productsProvider,
+              child: ProductsFilterSection(
+                onCloseRequested: () {
+                  Navigator.of(context).pop();
+                },
+              ),
             ),
           ),
         );
@@ -83,6 +89,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final colorScheme = theme.colorScheme;
 
     final provider = context.watch<ProductsProvider>();
+
+    final selectedSizeText = provider.selectedSize ?? '';
+    if (!_sizeFocusNode.hasFocus && _sizeController.text != selectedSizeText) {
+      _sizeController.value = TextEditingValue(
+        text: selectedSizeText,
+        selection: TextSelection.collapsed(offset: selectedSizeText.length),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -103,34 +117,125 @@ class _ProductsScreenState extends State<ProductsScreen> {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               sliver: SliverToBoxAdapter(
-                child: ProductsSearchBar(
-                  controller: _searchController,
-                  onChanged: provider.setSearchQuery,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isNarrow = constraints.maxWidth < 420;
+
+                    final search = ProductsSearchBar(
+                      controller: _searchController,
+                      onChanged: provider.setSearchQuery,
+                    );
+
+                    final sizeInput = TextField(
+                      controller: _sizeController,
+                      focusNode: _sizeFocusNode,
+                      textInputAction: TextInputAction.done,
+                      textCapitalization: TextCapitalization.characters,
+                      onChanged: provider.setSelectedSize,
+                      decoration: InputDecoration(
+                        hintText: 'Enter size',
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHigh,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: colorScheme.outlineVariant,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                      ),
+                    );
+
+                    final sizeDropdown = DropdownButtonFormField<String?>(
+                      value: provider.selectedSize,
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('All sizes'),
+                        ),
+                        if (provider.selectedSize != null &&
+                            !provider.availableSizes.contains(
+                              provider.selectedSize,
+                            ))
+                          DropdownMenuItem<String?>(
+                            value: provider.selectedSize,
+                            child: Text(provider.selectedSize!),
+                          ),
+                        ...provider.availableSizes.map(
+                          (s) => DropdownMenuItem<String?>(
+                            value: s,
+                            child: Text(s),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) {
+                        provider.setSelectedSize(v);
+                        final next = v ?? '';
+                        _sizeController.value = TextEditingValue(
+                          text: next,
+                          selection: TextSelection.collapsed(
+                            offset: next.length,
+                          ),
+                        );
+                      },
+                      menuMaxHeight: 220,
+                      decoration: InputDecoration(
+                        hintText: 'Size',
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHigh,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(
+                            color: colorScheme.outlineVariant,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                      ),
+                    );
+
+                    if (isNarrow) {
+                      return Column(
+                        children: [
+                          search,
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(child: sizeDropdown),
+                              const SizedBox(width: 10),
+                              SizedBox(width: 130, child: sizeInput),
+                            ],
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: search),
+                        const SizedBox(width: 10),
+                        SizedBox(width: 150, child: sizeDropdown),
+                        const SizedBox(width: 10),
+                        SizedBox(width: 130, child: sizeInput),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
-
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              sliver: SliverToBoxAdapter(
-                child: AnimatedCrossFade(
-                  duration: const Duration(milliseconds: 180),
-                  crossFadeState: _filtersExpanded
-                      ? CrossFadeState.showSecond
-                      : CrossFadeState.showFirst,
-                  firstChild: _CollapsedFiltersRow(
-                    hasActiveFilters: provider.hasActiveFilters,
-                    onToggle: () => setState(() => _filtersExpanded = true),
-                    onOpenSheet: _openFiltersSheet,
-                  ),
-                  secondChild: ProductsFilterSection(
-                    onCloseRequested: () =>
-                        setState(() => _filtersExpanded = false),
-                  ),
-                ),
-              ),
-            ),
-
             if (provider.isLoadingInitial)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -205,51 +310,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CollapsedFiltersRow extends StatelessWidget {
-  const _CollapsedFiltersRow({
-    required this.hasActiveFilters,
-    required this.onToggle,
-    required this.onOpenSheet,
-  });
-
-  final bool hasActiveFilters;
-  final VoidCallback onToggle;
-  final VoidCallback onOpenSheet;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Material(
-      color: colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onToggle,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              const Icon(Icons.tune),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  hasActiveFilters ? 'Filters applied' : 'Add filters',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              TextButton(onPressed: onOpenSheet, child: const Text('More')),
-            ],
-          ),
         ),
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/product.dart';
@@ -17,7 +18,19 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
   final Set<ProductGender> _genders = {};
   RangeValues? _priceRange;
   DateTimeRange? _dateRange;
-  String? _brand;
+
+  final TextEditingController _maxPriceController = TextEditingController();
+  final FocusNode _maxPriceFocusNode = FocusNode();
+
+  double? _priceMaxLimit;
+  static const double _minAllowedPrice = 100;
+
+  @override
+  void dispose() {
+    _maxPriceController.dispose();
+    _maxPriceFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -25,13 +38,22 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
 
     final provider = context.watch<ProductsProvider>();
 
-    if (_priceRange == null) {
+    if (_priceRange == null || _priceMaxLimit == null) {
+      final bounds = provider.priceBounds;
+
       _genders
         ..clear()
         ..addAll(provider.selectedGenders);
-      _priceRange = provider.selectedPriceRange;
+
+      final selected = provider.selectedPriceRange;
+      final start = selected.start < _minAllowedPrice
+          ? _minAllowedPrice
+          : selected.start;
+      final end = selected.end < start ? start : selected.end;
+      _priceRange = RangeValues(start, end);
       _dateRange = provider.selectedDateRange;
-      _brand = provider.selectedBrand;
+
+      _priceMaxLimit = bounds.$2 < end ? end : bounds.$2;
     }
   }
 
@@ -44,6 +66,49 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
     final bounds = provider.priceBounds;
 
     final range = _priceRange ?? provider.selectedPriceRange;
+
+    final sliderMin = _minAllowedPrice;
+    final sliderMax = (_priceMaxLimit ?? bounds.$2) < sliderMin
+        ? sliderMin
+        : (_priceMaxLimit ?? bounds.$2);
+
+    if (!_maxPriceFocusNode.hasFocus) {
+      final nextText = sliderMax.toStringAsFixed(0);
+      if (_maxPriceController.text != nextText) {
+        _maxPriceController.value = TextEditingValue(
+          text: nextText,
+          selection: TextSelection.collapsed(offset: nextText.length),
+        );
+      }
+    }
+
+    RangeValues clampRangeToMax(RangeValues v, double maxLimit) {
+      final start = v.start.clamp(sliderMin, maxLimit);
+      final end = v.end.clamp(sliderMin, maxLimit);
+
+      if (start > end) {
+        return RangeValues(end, end);
+      }
+      return RangeValues(start, end);
+    }
+
+    RangeValues clampRange(RangeValues v) {
+      final start = v.start.clamp(sliderMin, sliderMax);
+      final end = v.end.clamp(sliderMin, sliderMax);
+
+      if (start > end) {
+        return RangeValues(end, end);
+      }
+      return RangeValues(start, end);
+    }
+
+    void setRange(RangeValues v) {
+      final nextMax = v.end;
+      if ((_priceMaxLimit ?? bounds.$2) < nextMax) {
+        _priceMaxLimit = nextMax;
+      }
+      _priceRange = clampRange(v);
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -69,9 +134,9 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                 onPressed: () {
                   setState(() {
                     _genders.clear();
-                    _priceRange = RangeValues(bounds.$1, bounds.$2);
+                    _priceMaxLimit = bounds.$2;
+                    _priceRange = RangeValues(sliderMin, bounds.$2);
                     _dateRange = null;
-                    _brand = null;
                   });
                 },
                 child: const Text('Reset'),
@@ -120,36 +185,102 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
             ),
           ),
           const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                '₹${range.start.toStringAsFixed(0)}',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                '  —  ',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                '₹${range.end.toStringAsFixed(0)}',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                'Min ₹${sliderMin.toStringAsFixed(0)}',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
           RangeSlider(
             values: range,
-            min: bounds.$1,
-            max: bounds.$2,
-            divisions: ((bounds.$2 - bounds.$1) / 50).round().clamp(1, 200),
+            min: sliderMin,
+            max: sliderMax,
             labels: RangeLabels(
               '₹${range.start.toStringAsFixed(0)}',
               '₹${range.end.toStringAsFixed(0)}',
             ),
-            onChanged: (v) => setState(() => _priceRange = v),
+            onChanged: (v) {
+              setState(() {
+                setRange(v);
+              });
+            },
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
 
-          Row(
-            children: [
-              Expanded(
-                child: _InfoPill(
-                  label: 'Min',
-                  value: '₹${range.start.toStringAsFixed(0)}',
-                ),
+          TextField(
+            controller: _maxPriceController,
+            focusNode: _maxPriceFocusNode,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              labelText: 'Max price',
+              prefixText: '₹',
+              filled: true,
+              fillColor: colorScheme.surfaceContainerHigh,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _InfoPill(
-                  label: 'Max',
-                  value: '₹${range.end.toStringAsFixed(0)}',
-                ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: colorScheme.outlineVariant),
               ),
-            ],
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 14,
+              ),
+              suffixIcon: IconButton(
+                tooltip: 'Use default max',
+                onPressed: () {
+                  setState(() {
+                    _priceMaxLimit = bounds.$2;
+                    _priceRange = clampRangeToMax(
+                      _priceRange ?? provider.selectedPriceRange,
+                      _priceMaxLimit!,
+                    );
+                  });
+                },
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+            onChanged: (value) {
+              final parsed = double.tryParse(value.trim());
+              if (parsed == null) return;
+              final nextMax = parsed < sliderMin ? sliderMin : parsed;
+              setState(() {
+                _priceMaxLimit = nextMax;
+                _priceRange = clampRangeToMax(
+                  _priceRange ?? provider.selectedPriceRange,
+                  nextMax,
+                );
+              });
+            },
           ),
 
           const SizedBox(height: 16),
@@ -198,42 +329,6 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
             ],
           ),
 
-          const SizedBox(height: 16),
-
-          Text(
-            'Company / Brand',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String?>(
-            value: _brand,
-            items: [
-              const DropdownMenuItem<String?>(
-                value: null,
-                child: Text('All brands'),
-              ),
-              ...provider.availableBrands.map(
-                (b) => DropdownMenuItem<String?>(value: b, child: Text(b)),
-              ),
-            ],
-            onChanged: (v) => setState(() => _brand = v),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: colorScheme.surfaceContainerHigh,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: colorScheme.outlineVariant),
-              ),
-            ),
-          ),
-
           const SizedBox(height: 18),
 
           SizedBox(
@@ -245,52 +340,11 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                   genders: _genders,
                   priceRange: _priceRange ?? provider.selectedPriceRange,
                   dateRange: _dateRange,
-                  brand: _brand,
                 );
                 widget.onCloseRequested();
               },
               icon: const Icon(Icons.tune),
               label: const Text('Apply Filters'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w800,
             ),
           ),
         ],

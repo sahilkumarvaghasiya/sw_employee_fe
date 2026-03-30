@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-enum ProductGender { men, women, unisex }
+enum ProductGender { men, women, boy, girl }
 
 @immutable
 class Product {
@@ -34,8 +34,10 @@ extension ProductGenderLabel on ProductGender {
         return 'Men';
       case ProductGender.women:
         return 'Women';
-      case ProductGender.unisex:
-        return 'Unisex';
+      case ProductGender.boy:
+        return 'Boy';
+      case ProductGender.girl:
+        return 'Girl';
     }
   }
 }

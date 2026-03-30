@@ -20,7 +20,7 @@ class ProductsSearchBar extends StatelessWidget {
       onChanged: onChanged,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'Search products by name or barcode',
+        hintText: 'Search products by name or brand name',
         prefixIcon: const Icon(Icons.search),
         filled: true,
         fillColor: colorScheme.surfaceContainerHigh,

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/providers/theme_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../widgets/quick_action_card.dart';
 import '../widgets/recent_bill_tile.dart';
 import '../widgets/section_header.dart';
 import '../widgets/summary_metric_card.dart';
 import '../../products/screens/products_screen.dart';
+import '../../billing/screens/customer_form_screen.dart';
 import '../../stock_entry/screens/stock_entry_main_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -35,7 +37,9 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showSnack(context, 'Scan & Bill (coming soon)'),
+        onPressed: () {
+          Navigator.of(context).push(CustomerFormScreen.route());
+        },
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('Scan & Bill'),
       ),
@@ -105,8 +109,9 @@ class HomeScreen extends StatelessWidget {
                     title: 'Start Billing',
                     icon: Icons.qr_code_scanner,
                     isPrimary: true,
-                    onTap: () =>
-                        _showSnack(context, 'Start Billing (coming soon)'),
+                    onTap: () {
+                      Navigator.of(context).push(CustomerFormScreen.route());
+                    },
                   ),
                   QuickActionCard(
                     title: 'Stock Entry',
@@ -237,6 +242,120 @@ class _EmployeeChip extends StatelessWidget {
 
   final String name;
 
+  void _showAccountSheet(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        final initial = name.trim().isEmpty
+            ? '?'
+            : name.trim().characters.first;
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: colorScheme.primary.withOpacity(0.12),
+                    child: Text(
+                      initial.toUpperCase(),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                leading: const Icon(Icons.lock_outline),
+                title: const Text('Change password'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context)
+                    ..clearSnackBars()
+                    ..showSnackBar(
+                      const SnackBar(
+                        content: Text('Change password (coming soon)'),
+                      ),
+                    );
+                },
+              ),
+              Consumer<ThemeProvider>(
+                builder: (context, themeProvider, _) {
+                  final isDark = themeProvider.isDark;
+                  return SwitchListTile.adaptive(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    secondary: Icon(
+                      isDark
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                    ),
+                    title: Text(isDark ? 'White mode' : 'Dark mode'),
+                    value: isDark,
+                    onChanged: (value) {
+                      themeProvider.setThemeMode(
+                        value ? ThemeMode.dark : ThemeMode.light,
+                      );
+                    },
+                  );
+                },
+              ),
+              const Divider(height: 20),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                leading: Icon(Icons.logout, color: colorScheme.error),
+                title: Text(
+                  'Log out',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: colorScheme.error,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await context.read<AuthProvider>().logout();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -244,39 +363,49 @@ class _EmployeeChip extends StatelessWidget {
 
     final initial = name.trim().isEmpty ? '?' : name.trim().characters.first;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: colorScheme.primary.withOpacity(0.12),
-            child: Text(
-              initial.toUpperCase(),
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w800,
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => _showAccountSheet(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: colorScheme.primary.withOpacity(0.12),
+              child: Text(
+                initial.toUpperCase(),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 140),
-            child: Text(
-              name,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w700,
+            const SizedBox(width: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 140),
+              child: Text(
+                name,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 6),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
       ),
     );
   }
