@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  final String baseUrl = 'https://your-backend.com/api'; // Change to your backend
+  final String baseUrl =
+      'https://your-backend.com/api'; // Change to your backend
 
   Future<Map<String, String>> login(String email, String password) async {
     final response = await http.post(
@@ -13,12 +14,29 @@ class AuthService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return {
-        'access': data['access'],
-        'refresh': data['refresh'],
-      };
+      return {'access': data['access'], 'refresh': data['refresh']};
     } else {
       throw Exception('Login failed');
     }
+  }
+
+  Future<void> changePassword({
+    required String accessToken,
+    required String newPassword,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/change-password'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({'newPassword': newPassword}),
+    );
+
+    if (response.statusCode == 200) {
+      return;
+    }
+
+    throw Exception('Change password failed');
   }
 }

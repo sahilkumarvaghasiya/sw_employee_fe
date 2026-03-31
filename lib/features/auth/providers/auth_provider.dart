@@ -66,4 +66,27 @@ class AuthProvider extends ChangeNotifier {
     _employeeName = 'Employee';
     notifyListeners();
   }
+
+  Future<void> changePassword({required String newPassword}) async {
+    final normalized = newPassword.trim();
+    if (normalized.isEmpty) {
+      throw Exception('Password cannot be empty');
+    }
+
+    // DEV ONLY: allow UX testing without backend.
+    if (kDebugMode) {
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      return;
+    }
+
+    final accessToken = await _tokenStorage.getAccessToken();
+    if (accessToken == null) {
+      throw Exception('Not authenticated');
+    }
+
+    await _authService.changePassword(
+      accessToken: accessToken,
+      newPassword: normalized,
+    );
+  }
 }

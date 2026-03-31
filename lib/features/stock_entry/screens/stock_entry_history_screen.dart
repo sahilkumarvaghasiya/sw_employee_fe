@@ -2,18 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/stock_entry.dart';
+import '../models/vendor.dart';
 import '../providers/stock_entry_provider.dart';
 import 'stock_entry_detail_screen.dart';
 
 class StockEntryHistoryScreen extends StatefulWidget {
-  const StockEntryHistoryScreen({super.key});
+  const StockEntryHistoryScreen({super.key, this.vendor});
+
+  final Vendor? vendor;
 
   static const String routeName = '/stock-entry/history';
 
-  static Route<void> route() {
+  static Route<void> route({Vendor? vendor}) {
     return MaterialPageRoute<void>(
       settings: const RouteSettings(name: routeName),
-      builder: (_) => const StockEntryHistoryScreen(),
+      builder: (_) => StockEntryHistoryScreen(vendor: vendor),
     );
   }
 
@@ -55,8 +58,18 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
 
     final provider = context.watch<StockEntryProvider>();
 
+    final filteredEntries = widget.vendor == null
+        ? provider.entries
+        : provider.entries
+              .where((e) => e.vendor.id == widget.vendor!.id)
+              .toList(growable: false);
+
+    final title = widget.vendor == null
+        ? 'Stock Entry History'
+        : 'History • ${widget.vendor!.name}';
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Stock Entry History')),
+      appBar: AppBar(title: Text(title)),
       body: RefreshIndicator(
         onRefresh: provider.refreshHistory,
         child: CustomScrollView(
@@ -91,12 +104,14 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                   ),
                 ),
               )
-            else if (provider.entries.isEmpty)
+            else if (filteredEntries.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
                   child: Text(
-                    'No stock entries yet',
+                    widget.vendor == null
+                        ? 'No stock entries yet'
+                        : 'No stock entries for this vendor yet',
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -107,11 +122,11 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 sliver: SliverList.separated(
-                  itemCount: provider.entries.length,
+                  itemCount: filteredEntries.length,
                   separatorBuilder: (context, index) =>
                       const SizedBox(height: 12),
                   itemBuilder: (context, index) {
-                    final entry = provider.entries[index];
+                    final entry = filteredEntries[index];
                     return _HistoryRow(
                       entry: entry,
                       money: _money,

@@ -6,8 +6,8 @@ import '../models/vendor.dart';
 import '../providers/stock_entry_provider.dart';
 import '../widgets/payment_section.dart';
 import '../widgets/product_scan_card.dart';
-import '../widgets/stock_preview_section.dart';
 import 'stock_barcode_scanner_screen.dart';
+import 'stock_entry_history_screen.dart';
 import 'stock_entry_main_screen.dart';
 
 class StockScanningScreen extends StatefulWidget {
@@ -197,6 +197,134 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _openScannedPreview() async {
+    if (_items.isEmpty) return;
+
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: colorScheme.surface,
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: FractionallySizedBox(
+            heightFactor: 0.86,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Scanned products',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Card(
+                    color: colorScheme.surfaceContainerHigh,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.inventory_2_outlined),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '$_totalItems items • ${_money(_totalStockValue)} total',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: _items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final item = _items[index];
+                        return Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  height: 44,
+                                  width: 44,
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surfaceContainerHigh,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: colorScheme.outlineVariant,
+                                    ),
+                                  ),
+                                  child: const Icon(Icons.qr_code_2),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.productName,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Qty: ${item.quantity} • Cost: ${_money(item.costPrice)} • Sell: ${_money(item.sellingPrice)}',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _submit() async {
     final form = _formKey.currentState;
     if (form == null) return;
@@ -258,7 +386,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       ),
     );
 
-    context.read<StockEntryProvider>().addStockEntry(entry);
+    await context.read<StockEntryProvider>().saveStockEntry(entry);
 
     await showDialog<void>(
       context: context,
@@ -293,7 +421,20 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     return Form(
       key: _formKey,
       child: Scaffold(
-        appBar: AppBar(title: Text('Stock Entry • ${widget.vendor.name}')),
+        appBar: AppBar(
+          title: Text('Stock Entry • ${widget.vendor.name}'),
+          actions: [
+            IconButton(
+              tooltip: 'Vendor history',
+              onPressed: () {
+                Navigator.of(
+                  context,
+                ).push(StockEntryHistoryScreen.route(vendor: widget.vendor));
+              },
+              icon: const Icon(Icons.history),
+            ),
+          ],
+        ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 220),
           children: [
@@ -337,35 +478,109 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
             ),
             const SizedBox(height: 12),
 
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                child: Row(
-                  children: [
-                    const Icon(Icons.price_change_outlined),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Adjust Selling Price',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+            if (_items.isNotEmpty)
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.inventory_2_outlined),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Live preview',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$_totalItems items • ${_money(_totalStockValue)} value',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          FilledButton.tonal(
+                            onPressed: _openScannedPreview,
+                            child: const Text('View'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      const Divider(height: 1),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          const Icon(Icons.price_change_outlined),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Adjust selling price',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (_adjustSellingPrice)
+                            TextButton(
+                              onPressed: () => _toggleAdjustSellingPrice(false),
+                              child: const Text('Cancel'),
+                            ),
+                          Switch(
+                            value: _adjustSellingPrice,
+                            onChanged: _toggleAdjustSellingPrice,
+                          ),
+                        ],
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _adjustSellingPrice
+                              ? 'Selling price is editable for scanned products.'
+                              : 'Selling price stays auto-filled until you enable editing.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
-                    ),
-                    Switch(
-                      value: _adjustSellingPrice,
-                      onChanged: _toggleAdjustSellingPrice,
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+              )
+            else
+              Card(
+                color: colorScheme.surfaceContainerHigh,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Scan a product to enable preview and price editing.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-
-            StockPreviewSection(
-              totalItems: _totalItems,
-              totalStockValue: _totalStockValue,
-            ),
             const SizedBox(height: 12),
 
             Text(

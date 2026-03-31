@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -29,6 +31,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
   final TextEditingController _sizeController = TextEditingController();
   final FocusNode _sizeFocusNode = FocusNode();
 
+  final MenuController _sizeMenuController = MenuController();
+  Timer? _sizeDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +56,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     _searchController.dispose();
     _sizeController.dispose();
     _sizeFocusNode.dispose();
+    _sizeDebounce?.cancel();
     super.dispose();
   }
 
@@ -90,12 +96,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     final provider = context.watch<ProductsProvider>();
 
-    final selectedSizeText = provider.selectedSize ?? '';
-    if (!_sizeFocusNode.hasFocus && _sizeController.text != selectedSizeText) {
-      _sizeController.value = TextEditingValue(
-        text: selectedSizeText,
-        selection: TextSelection.collapsed(offset: selectedSizeText.length),
-      );
+    if (!_sizeFocusNode.hasFocus) {
+      final desiredText = provider.selectedSize ?? '';
+      if (_sizeController.text != desiredText) {
+        _sizeController.value = TextEditingValue(
+          text: desiredText,
+          selection: TextSelection.collapsed(offset: desiredText.length),
+        );
+      }
     }
 
     return Scaffold(
@@ -126,85 +134,88 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       onChanged: provider.setSearchQuery,
                     );
 
-                    final sizeInput = TextField(
-                      controller: _sizeController,
-                      focusNode: _sizeFocusNode,
-                      textInputAction: TextInputAction.done,
-                      textCapitalization: TextCapitalization.characters,
-                      onChanged: provider.setSelectedSize,
-                      decoration: InputDecoration(
-                        hintText: 'Enter size',
-                        filled: true,
-                        fillColor: colorScheme.surfaceContainerHigh,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                            color: colorScheme.outlineVariant,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 14,
+                    void applyTypedSize(String value) {
+                      _sizeDebounce?.cancel();
+                      _sizeDebounce = Timer(
+                        const Duration(milliseconds: 250),
+                        () {
+                          if (!mounted) return;
+                          provider.setSelectedSize(value);
+                        },
+                      );
+                    }
+
+                    final sizeMenu = MenuAnchor(
+                      controller: _sizeMenuController,
+                      style: MenuStyle(
+                        maximumSize: WidgetStatePropertyAll(
+                          Size(constraints.maxWidth, 320),
                         ),
                       ),
-                    );
-
-                    final sizeDropdown = DropdownButtonFormField<String?>(
-                      value: provider.selectedSize,
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('All sizes'),
+                      menuChildren: [
+                        MenuItemButton(
+                          onPressed: () {
+                            _sizeController.clear();
+                            provider.setSelectedSize(null);
+                            _sizeMenuController.close();
+                          },
+                          child: const Text('All sizes'),
                         ),
-                        if (provider.selectedSize != null &&
-                            !provider.availableSizes.contains(
-                              provider.selectedSize,
-                            ))
-                          DropdownMenuItem<String?>(
-                            value: provider.selectedSize,
-                            child: Text(provider.selectedSize!),
-                          ),
                         ...provider.availableSizes.map(
-                          (s) => DropdownMenuItem<String?>(
-                            value: s,
+                          (s) => MenuItemButton(
+                            onPressed: () {
+                              _sizeController.text = s;
+                              _sizeController.selection =
+                                  TextSelection.collapsed(offset: s.length);
+                              provider.setSelectedSize(s);
+                              _sizeMenuController.close();
+                            },
                             child: Text(s),
                           ),
                         ),
                       ],
-                      onChanged: (v) {
-                        provider.setSelectedSize(v);
-                        final next = v ?? '';
-                        _sizeController.value = TextEditingValue(
-                          text: next,
-                          selection: TextSelection.collapsed(
-                            offset: next.length,
+                      builder: (context, controller, child) {
+                        return TextField(
+                          controller: _sizeController,
+                          focusNode: _sizeFocusNode,
+                          textInputAction: TextInputAction.done,
+                          onChanged: applyTypedSize,
+                          onSubmitted: provider.setSelectedSize,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: colorScheme.surfaceContainerHigh,
+                            prefixIcon: const Icon(Icons.straighten_outlined),
+                            hintText: 'Size',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                color: colorScheme.outlineVariant,
+                              ),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 14,
+                            ),
+                            suffixIcon: IconButton(
+                              tooltip: 'Show sizes',
+                              onPressed: () {
+                                if (controller.isOpen) {
+                                  controller.close();
+                                } else {
+                                  controller.open();
+                                }
+                              },
+                              icon: const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                              ),
+                            ),
                           ),
                         );
                       },
-                      menuMaxHeight: 220,
-                      decoration: InputDecoration(
-                        hintText: 'Size',
-                        filled: true,
-                        fillColor: colorScheme.surfaceContainerHigh,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                            color: colorScheme.outlineVariant,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 14,
-                        ),
-                      ),
                     );
 
                     if (isNarrow) {
@@ -212,13 +223,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         children: [
                           search,
                           const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(child: sizeDropdown),
-                              const SizedBox(width: 10),
-                              SizedBox(width: 130, child: sizeInput),
-                            ],
-                          ),
+                          sizeMenu,
                         ],
                       );
                     }
@@ -227,9 +232,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       children: [
                         Expanded(child: search),
                         const SizedBox(width: 10),
-                        SizedBox(width: 150, child: sizeDropdown),
-                        const SizedBox(width: 10),
-                        SizedBox(width: 130, child: sizeInput),
+                        SizedBox(width: 220, child: sizeMenu),
                       ],
                     );
                   },

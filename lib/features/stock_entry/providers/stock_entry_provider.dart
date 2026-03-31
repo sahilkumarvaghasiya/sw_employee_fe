@@ -50,6 +50,10 @@ class StockEntryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> saveStockEntry(StockEntry entry) async {
+    addStockEntry(entry);
+  }
+
   Future<void> refreshHistory() async {
     _error = null;
     _visibleEntries.clear();

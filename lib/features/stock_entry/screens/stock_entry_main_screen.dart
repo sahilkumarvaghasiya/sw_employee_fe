@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import 'existing_vendor_entry_screen.dart';
 import 'new_vendor_entry_screen.dart';
-import 'stock_entry_history_screen.dart';
+import '../models/vendor.dart';
+import '../providers/stock_entry_provider.dart';
+import 'stock_scanning_screen.dart';
 
-class StockEntryMainScreen extends StatelessWidget {
+class StockEntryMainScreen extends StatefulWidget {
   const StockEntryMainScreen({super.key});
 
   static const String routeName = '/stock-entry';
@@ -17,11 +19,48 @@ class StockEntryMainScreen extends StatelessWidget {
   }
 
   @override
+  State<StockEntryMainScreen> createState() => _StockEntryMainScreenState();
+}
+
+class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final vendors = context.watch<StockEntryProvider>().vendors;
+
+    final query = _searchController.text.trim().toLowerCase();
+    final filtered = query.isEmpty
+        ? vendors
+        : vendors
+              .where((v) {
+                return v.name.toLowerCase().contains(query) ||
+                    v.address.toLowerCase().contains(query);
+              })
+              .toList(growable: false);
+
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        tooltip: 'Add new vendor',
+        onPressed: () {
+          Navigator.of(context).push(NewVendorEntryScreen.route());
+        },
+        elevation: 2,
+        hoverElevation: 8,
+        focusElevation: 8,
+        highlightElevation: 6,
+        icon: const Icon(Icons.add),
+        label: const Text('New vendor'),
+      ),
       body: DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -45,154 +84,51 @@ class StockEntryMainScreen extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
-            SliverFillRemaining(
-              hasScrollBody: false,
+            SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _HeaderCard(
-                      title: 'Choose an option',
-                      subtitle:
-                          'Create a new entry for a vendor, or review past entries.',
-                      icon: Icons.inventory_2_outlined,
-                    ),
-                    const SizedBox(height: 12),
-                    _OptionCard(
-                      title: 'New Vendor Entry',
-                      subtitle: 'Add a vendor and start entry',
-                      icon: Icons.person_add_alt_1_outlined,
-                      onTap: () {
-                        Navigator.of(
-                          context,
-                        ).push(NewVendorEntryScreen.route());
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _OptionCard(
-                      title: 'Existing Vendor Entry',
-                      subtitle: 'Pick an existing vendor',
-                      icon: Icons.people_outline,
-                      onTap: () {
-                        Navigator.of(
-                          context,
-                        ).push(ExistingVendorEntryScreen.route());
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _OptionCard(
-                      title: 'Stock Entry History',
-                      subtitle: 'View previous vendor stock entries',
-                      icon: Icons.history,
-                      onTap: () {
-                        Navigator.of(
-                          context,
-                        ).push(StockEntryHistoryScreen.route());
-                      },
-                    ),
-                    const Spacer(),
-                    _InfoFooterCard(
-                      text:
-                          'Tip: Use “New Vendor Entry” for first-time vendors, and “Existing Vendor Entry” for repeat suppliers.',
-                    ),
-                  ],
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'Search vendor…',
+                    prefixIcon: Icon(Icons.search),
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Row(
-          children: [
-            Container(
-              height: 52,
-              width: 52,
-              decoration: BoxDecoration(
-                color: colorScheme.primary.withAlpha(28),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(icon, color: colorScheme.primary),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
+            if (filtered.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Text(
+                    'No vendors found',
                     style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoFooterCard extends StatelessWidget {
-  const _InfoFooterCard({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.info_outline, color: colorScheme.onSurfaceVariant),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                text,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                sliver: SliverList.separated(
+                  itemCount: filtered.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final vendor = filtered[index];
+                    return _VendorCard(
+                      vendor: vendor,
+                      onTap: () {
+                        Navigator.of(
+                          context,
+                        ).push(StockScanningScreen.route(vendor: vendor));
+                      },
+                    );
+                  },
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -200,17 +136,10 @@ class _InfoFooterCard extends StatelessWidget {
   }
 }
 
-class _OptionCard extends StatelessWidget {
-  const _OptionCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.onTap,
-  });
+class _VendorCard extends StatelessWidget {
+  const _VendorCard({required this.vendor, required this.onTap});
 
-  final String title;
-  final String subtitle;
-  final IconData icon;
+  final Vendor vendor;
   final VoidCallback onTap;
 
   @override
@@ -223,35 +152,33 @@ class _OptionCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Row(
             children: [
-              Container(
-                height: 54,
-                width: 54,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withAlpha(31),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(icon, color: colorScheme.primary),
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: colorScheme.primary.withAlpha(31),
+                child: Icon(Icons.person_outline, color: colorScheme.primary),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      vendor.name,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
-                      subtitle,
+                      vendor.address,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
