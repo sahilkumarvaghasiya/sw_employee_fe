@@ -3,11 +3,24 @@ import 'package:flutter/foundation.dart';
 import '../models/billing_models.dart';
 
 class BillingProvider extends ChangeNotifier {
+  BillingProvider() {
+    // TODO: Replace this local cache with backend-powered search.
+    _knownCustomers = const [
+      BillingCustomer(name: 'Amit Sharma', phone: '9876543210'),
+      BillingCustomer(name: 'Anjali Gupta', phone: '9123456780'),
+      BillingCustomer(name: 'Ravi Kumar', phone: '9988776655'),
+      BillingCustomer(name: 'Sana Khan', phone: '9090909090'),
+      BillingCustomer(name: 'Vikram Singh', phone: '9012345678'),
+    ];
+  }
+
   BillingCustomer? _customer;
   BillingPaymentMethod? _paymentMethod;
   bool _markPaid = false;
   double _paidAmount = 0;
   PaytmQrCode? _selectedPaytmQr;
+
+  late final List<BillingCustomer> _knownCustomers;
 
   final List<BillingLineItem> _items = [];
 
@@ -18,6 +31,20 @@ class BillingProvider extends ChangeNotifier {
   PaytmQrCode? get selectedPaytmQr => _selectedPaytmQr;
 
   List<BillingLineItem> get items => List.unmodifiable(_items);
+
+  List<BillingCustomer> searchCustomers(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+
+    return _knownCustomers
+        .where(
+          (c) =>
+              c.name.toLowerCase().contains(q) ||
+              c.phone.replaceAll(' ', '').contains(q),
+        )
+        .take(8)
+        .toList(growable: false);
+  }
 
   int get totalItems => _items.fold<int>(0, (sum, i) => sum + i.quantity);
 
