@@ -28,20 +28,26 @@ class _QuickActionCardState extends State<QuickActionCard> {
 
     final Color baseColor = widget.isPrimary
         ? colorScheme.primaryContainer
-        : colorScheme.surfaceContainerHigh;
+        : colorScheme.surfaceContainerLow;
 
     final Color iconColor = widget.isPrimary
         ? colorScheme.onPrimaryContainer
         : colorScheme.primary;
+
+    final Color iconBg = widget.isPrimary
+        ? colorScheme.onPrimaryContainer.withAlpha(22)
+        : colorScheme.primary.withAlpha(22);
 
     return AnimatedScale(
       duration: const Duration(milliseconds: 120),
       scale: _pressed ? 0.98 : 1.0,
       child: Material(
         color: baseColor,
-        elevation: widget.isPrimary ? 2 : 1,
-        shadowColor: Colors.black.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(18),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
           onTap: widget.onTap,
@@ -57,7 +63,7 @@ class _QuickActionCardState extends State<QuickActionCard> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: colorScheme.surface.withOpacity(0.55),
+                    color: iconBg,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(widget.icon, color: iconColor, size: 26),

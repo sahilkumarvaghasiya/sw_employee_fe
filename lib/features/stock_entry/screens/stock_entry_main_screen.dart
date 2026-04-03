@@ -49,17 +49,28 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
               .toList(growable: false);
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        tooltip: 'Add new vendor',
-        onPressed: () {
-          Navigator.of(context).push(NewVendorEntryScreen.route());
-        },
-        elevation: 2,
-        hoverElevation: 8,
-        focusElevation: 8,
-        highlightElevation: 6,
-        icon: const Icon(Icons.add),
-        label: const Text('New vendor'),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.primary.withOpacity(0.18),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          tooltip: 'Add new vendor',
+          onPressed: () {
+            Navigator.of(context).push(NewVendorEntryScreen.route());
+          },
+          elevation: 2,
+          icon: const Icon(Icons.add),
+          label: const Text('New vendor'),
+          backgroundColor: colorScheme.primary,
+          foregroundColor: colorScheme.onPrimary,
+        ),
       ),
       body: DecoratedBox(
         decoration: BoxDecoration(
@@ -67,7 +78,7 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              colorScheme.primary.withOpacity(0.06),
+              colorScheme.primary.withOpacity(0.08),
               colorScheme.surface,
             ],
           ),
@@ -79,20 +90,61 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
               elevation: 0,
               scrolledUnderElevation: 1,
               backgroundColor: colorScheme.surface.withOpacity(0.92),
-              title: const Text(
-                'Stock Entry',
-                style: TextStyle(fontWeight: FontWeight.w800),
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    color: colorScheme.primary,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Stock Entry',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(32),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    'Select a vendor to begin stock entry',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    hintText: 'Search vendor…',
-                    prefixIcon: Icon(Icons.search),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Material(
+                  elevation: 2,
+                  borderRadius: BorderRadius.circular(24),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Search vendor…',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 16,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -101,11 +153,29 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
-                  child: Text(
-                    'No vendors found',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.search_off_rounded,
+                        size: 64,
+                        color: colorScheme.primary.withOpacity(0.18),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No vendors found',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Try a different name or add a new vendor.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               )
@@ -115,7 +185,7 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
                 sliver: SliverList.separated(
                   itemCount: filtered.length,
                   separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                   itemBuilder: (context, index) {
                     final vendor = filtered[index];
                     return _VendorCard(
@@ -147,46 +217,101 @@ class _VendorCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final initials = vendor.name.isNotEmpty
+        ? vendor.name
+              .trim()
+              .split(' ')
+              .map((e) => e[0])
+              .take(2)
+              .join()
+              .toUpperCase()
+        : '?';
+
     return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: colorScheme.primary.withAlpha(31),
-                child: Icon(Icons.person_outline, color: colorScheme.primary),
+        child: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(
+                width: 6,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(18),
+                    bottomLeft: Radius.circular(18),
+                  ),
+                ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      vendor.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 16, 14),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: colorScheme.primary.withOpacity(0.13),
+                    child: Text(
+                      initials,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          vendor.name,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          vendor.address,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton(
+                    onPressed: onTap,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: theme.textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      vendor.address,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
+                    child: const Text('Start Entry'),
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

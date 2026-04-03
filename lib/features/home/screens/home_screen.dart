@@ -50,7 +50,8 @@ class HomeScreen extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              colorScheme.primary.withOpacity(0.06),
+              colorScheme.primaryContainer.withAlpha(38),
+              colorScheme.secondaryContainer.withAlpha(18),
               colorScheme.surface,
             ],
           ),
@@ -62,7 +63,7 @@ class HomeScreen extends StatelessWidget {
               floating: false,
               elevation: 0,
               scrolledUnderElevation: 1,
-              backgroundColor: colorScheme.surface.withOpacity(0.92),
+              backgroundColor: colorScheme.surfaceContainerLow.withAlpha(235),
               surfaceTintColor: colorScheme.surfaceTint,
               title: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -86,6 +87,22 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
               actions: [
+                Consumer<ThemeProvider>(
+                  builder: (context, themeProvider, _) {
+                    final isDark = themeProvider.isDark;
+                    return IconButton(
+                      tooltip: isDark
+                          ? 'Switch to light mode'
+                          : 'Switch to dark mode',
+                      onPressed: themeProvider.toggle,
+                      icon: Icon(
+                        isDark
+                            ? Icons.light_mode_outlined
+                            : Icons.dark_mode_outlined,
+                      ),
+                    );
+                  },
+                ),
                 IconButton(
                   tooltip: 'Notifications',
                   onPressed: () => _showSnack(context, 'Notifications'),

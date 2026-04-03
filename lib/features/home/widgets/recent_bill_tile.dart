@@ -20,8 +20,11 @@ class RecentBillTile extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Material(
-      color: colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(16),
+      color: colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
@@ -33,13 +36,13 @@ class RecentBillTile extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: colorScheme.primary.withOpacity(0.10),
+                  color: colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 alignment: Alignment.center,
                 child: Icon(
                   Icons.receipt_long_outlined,
-                  color: colorScheme.primary,
+                  color: colorScheme.onPrimaryContainer,
                   size: 22,
                 ),
               ),
