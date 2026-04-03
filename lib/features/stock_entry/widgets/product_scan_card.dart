@@ -4,6 +4,7 @@ class ProductScanCard extends StatelessWidget {
   const ProductScanCard({
     super.key,
     required this.productName,
+    this.metaLine,
     required this.quantityController,
     required this.costPriceController,
     required this.sellingPriceController,
@@ -14,6 +15,7 @@ class ProductScanCard extends StatelessWidget {
   });
 
   final String productName;
+  final String? metaLine;
 
   final TextEditingController quantityController;
   final TextEditingController costPriceController;
@@ -56,6 +58,18 @@ class ProductScanCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (metaLine != null && metaLine!.trim().isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                metaLine!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
             const SizedBox(height: 10),
 
             Row(

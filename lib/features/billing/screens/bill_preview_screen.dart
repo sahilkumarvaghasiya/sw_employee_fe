@@ -33,6 +33,7 @@ class BillPreviewScreen extends StatelessWidget {
       BillingPaymentMethod.cash => 'Cash',
       BillingPaymentMethod.upi => 'UPI',
       BillingPaymentMethod.paytm => 'Paytm',
+      BillingPaymentMethod.card => 'Card',
       _ => '—',
     };
   }

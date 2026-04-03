@@ -26,6 +26,7 @@ class HomeScreen extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     final employeeName = context.watch<AuthProvider>().employeeName;
+    final branchName = context.watch<AuthProvider>().branchName;
 
     final recentBills = <_RecentBill>[
       const _RecentBill(billNo: '10421', amount: 1299.00, method: 'UPI'),
@@ -63,9 +64,26 @@ class HomeScreen extends StatelessWidget {
               scrolledUnderElevation: 1,
               backgroundColor: colorScheme.surface.withOpacity(0.92),
               surfaceTintColor: colorScheme.surfaceTint,
-              title: const Text(
-                'RetailAgent',
-                style: TextStyle(fontWeight: FontWeight.w800),
+              title: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'RetailAgent',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  if (branchName.isNotEmpty)
+                    Text(
+                      branchName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        height: 1.05,
+                      ),
+                    ),
+                ],
               ),
               actions: [
                 IconButton(

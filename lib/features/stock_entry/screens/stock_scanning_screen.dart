@@ -1,11 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/stock_entry_draft_item.dart';
 import '../models/stock_entry.dart';
 import '../models/vendor.dart';
 import '../providers/stock_entry_provider.dart';
 import '../widgets/payment_section.dart';
 import '../widgets/product_scan_card.dart';
+import 'add_stock_entry_item_screen.dart';
 import 'stock_barcode_scanner_screen.dart';
 import 'stock_entry_history_screen.dart';
 import 'stock_entry_main_screen.dart';
@@ -38,32 +41,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
   DateTime? _deadline;
   bool _adjustSellingPrice = false;
-
-  int _catalogIndex = 0;
-
-  final List<_CatalogProduct> _catalog = const [
-    _CatalogProduct(id: 'p_101', name: 'Parle-G 250g', cost: 18.0, sell: 20.0),
-    _CatalogProduct(
-      id: 'p_112',
-      name: 'Aashirvaad Atta 5kg',
-      cost: 250.0,
-      sell: 275.0,
-    ),
-    _CatalogProduct(
-      id: 'p_205',
-      name: 'Coca-Cola 750ml',
-      cost: 32.0,
-      sell: 40.0,
-    ),
-    _CatalogProduct(id: 'p_207', name: 'Sprite 750ml', cost: 32.0, sell: 40.0),
-    _CatalogProduct(id: 'p_309', name: 'Lux Soap', cost: 28.0, sell: 35.0),
-    _CatalogProduct(
-      id: 'p_410',
-      name: 'Colgate Toothpaste 200g',
-      cost: 78.0,
-      sell: 95.0,
-    ),
-  ];
 
   @override
   void initState() {
@@ -112,25 +89,43 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     _totalPaymentController.text = _totalStockValue.toStringAsFixed(2);
   }
 
-  void _simulateScan() {
-    final product = _catalog[_catalogIndex % _catalog.length];
-    _catalogIndex++;
+  String _buildProductName(StockEntryDraftItem draft) {
+    final brand = draft.brandName.trim();
+    final size = draft.size.trim();
+    final colour = draft.colour.trim();
 
-    final existingIndex = _items.indexWhere((e) => e.productId == product.id);
-
-    if (existingIndex >= 0) {
-      final item = _items[existingIndex];
-      item.setQuantity(item.quantity + 1);
-      setState(() {
-        _syncTotalPayment();
-      });
-      return;
+    final parts = <String>[];
+    if (brand.isNotEmpty) parts.add(brand);
+    if (draft.isPair && draft.itemType2 != null) {
+      parts.add('${draft.itemType1} + ${draft.itemType2!}');
+    } else {
+      parts.add(draft.itemType1);
     }
+    if (size.isNotEmpty) parts.add('Size $size');
+    if (colour.isNotEmpty) parts.add(colour);
+    parts.add(draft.gender.label);
+    return parts.join(' • ');
+  }
 
-    final newItem = _ScannedItem.fromCatalog(
-      product,
-      allowSellingPriceEdit: _adjustSellingPrice,
+  Future<void> _addDraftToList(StockEntryDraftItem draft) async {
+    final productName = _buildProductName(draft);
+
+    final newItem = _ScannedItem.manual(
+      barcode: draft.barcode,
+      productName: productName,
+      brandName: draft.brandName,
+      size: draft.size,
+      colour: draft.colour,
+      gender: draft.gender,
+      isPair: draft.isPair,
+      itemType1: draft.itemType1,
+      itemType2: draft.isPair ? draft.itemType2 : null,
+      defaultSellingPrice: draft.sellingPrice,
+      quantity: draft.quantity,
+      costPrice: draft.costPrice,
+      sellingPrice: draft.sellingPrice,
     );
+
     newItem.attachOnChanged(() {
       setState(() {
         if (!_adjustSellingPrice) {
@@ -146,6 +141,17 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     });
   }
 
+  Future<void> _manualAdd() async {
+    final draft = await Navigator.of(context).push<StockEntryDraftItem?>(
+      AddStockEntryItemScreen.route(initialBarcode: '', allowBarcodeEdit: true),
+    );
+    if (!mounted) return;
+    if (draft == null) return;
+
+    await _addDraftToList(draft);
+    _showSnack('Added: ${draft.barcode}');
+  }
+
   Future<void> _scanBarcode() async {
     final barcode = await Navigator.of(
       context,
@@ -154,10 +160,18 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     if (!mounted) return;
     if (barcode == null || barcode.trim().isEmpty) return;
 
-    // Today the stock-entry flow uses a local demo catalog (no barcode mapping).
-    // We still use the real camera scan to trigger adding a product.
-    _simulateScan();
-    _showSnack('Scanned: ${barcode.trim()}');
+    final normalized = barcode.trim();
+    final draft = await Navigator.of(context).push<StockEntryDraftItem?>(
+      AddStockEntryItemScreen.route(
+        initialBarcode: normalized,
+        allowBarcodeEdit: false,
+      ),
+    );
+    if (!mounted) return;
+    if (draft == null) return;
+
+    await _addDraftToList(draft);
+    _showSnack('Added: $normalized');
   }
 
   Future<void> _pickDeadline() async {
@@ -458,7 +472,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Tap scan to add a product (simulated)',
+                            'Tap scan to add a product',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -472,6 +486,14 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                       icon: const Icon(Icons.document_scanner_outlined),
                       label: const Text('Scan'),
                     ),
+                    if (kDebugMode) ...[
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: _manualAdd,
+                        icon: const Icon(Icons.edit_note_outlined),
+                        label: const Text('Manual'),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -613,6 +635,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                   ),
                   child: ProductScanCard(
                     productName: item.productName,
+                    metaLine: item.metaLine,
                     quantityController: item.qtyController,
                     costPriceController: item.costController,
                     sellingPriceController: item.sellController,
@@ -692,6 +715,14 @@ class _ScannedItem {
   _ScannedItem({
     required this.productId,
     required this.productName,
+    required this.barcode,
+    required this.brandName,
+    required this.size,
+    required this.colour,
+    required this.gender,
+    required this.isPair,
+    required this.itemType1,
+    required this.itemType2,
     required this.defaultSellingPrice,
     required int quantity,
     required double costPrice,
@@ -706,6 +737,14 @@ class _ScannedItem {
 
   final String productId;
   final String productName;
+  final String barcode;
+  final String brandName;
+  final String size;
+  final String colour;
+  final StockEntryItemGender gender;
+  final bool isPair;
+  final String itemType1;
+  final String? itemType2;
   final double defaultSellingPrice;
 
   final TextEditingController qtyController;
@@ -714,18 +753,52 @@ class _ScannedItem {
 
   VoidCallback? _onChanged;
 
-  static _ScannedItem fromCatalog(
-    _CatalogProduct product, {
-    required bool allowSellingPriceEdit,
+  static _ScannedItem manual({
+    required String barcode,
+    required String productName,
+    required String brandName,
+    required String size,
+    required String colour,
+    required StockEntryItemGender gender,
+    required bool isPair,
+    required String itemType1,
+    required String? itemType2,
+    required double defaultSellingPrice,
+    required int quantity,
+    required double costPrice,
+    required double sellingPrice,
   }) {
     return _ScannedItem(
-      productId: product.id,
-      productName: product.name,
-      defaultSellingPrice: product.sell,
-      quantity: 1,
-      costPrice: product.cost,
-      sellingPrice: allowSellingPriceEdit ? product.sell : product.sell,
+      productId: barcode,
+      productName: productName,
+      barcode: barcode,
+      brandName: brandName,
+      size: size,
+      colour: colour,
+      gender: gender,
+      isPair: isPair,
+      itemType1: itemType1,
+      itemType2: itemType2,
+      defaultSellingPrice: defaultSellingPrice,
+      quantity: quantity,
+      costPrice: costPrice,
+      sellingPrice: sellingPrice,
     );
+  }
+
+  String get metaLine {
+    final parts = <String>[];
+    parts.add('Barcode: $barcode');
+    if (brandName.trim().isNotEmpty) parts.add(brandName.trim());
+    if (isPair && itemType2 != null) {
+      parts.add('$itemType1 + ${itemType2!}');
+    } else {
+      parts.add(itemType1);
+    }
+    if (size.trim().isNotEmpty) parts.add('Size $size');
+    if (colour.trim().isNotEmpty) parts.add(colour.trim());
+    parts.add(gender.label);
+    return parts.join(' • ');
   }
 
   void attachOnChanged(VoidCallback onChanged) {

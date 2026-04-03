@@ -76,6 +76,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
 
+    if (provider.paymentMethod == BillingPaymentMethod.upi &&
+        provider.selectedUpiQr == null) {
+      _showSnack('Please select a UPI QR code.');
+      return;
+    }
+
+    if (provider.paymentMethod == BillingPaymentMethod.card) {
+      _showSnack('Card payment is coming soon.');
+      return;
+    }
+
     Navigator.of(context).push(BillPreviewScreen.route(context));
   }
 
@@ -145,6 +156,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ),
                 const Divider(height: 0),
                 RadioListTile<BillingPaymentMethod>(
+                  value: BillingPaymentMethod.paytm,
+                  groupValue: provider.paymentMethod,
+                  onChanged: (v) =>
+                      context.read<BillingProvider>().setPaymentMethod(v),
+                  title: const Text('Paytm'),
+                  secondary: const Icon(Icons.account_balance_wallet_outlined),
+                ),
+                const Divider(height: 0),
+                RadioListTile<BillingPaymentMethod>(
                   value: BillingPaymentMethod.upi,
                   groupValue: provider.paymentMethod,
                   onChanged: (v) =>
@@ -154,12 +174,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ),
                 const Divider(height: 0),
                 RadioListTile<BillingPaymentMethod>(
-                  value: BillingPaymentMethod.paytm,
+                  value: BillingPaymentMethod.card,
                   groupValue: provider.paymentMethod,
                   onChanged: (v) =>
                       context.read<BillingProvider>().setPaymentMethod(v),
-                  title: const Text('Paytm'),
-                  secondary: const Icon(Icons.account_balance_wallet_outlined),
+                  title: const Text('Card (Credit/Debit)'),
+                  secondary: const Icon(Icons.credit_card_outlined),
                 ),
               ],
             ),
@@ -232,6 +252,86 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   ),
                 ),
               ),
+          ],
+
+          if (provider.paymentMethod == BillingPaymentMethod.upi) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Select UPI QR',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Column(
+                children: [
+                  for (final qr in provider.upiQrs) ...[
+                    RadioListTile<UpiQrCode>(
+                      value: qr,
+                      groupValue: provider.selectedUpiQr,
+                      onChanged: (v) =>
+                          context.read<BillingProvider>().selectUpiQr(v),
+                      title: Text(qr.label),
+                      secondary: const Icon(Icons.qr_code),
+                    ),
+                    if (qr != provider.upiQrs.last) const Divider(height: 0),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (provider.selectedUpiQr != null)
+              Card(
+                color: colorScheme.surfaceContainerHigh,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: [
+                      Text(
+                        provider.selectedUpiQr!.label,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      AspectRatio(
+                        aspectRatio: 1,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: colorScheme.outlineVariant,
+                            ),
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.qr_code_2, size: 120),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'QR (dummy) • ${provider.selectedUpiQr!.id}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+
+          if (provider.paymentMethod == BillingPaymentMethod.card) ...[
+            const SizedBox(height: 12),
+            Card(
+              color: colorScheme.surfaceContainerHigh,
+              child: const Padding(
+                padding: EdgeInsets.all(14),
+                child: Text('Card payment is coming soon.'),
+              ),
+            ),
           ],
 
           const SizedBox(height: 12),

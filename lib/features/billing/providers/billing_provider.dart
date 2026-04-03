@@ -19,6 +19,7 @@ class BillingProvider extends ChangeNotifier {
   bool _markPaid = false;
   double _paidAmount = 0;
   PaytmQrCode? _selectedPaytmQr;
+  UpiQrCode? _selectedUpiQr;
 
   late final List<BillingCustomer> _knownCustomers;
 
@@ -29,6 +30,7 @@ class BillingProvider extends ChangeNotifier {
   bool get markPaid => _markPaid;
   double get paidAmount => _paidAmount;
   PaytmQrCode? get selectedPaytmQr => _selectedPaytmQr;
+  UpiQrCode? get selectedUpiQr => _selectedUpiQr;
 
   List<BillingLineItem> get items => List.unmodifiable(_items);
 
@@ -66,6 +68,12 @@ class BillingProvider extends ChangeNotifier {
     PaytmQrCode(id: 'ptm_003', label: 'Delivery QR'),
   ];
 
+  List<UpiQrCode> get upiQrs => const [
+    UpiQrCode(id: 'upi_001', label: 'UPI QR #1'),
+    UpiQrCode(id: 'upi_002', label: 'UPI QR #2'),
+    UpiQrCode(id: 'upi_003', label: 'UPI QR #3'),
+  ];
+
   void setCustomer(BillingCustomer customer) {
     _customer = customer;
     notifyListeners();
@@ -75,6 +83,7 @@ class BillingProvider extends ChangeNotifier {
     _customer = null;
     _paymentMethod = null;
     _selectedPaytmQr = null;
+    _selectedUpiQr = null;
     _markPaid = false;
     _paidAmount = 0;
     _items.clear();
@@ -143,14 +152,20 @@ class BillingProvider extends ChangeNotifier {
 
   void setPaymentMethod(BillingPaymentMethod? method) {
     _paymentMethod = method;
-    if (_paymentMethod != BillingPaymentMethod.paytm) {
-      _selectedPaytmQr = null;
-    }
+
+    if (_paymentMethod != BillingPaymentMethod.paytm) _selectedPaytmQr = null;
+    if (_paymentMethod != BillingPaymentMethod.upi) _selectedUpiQr = null;
+
     notifyListeners();
   }
 
   void selectPaytmQr(PaytmQrCode? qr) {
     _selectedPaytmQr = qr;
+    notifyListeners();
+  }
+
+  void selectUpiQr(UpiQrCode? qr) {
+    _selectedUpiQr = qr;
     notifyListeners();
   }
 

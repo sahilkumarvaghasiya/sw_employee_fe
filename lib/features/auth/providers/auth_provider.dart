@@ -13,6 +13,9 @@ class AuthProvider extends ChangeNotifier {
   String _employeeName = 'Employee';
   String get employeeName => _employeeName;
 
+  String _branchName = 'Main Branch';
+  String get branchName => _branchName;
+
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
@@ -38,6 +41,7 @@ class AuthProvider extends ChangeNotifier {
       if (normalizedEmail == 'demo@retailagent.com' &&
           normalizedPassword == 'demo123') {
         _employeeName = 'Demo Employee';
+        _branchName = 'Demo Branch';
         _isAuthenticated = true;
         _isLoading = false;
         notifyListeners();
@@ -52,6 +56,9 @@ class AuthProvider extends ChangeNotifier {
 
       final localPart = email.trim().split('@').first;
       _employeeName = localPart.isEmpty ? 'Employee' : localPart;
+
+      // Placeholder until branch details are fetched from the backend.
+      _branchName = 'Main Branch';
     } catch (e) {
       _errorMessage = 'Invalid email or password';
       _isAuthenticated = false;
@@ -64,6 +71,14 @@ class AuthProvider extends ChangeNotifier {
     await _tokenStorage.deleteTokens();
     _isAuthenticated = false;
     _employeeName = 'Employee';
+    _branchName = 'Main Branch';
+    notifyListeners();
+  }
+
+  void setBranchName(String name) {
+    final normalized = name.trim();
+    if (normalized.isEmpty || normalized == _branchName) return;
+    _branchName = normalized;
     notifyListeners();
   }
 
