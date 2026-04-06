@@ -32,6 +32,8 @@ class StockScanningScreen extends StatefulWidget {
 
 class _StockScanningScreenState extends State<StockScanningScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _paymentSectionKey = GlobalKey();
 
   final TextEditingController _totalPaymentController = TextEditingController();
   final TextEditingController _paidAmountController = TextEditingController();
@@ -40,6 +42,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
   bool _adjustSellingPrice = false;
   DateTime? _deadline;
+
+  bool _showPaymentSection = false;
 
   double _totalStockValue = 0;
   double _paidAmount = 0;
@@ -62,6 +66,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     _totalPaymentController.dispose();
     _paidAmountController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -118,7 +123,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     final normalized = barcode.trim();
 
-    final draft = await Navigator.of(context).push<StockEntryDraftItem?>(
+    final drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
       AddStockEntryItemScreen.route(
         initialBarcode: normalized,
         allowBarcodeEdit: false,
@@ -126,13 +131,15 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     );
 
     if (!mounted) return;
-    if (draft == null) return;
+    if (drafts == null || drafts.isEmpty) return;
 
-    _addDraftToList(draft);
+    for (final draft in drafts) {
+      _addDraftToList(draft);
+    }
   }
 
   Future<void> _generateBarcode() async {
-    final draft = await Navigator.of(context).push<StockEntryDraftItem?>(
+    final drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
       AddStockEntryItemScreen.route(
         initialBarcode: '',
         allowBarcodeEdit: false,
@@ -141,9 +148,11 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     );
 
     if (!mounted) return;
-    if (draft == null) return;
+    if (drafts == null || drafts.isEmpty) return;
 
-    _addDraftToList(draft);
+    for (final draft in drafts) {
+      _addDraftToList(draft);
+    }
   }
 
   void _addDraftToList(StockEntryDraftItem draft) {
@@ -202,13 +211,79 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       );
   }
 
-  void _save() async {
-    final form = _formKey.currentState;
-
+  bool _validateItemsOnly() {
     if (_items.isEmpty) {
       _showSnack('Scan at least one product to continue.');
-      return;
+      return false;
     }
+
+    for (final item in _items) {
+      if (item.quantity <= 0) {
+        _showSnack('Quantity must be at least 1.');
+        return false;
+      }
+      if (item.costPrice <= 0) {
+        _showSnack('Cost price must be > 0.');
+        return false;
+      }
+      if (item.sellingPrice < 0) {
+        _showSnack('Selling price cannot be negative.');
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  Future<void> _proceedToPayment() async {
+    if (!_validateItemsOnly()) return;
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          icon: const Icon(Icons.fact_check_outlined),
+          title: const Text('Confirm items'),
+          content: const Text(
+            'Have you entered all stock items for this vendor?\n\nTap Continue to enter payment details and save.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Not yet'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    setState(() {
+      _showPaymentSection = true;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _paymentSectionKey.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        alignment: 0.1,
+      );
+    });
+  }
+
+  Future<void> _saveFinal() async {
+    final form = _formKey.currentState;
+
+    if (!_validateItemsOnly()) return;
 
     if (form == null || !form.validate()) {
       _showSnack('Please fix highlighted fields.');
@@ -223,21 +298,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     if (_remainingAmount > 0 && _deadline == null) {
       _showSnack('Please select a payment deadline.');
       return;
-    }
-
-    for (final item in _items) {
-      if (item.quantity <= 0) {
-        _showSnack('Quantity must be at least 1.');
-        return;
-      }
-      if (item.costPrice <= 0) {
-        _showSnack('Cost price must be > 0.');
-        return;
-      }
-      if (item.sellingPrice < 0) {
-        _showSnack('Selling price cannot be negative.');
-        return;
-      }
     }
 
     final entry = StockEntry(
@@ -303,6 +363,63 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    Widget actionRow({
+      required IconData icon,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap,
+    }) {
+      return Material(
+        color: colorScheme.surfaceContainerHigh,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Row(
+              children: [
+                Container(
+                  height: 42,
+                  width: 42,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withAlpha(18),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: colorScheme.outlineVariant),
+                  ),
+                  child: Icon(icon, color: colorScheme.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Form(
       key: _formKey,
       child: Scaffold(
@@ -321,6 +438,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
           ],
         ),
         body: ListView(
+          controller: _scrollController,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 140),
           children: [
             Card(
@@ -368,28 +486,52 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      'Add items',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 10,
+                    Row(
                       children: [
-                        FilledButton.icon(
-                          onPressed: _scanBarcode,
-                          icon: const Icon(Icons.document_scanner_outlined),
-                          label: const Text('Scan barcode'),
+                        Expanded(
+                          child: Text(
+                            'Add items',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
-                        OutlinedButton.icon(
-                          onPressed: _generateBarcode,
-                          icon: const Icon(Icons.auto_fix_high_rounded),
-                          label: const Text('Generate barcode'),
+                        Text(
+                          '${_items.length} added',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: colorScheme.outlineVariant),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            actionRow(
+                              icon: Icons.document_scanner_outlined,
+                              title: 'Scan barcode',
+                              subtitle: 'Scan existing barcode using camera',
+                              onTap: _scanBarcode,
+                            ),
+                            const Divider(height: 1),
+                            actionRow(
+                              icon: Icons.auto_fix_high_rounded,
+                              title: 'Generate barcode',
+                              subtitle: 'Create new barcode with item details',
+                              onTap: _generateBarcode,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -411,7 +553,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'No items yet. Scan a barcode to add products.',
+                          'No items yet. Scan or generate a barcode to add products.',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w600,
@@ -467,13 +609,18 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
             const SizedBox(height: 14),
 
-            PaymentSection(
-              totalPaymentController: _totalPaymentController,
-              paidAmountController: _paidAmountController,
-              remainingAmount: _remainingAmount,
-              deadline: _deadline,
-              onPickDeadline: _pickDeadline,
-            ),
+            if (_showPaymentSection) ...[
+              KeyedSubtree(
+                key: _paymentSectionKey,
+                child: PaymentSection(
+                  totalPaymentController: _totalPaymentController,
+                  paidAmountController: _paidAmountController,
+                  remainingAmount: _remainingAmount,
+                  deadline: _deadline,
+                  onPickDeadline: _pickDeadline,
+                ),
+              ),
+            ],
           ],
         ),
         bottomNavigationBar: SafeArea(
@@ -506,9 +653,13 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: _save,
-                  icon: const Icon(Icons.check),
-                  label: const Text('Save'),
+                  onPressed: _showPaymentSection
+                      ? _saveFinal
+                      : _proceedToPayment,
+                  icon: Icon(
+                    _showPaymentSection ? Icons.check_circle : Icons.save,
+                  ),
+                  label: Text(_showPaymentSection ? 'Confirm & Save' : 'Save'),
                 ),
               ],
             ),

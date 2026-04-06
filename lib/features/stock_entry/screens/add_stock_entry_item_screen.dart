@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/stock_entry_draft_item.dart';
 import 'barcode_preview_screen.dart';
@@ -16,12 +17,12 @@ class AddStockEntryItemScreen extends StatefulWidget {
   final bool allowBarcodeEdit;
   final bool enableBarcodeGeneration;
 
-  static Route<StockEntryDraftItem?> route({
+  static Route<List<StockEntryDraftItem>?> route({
     required String initialBarcode,
     required bool allowBarcodeEdit,
     bool enableBarcodeGeneration = false,
   }) {
-    return MaterialPageRoute<StockEntryDraftItem?>(
+    return MaterialPageRoute<List<StockEntryDraftItem>?>(
       settings: const RouteSettings(name: '/stock-entry/add-item'),
       builder: (_) => AddStockEntryItemScreen(
         initialBarcode: initialBarcode,
@@ -41,27 +42,21 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
   late final TextEditingController _barcodeController;
   final TextEditingController _brandController = TextEditingController();
-  final TextEditingController _sizeController = TextEditingController();
-  final TextEditingController _colourController = TextEditingController();
-  final TextEditingController _qtyController = TextEditingController(text: '1');
   final TextEditingController _costController = TextEditingController();
   final TextEditingController _sellController = TextEditingController();
 
   StockEntryItemGender? _gender;
-  String? _itemType1;
-
-  bool _isGeneratingBarcode = false;
-
-  static const String _customOption = '__custom__';
+  String? _itemType;
 
   String? _brandSelection;
   bool get _isBrandCustom => _brandSelection == _customOption;
 
-  String? _sizeSelection;
-  bool get _isSizeCustom => _sizeSelection == _customOption;
+  bool _isGeneratingBarcode = false;
 
-  String? _colourSelection;
-  bool get _isColourCustom => _colourSelection == _customOption;
+  final _VariantDraftRow _draftRow = _VariantDraftRow();
+  final List<_VariantEntry> _entries = <_VariantEntry>[];
+
+  static const String _customOption = '__custom__';
 
   static const List<String> _brandOptions = <String>[
     'Nova Apparel',
@@ -70,40 +65,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     'Astra',
     'DashWear',
     'MintMode',
-  ];
-
-  static const List<String> _sizeOptions = <String>[
-    'XS',
-    'S',
-    'M',
-    'L',
-    'XL',
-    'XXL',
-    '28',
-    '30',
-    '32',
-    '34',
-    '36',
-    '38',
-    '40',
-    '42',
-    '44',
-  ];
-
-  static const List<String> _colourOptions = <String>[
-    'Black',
-    'White',
-    'Blue',
-    'Navy',
-    'Grey',
-    'Green',
-    'Red',
-    'Yellow',
-    'Pink',
-    'Brown',
-    'Beige',
-    'Purple',
-    'Orange',
   ];
 
   static const List<String> _itemTypes = <String>[
@@ -121,78 +82,203 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     'Other',
   ];
 
+  static const List<String> _sizeOptionsDefault = <String>[
+    'XS',
+    'S',
+    'M',
+    'L',
+    'XL',
+    'XXL',
+    '28',
+    '30',
+    '32',
+    '34',
+    '36',
+    '38',
+    '40',
+    '42',
+    '44',
+  ];
+
+  static const List<String> _colourOptionsDefault = <String>[
+    'Black',
+    'White',
+    'Blue',
+    'Navy',
+    'Grey',
+    'Green',
+    'Red',
+    'Yellow',
+    'Pink',
+    'Brown',
+    'Beige',
+    'Purple',
+    'Orange',
+  ];
+
+  static const String _prefsKeySizes = 'stock_entry_custom_sizes_v1';
+  static const String _prefsKeyColours = 'stock_entry_custom_colours_v1';
+
+  List<String> _sizeOptions = List<String>.from(_sizeOptionsDefault);
+  List<String> _colourOptions = List<String>.from(_colourOptionsDefault);
+
   @override
   void initState() {
     super.initState();
     _barcodeController = TextEditingController(text: widget.initialBarcode);
-
-    // Sanitize any state that might be kept across hot reloads.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-
-      final nextGender =
-          _gender != null && StockEntryItemGender.values.contains(_gender)
-          ? _gender
-          : null;
-
-      final nextBrand =
-          _brandSelection == null ||
-              _brandSelection == _customOption ||
-              _brandOptions.contains(_brandSelection)
-          ? _brandSelection
-          : null;
-
-      final nextSize =
-          _sizeSelection == null ||
-              _sizeSelection == _customOption ||
-              _sizeOptions.contains(_sizeSelection)
-          ? _sizeSelection
-          : null;
-
-      final nextColour =
-          _colourSelection == null ||
-              _colourSelection == _customOption ||
-              _colourOptions.contains(_colourSelection)
-          ? _colourSelection
-          : null;
-
-      if (nextGender != _gender ||
-          nextBrand != _brandSelection ||
-          nextSize != _sizeSelection ||
-          nextColour != _colourSelection) {
-        setState(() {
-          _gender = nextGender;
-          _brandSelection = nextBrand;
-          _sizeSelection = nextSize;
-          _colourSelection = nextColour;
-        });
-      }
-    });
+    _loadCustomOptions();
   }
 
   @override
   void dispose() {
     _barcodeController.dispose();
     _brandController.dispose();
-    _sizeController.dispose();
-    _colourController.dispose();
-    _qtyController.dispose();
     _costController.dispose();
     _sellController.dispose();
+    _draftRow.dispose();
     super.dispose();
   }
 
-  int _qty() => int.tryParse(_qtyController.text.trim()) ?? 0;
+  Future<void> _loadCustomOptions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final sizes = prefs.getStringList(_prefsKeySizes) ?? const <String>[];
+      final colours = prefs.getStringList(_prefsKeyColours) ?? const <String>[];
 
-  void _setQty(int value) {
-    final next = value.clamp(1, 9999);
-    _qtyController.text = next.toString();
+      if (!mounted) return;
+      setState(() {
+        _sizeOptions = _mergeOptions(_sizeOptionsDefault, sizes);
+        _colourOptions = _mergeOptions(_colourOptionsDefault, colours);
+      });
+    } catch (_) {
+      // Ignore; defaults will be used.
+    }
   }
 
-  void _onGenderChanged(StockEntryItemGender value) {
+  List<String> _mergeOptions(List<String> defaults, List<String> custom) {
+    final seen = <String>{};
+    final out = <String>[];
+
+    void add(String v) {
+      final trimmed = v.trim();
+      if (trimmed.isEmpty) return;
+      final key = trimmed.toLowerCase();
+      if (seen.add(key)) out.add(trimmed);
+    }
+
+    for (final v in defaults) {
+      add(v);
+    }
+    for (final v in custom) {
+      add(v);
+    }
+
+    return out;
+  }
+
+  Future<void> _persistCustomOptions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final customSizes = _sizeOptions
+          .where((s) => !_sizeOptionsDefault.contains(s))
+          .toList(growable: false);
+      final customColours = _colourOptions
+          .where((c) => !_colourOptionsDefault.contains(c))
+          .toList(growable: false);
+
+      await prefs.setStringList(_prefsKeySizes, customSizes);
+      await prefs.setStringList(_prefsKeyColours, customColours);
+    } catch (_) {
+      // Ignore.
+    }
+  }
+
+  Future<bool> _maybePersistCustomValue({
+    required String kind,
+    required String value,
+  }) async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+
+    if (kind == 'size') {
+      final exists = _sizeOptions.any(
+        (o) => o.toLowerCase() == trimmed.toLowerCase(),
+      );
+      if (exists) return true;
+
+      final ok = await _confirmNewCustomEntry(kind: 'size', value: trimmed);
+      if (!ok) return false;
+      setState(() {
+        _sizeOptions = [..._sizeOptions, trimmed];
+      });
+      await _persistCustomOptions();
+      return true;
+    }
+
+    if (kind == 'colour') {
+      final exists = _colourOptions.any(
+        (o) => o.toLowerCase() == trimmed.toLowerCase(),
+      );
+      if (exists) return true;
+
+      final ok = await _confirmNewCustomEntry(kind: 'colour', value: trimmed);
+      if (!ok) return false;
+      setState(() {
+        _colourOptions = [..._colourOptions, trimmed];
+      });
+      await _persistCustomOptions();
+      return true;
+    }
+
+    return true;
+  }
+
+  Future<void> _addItemToTable() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    final size = _draftRow.resolvedSize.trim();
+    final colour = _draftRow.resolvedColour.trim();
+    final qty = _draftRow.qty;
+
+    if (size.isEmpty) {
+      _showSnack('Select a size.');
+      return;
+    }
+    if (colour.isEmpty) {
+      _showSnack('Select a colour.');
+      return;
+    }
+    if (qty <= 0) {
+      _showSnack('Enter pieces (qty).');
+      return;
+    }
+
+    if (_draftRow.isSizeCustom) {
+      final ok = await _maybePersistCustomValue(kind: 'size', value: size);
+      if (!ok) return;
+    }
+    if (_draftRow.isColourCustom) {
+      final ok = await _maybePersistCustomValue(kind: 'colour', value: colour);
+      if (!ok) return;
+    }
+
     setState(() {
-      _gender = value;
+      _entries.add(_VariantEntry(size: size, colour: colour, qty: qty));
+      _draftRow.reset();
     });
+  }
+
+  void _removeEntryAt(int index) {
+    setState(() {
+      _entries.removeAt(index);
+    });
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   String _stubGenerateBarcodeValue() {
@@ -201,8 +287,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   }
 
   Future<String> _generateBarcodeFromBackend() async {
-    // TODO: Replace this stub with backend API integration.
-    // API input: brand/size/colour/gender/itemType/qty/prices etc.
+    // TODO: Replace with backend API.
     return _stubGenerateBarcodeValue();
   }
 
@@ -211,7 +296,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirm entry'),
-        content: const Text('Do your entry is right?'),
+        content: const Text('Is the entry correct?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -228,36 +313,59 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     return result ?? false;
   }
 
+  Future<bool> _confirmNewCustomEntry({
+    required String kind,
+    required String value,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm entry'),
+        content: Text('Save "$value" as a new $kind option for future use?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes, save'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   Future<void> _submit() async {
     final form = _formKey.currentState;
     if (form == null) return;
     if (!form.validate()) return;
-
     if (_isGeneratingBarcode) return;
 
     FocusManager.instance.primaryFocus?.unfocus();
 
-    final barcode = _barcodeController.text.trim();
-    final brand = _isBrandCustom
-        ? _brandController.text.trim()
-        : (_brandSelection ?? '').trim();
-    final size = _isSizeCustom
-        ? _sizeController.text.trim()
-        : (_sizeSelection ?? '');
-    final colour = _isColourCustom
-        ? _colourController.text.trim()
-        : (_colourSelection ?? '');
-
-    final qty = int.tryParse(_qtyController.text.trim()) ?? 0;
-    final cost = double.tryParse(_costController.text.trim()) ?? 0;
-    final sell = double.tryParse(_sellController.text.trim()) ?? 0;
-
-    final item1 = _itemType1;
-
     final gender = _gender;
     if (gender == null) return;
 
-    var finalBarcode = barcode;
+    final itemType = _itemType;
+    if (itemType == null || itemType.trim().isEmpty) return;
+
+    final brand = _isBrandCustom
+        ? _brandController.text.trim()
+        : (_brandSelection ?? '').trim();
+    if (brand.isEmpty) return;
+
+    if (_entries.isEmpty) {
+      _showSnack('Add at least one item row.');
+      return;
+    }
+
+    final cost = double.tryParse(_costController.text.trim()) ?? 0;
+    final sell = double.tryParse(_sellController.text.trim()) ?? 0;
+
+    // Barcode handling: one barcode for the whole group.
+    var finalBarcode = _barcodeController.text.trim();
     if (widget.enableBarcodeGeneration) {
       final confirmed = await _confirmEntryIsRight();
       if (!confirmed) return;
@@ -287,21 +395,27 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
     if (finalBarcode.isEmpty) return;
 
-    final result = StockEntryDraftItem(
-      barcode: finalBarcode,
-      brandName: brand,
-      size: size,
-      colour: colour,
-      gender: gender,
-      isPair: false,
-      itemType1: item1!,
-      itemType2: null,
-      quantity: qty,
-      costPrice: cost,
-      sellingPrice: sell,
-    );
+    final out = <StockEntryDraftItem>[];
+    for (final row in _entries) {
+      out.add(
+        StockEntryDraftItem(
+          barcode: finalBarcode,
+          brandName: brand,
+          size: row.size,
+          colour: row.colour,
+          gender: gender,
+          isPair: false,
+          itemType1: itemType,
+          itemType2: null,
+          quantity: row.qty,
+          costPrice: cost,
+          sellingPrice: sell,
+        ),
+      );
+    }
 
-    Navigator.of(context).pop(result);
+    if (!mounted) return;
+    Navigator.of(context).pop(out);
   }
 
   @override
@@ -309,9 +423,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    // Hot reload can keep old enum/string values in State. If an enum value was
-    // removed (ex: Unisex), DropdownButtonFormField will assert unless we
-    // sanitize it.
     final StockEntryItemGender? safeGender =
         _gender != null && StockEntryItemGender.values.contains(_gender)
         ? _gender
@@ -324,20 +435,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         ? _brandSelection
         : null;
 
-    final String? safeSizeSelection =
-        _sizeSelection == null ||
-            _sizeSelection == _customOption ||
-            _sizeOptions.contains(_sizeSelection)
-        ? _sizeSelection
-        : null;
-
-    final String? safeColourSelection =
-        _colourSelection == null ||
-            _colourSelection == _customOption ||
-            _colourOptions.contains(_colourSelection)
-        ? _colourSelection
-        : null;
-
     InputDecoration decoration({
       required String label,
       required IconData icon,
@@ -345,6 +442,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       String? prefixText,
     }) {
       return InputDecoration(
+        isDense: true,
         labelText: label,
         hintText: hint,
         prefixText: prefixText,
@@ -352,6 +450,20 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         filled: true,
         fillColor: colorScheme.surfaceContainerHighest,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      );
+    }
+
+    InputDecoration rowDecoration({required String hint}) {
+      return InputDecoration(
+        isDense: true,
+        hintText: hint,
+        filled: true,
+        fillColor: colorScheme.surfaceContainerHighest,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
       );
     }
 
@@ -367,7 +479,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         color: colorScheme.surfaceContainerLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -421,15 +533,15 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       );
     }
 
-    final productSubtitle = widget.enableBarcodeGeneration
-        ? 'Enter details and generate barcode.'
+    final subtitle = widget.enableBarcodeGeneration
+        ? 'Enter details and generate one barcode for this group.'
         : widget.allowBarcodeEdit
-        ? 'Enter barcode and product details.'
+        ? 'Enter barcode and details.'
         : 'Barcode scanned. Fill remaining details.';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Stock Item'),
+        title: const Text('Add Stock Items'),
         actions: [
           IconButton(
             tooltip: 'Close',
@@ -453,8 +565,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
             children: [
               sectionCard(
                 icon: Icons.inventory_2_outlined,
-                title: 'Product',
-                subtitle: productSubtitle,
+                title: 'Common details',
+                subtitle: subtitle,
                 children: [
                   if (!widget.enableBarcodeGeneration) ...[
                     TextFormField(
@@ -488,18 +600,13 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                       ),
                       const DropdownMenuItem<String>(
                         value: _customOption,
-                        child: Text(
-                          'Custom entry',
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        child: Text('Custom entry'),
                       ),
                     ],
                     onChanged: (v) {
                       setState(() {
                         _brandSelection = v;
-                        if (v != _customOption) {
-                          _brandController.text = '';
-                        }
+                        if (v != _customOption) _brandController.text = '';
                       });
                     },
                     validator: (v) {
@@ -529,25 +636,24 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                       ),
                       validator: (v) {
                         if (!_isBrandCustom) return null;
-                        final raw = v?.trim() ?? '';
-                        if (raw.isEmpty) return 'Enter brand name';
+                        if ((v ?? '').trim().isEmpty) return 'Enter brand name';
                         return null;
                       },
                     ),
                   ],
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: _itemType1,
+                    initialValue: _itemType,
                     isExpanded: true,
                     items: _itemTypes
                         .map(
-                          (t) => DropdownMenuItem(
+                          (t) => DropdownMenuItem<String>(
                             value: t,
                             child: Text(t, overflow: TextOverflow.ellipsis),
                           ),
                         )
                         .toList(growable: false),
-                    onChanged: (v) => setState(() => _itemType1 = v),
+                    onChanged: (v) => setState(() => _itemType = v),
                     validator: (v) {
                       final raw = v?.trim() ?? '';
                       if (raw.isEmpty) return 'Item type is required';
@@ -556,7 +662,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                     decoration: decoration(
                       label: 'Item type',
                       icon: Icons.checkroom_outlined,
-                      hint: 'Example: T-Shirt',
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -565,7 +670,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                     isExpanded: true,
                     items: StockEntryItemGender.values
                         .map(
-                          (g) => DropdownMenuItem(
+                          (g) => DropdownMenuItem<StockEntryItemGender>(
                             value: g,
                             child: Text(
                               g.label,
@@ -574,233 +679,17 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                           ),
                         )
                         .toList(growable: false),
-                    onChanged: (v) {
-                      if (v == null) return;
-                      _onGenderChanged(v);
-                    },
-                    validator: (v) {
-                      if (v == null) return 'Gender is required';
-                      return null;
-                    },
+                    onChanged: (v) => setState(() => _gender = v),
+                    validator: (v) => v == null ? 'Gender is required' : null,
                     decoration: decoration(
                       label: 'Gender',
                       icon: Icons.wc_outlined,
                     ),
                   ),
+
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: safeSizeSelection,
-                          isExpanded: true,
-                          items: <DropdownMenuItem<String>>[
-                            ..._sizeOptions.map(
-                              (s) => DropdownMenuItem<String>(
-                                value: s,
-                                child: Text(s, overflow: TextOverflow.ellipsis),
-                              ),
-                            ),
-                            const DropdownMenuItem<String>(
-                              value: _customOption,
-                              child: Text(
-                                'Custom entry',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                          onChanged: (v) {
-                            setState(() {
-                              _sizeSelection = v;
-                              if (v != _customOption) {
-                                _sizeController.text = '';
-                              }
-                            });
-                          },
-                          validator: (v) {
-                            final raw = v?.trim() ?? '';
-                            if (raw.isEmpty) return 'Size is required';
-                            if (raw == _customOption &&
-                                _sizeController.text.trim().isEmpty) {
-                              return 'Enter size';
-                            }
-                            return null;
-                          },
-                          decoration: decoration(
-                            label: 'Size',
-                            icon: Icons.straighten_outlined,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: safeColourSelection,
-                          isExpanded: true,
-                          items: <DropdownMenuItem<String>>[
-                            ..._colourOptions.map(
-                              (c) => DropdownMenuItem<String>(
-                                value: c,
-                                child: Text(c, overflow: TextOverflow.ellipsis),
-                              ),
-                            ),
-                            const DropdownMenuItem<String>(
-                              value: _customOption,
-                              child: Text(
-                                'Custom entry',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                          onChanged: (v) {
-                            setState(() {
-                              _colourSelection = v;
-                              if (v != _customOption) {
-                                _colourController.text = '';
-                              }
-                            });
-                          },
-                          validator: (v) {
-                            final raw = v?.trim() ?? '';
-                            if (raw.isEmpty) return 'Colour is required';
-                            if (raw == _customOption &&
-                                _colourController.text.trim().isEmpty) {
-                              return 'Enter colour';
-                            }
-                            return null;
-                          },
-                          decoration: decoration(
-                            label: 'Colour',
-                            icon: Icons.palette_outlined,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_isSizeCustom || _isColourCustom) ...[
-                    const SizedBox(height: 12),
-                    if (_isSizeCustom && _isColourCustom)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _sizeController,
-                              textCapitalization: TextCapitalization.characters,
-                              textInputAction: TextInputAction.next,
-                              decoration: decoration(
-                                label: 'Enter size',
-                                icon: Icons.edit_outlined,
-                                hint: 'S / M / L / 30',
-                              ),
-                              validator: (v) {
-                                if (!_isSizeCustom) return null;
-                                final raw = v?.trim() ?? '';
-                                if (raw.isEmpty) return 'Enter size';
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _colourController,
-                              textCapitalization: TextCapitalization.words,
-                              textInputAction: TextInputAction.next,
-                              decoration: decoration(
-                                label: 'Enter colour',
-                                icon: Icons.edit_outlined,
-                                hint: 'Example: Blue',
-                              ),
-                              validator: (v) {
-                                if (!_isColourCustom) return null;
-                                final raw = v?.trim() ?? '';
-                                if (raw.isEmpty) return 'Enter colour';
-                                return null;
-                              },
-                            ),
-                          ),
-                        ],
-                      )
-                    else if (_isSizeCustom)
-                      TextFormField(
-                        controller: _sizeController,
-                        textCapitalization: TextCapitalization.characters,
-                        textInputAction: TextInputAction.next,
-                        decoration: decoration(
-                          label: 'Enter size',
-                          icon: Icons.edit_outlined,
-                          hint: 'S / M / L / 30',
-                        ),
-                        validator: (v) {
-                          if (!_isSizeCustom) return null;
-                          final raw = v?.trim() ?? '';
-                          if (raw.isEmpty) return 'Enter size';
-                          return null;
-                        },
-                      )
-                    else
-                      TextFormField(
-                        controller: _colourController,
-                        textCapitalization: TextCapitalization.words,
-                        textInputAction: TextInputAction.next,
-                        decoration: decoration(
-                          label: 'Enter colour',
-                          icon: Icons.edit_outlined,
-                          hint: 'Example: Blue',
-                        ),
-                        validator: (v) {
-                          if (!_isColourCustom) return null;
-                          final raw = v?.trim() ?? '';
-                          if (raw.isEmpty) return 'Enter colour';
-                          return null;
-                        },
-                      ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 14),
-              sectionCard(
-                icon: Icons.payments_outlined,
-                title: 'Stock & pricing',
-                subtitle: 'Quantity, cost price and selling price.',
-                children: [
-                  Row(
-                    children: [
-                      IconButton.filledTonal(
-                        tooltip: 'Decrease quantity',
-                        onPressed: () => _setQty(_qty() - 1),
-                        icon: const Icon(Icons.remove),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 110,
-                        child: TextFormField(
-                          controller: _qtyController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          textAlign: TextAlign.center,
-                          decoration: decoration(
-                            label: 'Qty',
-                            icon: Icons.numbers,
-                          ),
-                          validator: (v) {
-                            final raw = v?.trim() ?? '';
-                            final parsed = int.tryParse(raw);
-                            if (parsed == null) return 'Enter qty';
-                            if (parsed <= 0) return 'Qty must be > 0';
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton.filledTonal(
-                        tooltip: 'Increase quantity',
-                        onPressed: () => _setQty(_qty() + 1),
-                        icon: const Icon(Icons.add),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
                         child: TextFormField(
                           controller: _costController,
@@ -808,7 +697,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                             decimal: true,
                           ),
                           decoration: decoration(
-                            label: 'Cost price',
+                            label: 'Cost',
                             icon: Icons.payments_outlined,
                             prefixText: '₹',
                           ),
@@ -821,26 +710,305 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                           },
                         ),
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _sellController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: decoration(
+                            label: 'Selling',
+                            icon: Icons.sell_outlined,
+                            prefixText: '₹',
+                          ),
+                          validator: (v) {
+                            final raw = v?.trim() ?? '';
+                            final parsed = double.tryParse(raw);
+                            if (parsed == null) return 'Enter selling';
+                            if (parsed < 0) return 'Selling cannot be negative';
+                            return null;
+                          },
+                        ),
+                      ),
                     ],
                   ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              sectionCard(
+                icon: Icons.view_list_outlined,
+                title: 'Items',
+                subtitle: 'Add size, colour and pieces in a row.',
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 5,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _draftRow.safeSizeSelection(
+                            _sizeOptions,
+                          ),
+                          isExpanded: true,
+                          menuMaxHeight: 360,
+                          items: <DropdownMenuItem<String>>[
+                            ..._sizeOptions.map(
+                              (v) => DropdownMenuItem<String>(
+                                value: v,
+                                child: Text(v, overflow: TextOverflow.ellipsis),
+                              ),
+                            ),
+                            const DropdownMenuItem<String>(
+                              value: _customOption,
+                              child: Text('Custom entry'),
+                            ),
+                          ],
+                          onChanged: (v) {
+                            setState(() {
+                              _draftRow.sizeSelection = v;
+                              if (v != _customOption) {
+                                _draftRow.sizeController.text = '';
+                              }
+                            });
+                          },
+                          decoration: rowDecoration(hint: 'Size'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 6,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _draftRow.safeColourSelection(
+                            _colourOptions,
+                          ),
+                          isExpanded: true,
+                          menuMaxHeight: 360,
+                          items: <DropdownMenuItem<String>>[
+                            ..._colourOptions.map(
+                              (v) => DropdownMenuItem<String>(
+                                value: v,
+                                child: Text(v, overflow: TextOverflow.ellipsis),
+                              ),
+                            ),
+                            const DropdownMenuItem<String>(
+                              value: _customOption,
+                              child: Text('Custom entry'),
+                            ),
+                          ],
+                          onChanged: (v) {
+                            setState(() {
+                              _draftRow.colourSelection = v;
+                              if (v != _customOption) {
+                                _draftRow.colourController.text = '';
+                              }
+                            });
+                          },
+                          decoration: rowDecoration(hint: 'Colour'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 96,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextFormField(
+                              controller: _draftRow.qtyController,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              textAlign: TextAlign.center,
+                              decoration: rowDecoration(hint: 'Pieces'),
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: _addItemToTable,
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(0, 28),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                  textStyle: theme.textTheme.labelSmall
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                                icon: const Icon(Icons.add, size: 16),
+                                label: const Text('Add item'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_draftRow.isSizeCustom || _draftRow.isColourCustom) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        if (_draftRow.isSizeCustom)
+                          Expanded(
+                            child: TextFormField(
+                              controller: _draftRow.sizeController,
+                              textCapitalization: TextCapitalization.characters,
+                              textInputAction: TextInputAction.next,
+                              decoration: decoration(
+                                label: 'Enter size',
+                                icon: Icons.edit_outlined,
+                                hint: 'S / M / L / 30',
+                              ),
+                            ),
+                          ),
+                        if (_draftRow.isSizeCustom && _draftRow.isColourCustom)
+                          const SizedBox(width: 12),
+                        if (_draftRow.isColourCustom)
+                          Expanded(
+                            child: TextFormField(
+                              controller: _draftRow.colourController,
+                              textCapitalization: TextCapitalization.words,
+                              textInputAction: TextInputAction.next,
+                              decoration: decoration(
+                                label: 'Enter colour',
+                                icon: Icons.edit_outlined,
+                                hint: 'Example: Blue',
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _sellController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colorScheme.outlineVariant),
                     ),
-                    decoration: decoration(
-                      label: 'Selling price',
-                      icon: Icons.sell_outlined,
-                      prefixText: '₹',
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: Text(
+                                'Size',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 6,
+                              child: Text(
+                                'Colour',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 96,
+                              child: Text(
+                                'Pieces',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 36),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (_entries.isEmpty)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'No items added yet',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        else
+                          ...List.generate(_entries.length, (i) {
+                            final e = _entries[i];
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                bottom: i == _entries.length - 1 ? 0 : 6,
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: colorScheme.outlineVariant,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 5,
+                                      child: Text(
+                                        e.size,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 6,
+                                      child: Text(
+                                        e.colour,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 96,
+                                      child: Text(
+                                        e.qty.toString(),
+                                        textAlign: TextAlign.center,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Delete',
+                                      visualDensity: VisualDensity.compact,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 36,
+                                        minHeight: 36,
+                                      ),
+                                      onPressed: () => _removeEntryAt(i),
+                                      icon: const Icon(Icons.delete_outline),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                      ],
                     ),
-                    validator: (v) {
-                      final raw = v?.trim() ?? '';
-                      final parsed = double.tryParse(raw);
-                      if (parsed == null) return 'Enter selling price';
-                      if (parsed < 0) return 'Selling cannot be negative';
-                      return null;
-                    },
                   ),
                 ],
               ),
@@ -880,7 +1048,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                           ? (_isGeneratingBarcode
                                 ? 'Generating...'
                                 : 'Generate barcode')
-                          : 'Add item',
+                          : 'Add items',
                     ),
                   ),
                 ),
@@ -891,4 +1059,72 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       ),
     );
   }
+}
+
+class _VariantDraftRow {
+  _VariantDraftRow()
+    : qtyController = TextEditingController(text: '1'),
+      sizeController = TextEditingController(),
+      colourController = TextEditingController();
+
+  String? sizeSelection;
+  String? colourSelection;
+
+  final TextEditingController qtyController;
+  final TextEditingController sizeController;
+  final TextEditingController colourController;
+
+  bool get isSizeCustom =>
+      sizeSelection == _AddStockEntryItemScreenState._customOption;
+  bool get isColourCustom =>
+      colourSelection == _AddStockEntryItemScreenState._customOption;
+
+  int get qty => int.tryParse(qtyController.text.trim()) ?? 0;
+
+  String get resolvedSize =>
+      isSizeCustom ? sizeController.text.trim() : (sizeSelection ?? '').trim();
+
+  String get resolvedColour => isColourCustom
+      ? colourController.text.trim()
+      : (colourSelection ?? '').trim();
+
+  String? safeSizeSelection(List<String> options) {
+    final v = sizeSelection;
+    if (v == null) return null;
+    if (v == _AddStockEntryItemScreenState._customOption) return v;
+    return options.contains(v) ? v : null;
+  }
+
+  String? safeColourSelection(List<String> options) {
+    final v = colourSelection;
+    if (v == null) return null;
+    if (v == _AddStockEntryItemScreenState._customOption) return v;
+    return options.contains(v) ? v : null;
+  }
+
+  void reset() {
+    sizeSelection = null;
+    colourSelection = null;
+    sizeController.text = '';
+    colourController.text = '';
+    qtyController.text = '1';
+  }
+
+  void dispose() {
+    qtyController.dispose();
+    sizeController.dispose();
+    colourController.dispose();
+  }
+}
+
+class _VariantEntry {
+  const _VariantEntry({
+    required this.size,
+    required this.colour,
+    required this.qty,
+  });
+
+  final String size;
+  final String colour;
+  final int qty;
 }
