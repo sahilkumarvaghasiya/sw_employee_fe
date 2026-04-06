@@ -122,120 +122,134 @@ class _ProductsScreenState extends State<ProductsScreen> {
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              sliver: SliverToBoxAdapter(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isNarrow = constraints.maxWidth < 420;
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _PinnedHeaderDelegate(
+                height: 96,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 420;
 
-                    final search = ProductsSearchBar(
-                      controller: _searchController,
-                      onChanged: provider.setSearchQuery,
-                    );
-
-                    void applyTypedSize(String value) {
-                      _sizeDebounce?.cancel();
-                      _sizeDebounce = Timer(
-                        const Duration(milliseconds: 250),
-                        () {
-                          if (!mounted) return;
-                          provider.setSelectedSize(value);
-                        },
+                      final search = ProductsSearchBar(
+                        controller: _searchController,
+                        onChanged: provider.setSearchQuery,
                       );
-                    }
 
-                    final sizeMenu = MenuAnchor(
-                      controller: _sizeMenuController,
-                      style: MenuStyle(
-                        maximumSize: WidgetStatePropertyAll(
-                          Size(constraints.maxWidth, 320),
-                        ),
-                      ),
-                      menuChildren: [
-                        MenuItemButton(
-                          onPressed: () {
-                            _sizeController.clear();
-                            provider.setSelectedSize(null);
-                            _sizeMenuController.close();
+                      void applyTypedSize(String value) {
+                        _sizeDebounce?.cancel();
+                        _sizeDebounce = Timer(
+                          const Duration(milliseconds: 250),
+                          () {
+                            if (!mounted) return;
+                            provider.setSelectedSize(value);
                           },
-                          child: const Text('All sizes'),
+                        );
+                      }
+
+                      final sizeMenu = MenuAnchor(
+                        controller: _sizeMenuController,
+                        style: MenuStyle(
+                          maximumSize: WidgetStatePropertyAll(
+                            Size(constraints.maxWidth, 320),
+                          ),
                         ),
-                        ...provider.availableSizes.map(
-                          (s) => MenuItemButton(
+                        menuChildren: [
+                          MenuItemButton(
                             onPressed: () {
-                              _sizeController.text = s;
-                              _sizeController.selection =
-                                  TextSelection.collapsed(offset: s.length);
-                              provider.setSelectedSize(s);
+                              _sizeController.clear();
+                              provider.setSelectedSize(null);
                               _sizeMenuController.close();
                             },
-                            child: Text(s),
+                            child: const Text('All sizes'),
                           ),
-                        ),
-                      ],
-                      builder: (context, controller, child) {
-                        return TextField(
-                          controller: _sizeController,
-                          focusNode: _sizeFocusNode,
-                          textInputAction: TextInputAction.done,
-                          onChanged: applyTypedSize,
-                          onSubmitted: provider.setSelectedSize,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: colorScheme.surfaceContainerHigh,
-                            prefixIcon: const Icon(Icons.straighten_outlined),
-                            hintText: 'Size',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide(
-                                color: colorScheme.outlineVariant,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 14,
-                            ),
-                            suffixIcon: IconButton(
-                              tooltip: 'Show sizes',
+                          ...provider.availableSizes.map(
+                            (s) => MenuItemButton(
                               onPressed: () {
-                                if (controller.isOpen) {
-                                  controller.close();
-                                } else {
-                                  controller.open();
-                                }
+                                _sizeController.text = s;
+                                _sizeController.selection =
+                                    TextSelection.collapsed(offset: s.length);
+                                provider.setSelectedSize(s);
+                                _sizeMenuController.close();
                               },
-                              icon: const Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                              ),
+                              child: Text(s),
                             ),
                           ),
-                        );
-                      },
-                    );
+                        ],
+                        builder: (context, controller, child) {
+                          return TextField(
+                            controller: _sizeController,
+                            focusNode: _sizeFocusNode,
+                            textInputAction: TextInputAction.done,
+                            onChanged: applyTypedSize,
+                            onSubmitted: provider.setSelectedSize,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerHigh,
+                              prefixIcon: const Icon(Icons.straighten_outlined),
+                              prefixIconConstraints: const BoxConstraints(
+                                minWidth: 42,
+                                minHeight: 42,
+                              ),
+                              hintText: 'Size',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide(
+                                  color: colorScheme.outlineVariant,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
+                              ),
+                              suffixIcon: IconButton(
+                                tooltip: 'Show sizes',
+                                visualDensity: VisualDensity.compact,
+                                constraints: const BoxConstraints(
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                ),
+                                onPressed: () {
+                                  if (controller.isOpen) {
+                                    controller.close();
+                                  } else {
+                                    controller.open();
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
 
-                    if (isNarrow) {
-                      return Column(
+                      if (isNarrow) {
+                        return Row(
+                          children: [
+                            Expanded(child: search),
+                            const SizedBox(width: 10),
+                            SizedBox(width: 140, child: sizeMenu),
+                          ],
+                        );
+                      }
+
+                      return Row(
                         children: [
-                          search,
-                          const SizedBox(height: 10),
-                          sizeMenu,
+                          Expanded(child: search),
+                          const SizedBox(width: 10),
+                          SizedBox(width: 190, child: sizeMenu),
                         ],
                       );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(child: search),
-                        const SizedBox(width: 10),
-                        SizedBox(width: 220, child: sizeMenu),
-                      ],
-                    );
-                  },
+                    },
+                  ),
                 ),
               ),
             ),
@@ -351,5 +365,48 @@ class _PaginationFooter extends StatelessWidget {
     }
 
     return const SizedBox(height: 8);
+  }
+}
+
+class _PinnedHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _PinnedHeaderDelegate({required this.height, required this.child});
+
+  final double height;
+  final Widget child;
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: height,
+      child: Material(
+        color: colorScheme.surface,
+        elevation: overlapsContent ? 1 : 0,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: colorScheme.outlineVariant, width: 1),
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedHeaderDelegate oldDelegate) {
+    return oldDelegate.height != height || oldDelegate.child != child;
   }
 }
