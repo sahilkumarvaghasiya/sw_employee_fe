@@ -6,7 +6,6 @@ import '../models/stock_entry_draft_item.dart';
 import '../models/vendor.dart';
 import '../providers/stock_entry_provider.dart';
 import '../widgets/payment_section.dart';
-import '../widgets/product_scan_card.dart';
 import 'add_stock_entry_item_screen.dart';
 import 'stock_barcode_scanner_screen.dart';
 import 'stock_entry_history_screen.dart';
@@ -39,8 +38,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   final TextEditingController _paidAmountController = TextEditingController();
 
   final List<_EditableDraftItem> _items = [];
-
-  bool _adjustSellingPrice = false;
   DateTime? _deadline;
 
   bool _showPaymentSection = false;
@@ -184,18 +181,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     if (picked == null) return;
     setState(() => _deadline = picked);
-  }
-
-  void _toggleAdjustSellingPrice(bool value) {
-    setState(() {
-      _adjustSellingPrice = value;
-
-      if (!_adjustSellingPrice) {
-        for (final item in _items) {
-          item.resetSellingPriceToDefault();
-        }
-      }
-    });
   }
 
   void _removeItemAt(int index) {
@@ -362,6 +347,279 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+
+    Widget buildItemsTable() {
+      final headerStyle = theme.textTheme.labelSmall?.copyWith(
+        color: colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w800,
+      );
+
+      InputDecoration denseFieldDecoration(
+        String hint, {
+        required bool narrow,
+      }) {
+        return InputDecoration(
+          hintText: hint,
+          isDense: true,
+          filled: true,
+          fillColor: colorScheme.surfaceContainerHigh,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          contentPadding: narrow
+              ? const EdgeInsets.symmetric(horizontal: 6, vertical: 8)
+              : const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        );
+      }
+
+      Widget buildHeaderRow({
+        required double gap,
+        required double indexWidth,
+        required double removeWidth,
+        required int productFlex,
+        required int qtyFlex,
+        required int costFlex,
+        required int sellFlex,
+      }) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          color: colorScheme.surfaceContainerHigh,
+          child: Row(
+            children: [
+              SizedBox(
+                width: indexWidth,
+                child: Text('#', style: headerStyle),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: productFlex,
+                child: Text('Product', style: headerStyle),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: qtyFlex,
+                child: Text('Qty', style: headerStyle),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: costFlex,
+                child: Text('Cost', style: headerStyle),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: sellFlex,
+                child: Text('Sell', style: headerStyle),
+              ),
+              SizedBox(width: gap),
+              SizedBox(width: removeWidth),
+            ],
+          ),
+        );
+      }
+
+      Widget buildDataRow(
+        int index, {
+        required double gap,
+        required double indexWidth,
+        required double removeWidth,
+        required bool narrow,
+        required int productFlex,
+        required int qtyFlex,
+        required int costFlex,
+        required int sellFlex,
+      }) {
+        final item = _items[index];
+
+        final textStyle = theme.textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        );
+
+        Widget qtyControl({
+          required IconData icon,
+          required VoidCallback onTap,
+          required String tooltip,
+        }) {
+          final size = narrow ? 14.0 : 16.0;
+          final box = narrow ? 22.0 : 26.0;
+          return SizedBox(
+            width: box,
+            height: box,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                customBorder: const CircleBorder(),
+                child: Tooltip(
+                  message: tooltip,
+                  child: Center(child: Icon(icon, size: size)),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(
+            children: [
+              SizedBox(
+                width: indexWidth,
+                child: Text(
+                  '${index + 1}',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: productFlex,
+                child: Text(
+                  _displayName(item.draft),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyle,
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: qtyFlex,
+                child: Row(
+                  children: [
+                    qtyControl(
+                      icon: Icons.remove_rounded,
+                      tooltip: 'Decrease',
+                      onTap: () {
+                        item.decrementQty();
+                        _syncTotalsFromControllers();
+                      },
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: item.qtyController,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        style: textStyle,
+                        decoration: denseFieldDecoration('', narrow: narrow),
+                      ),
+                    ),
+                    qtyControl(
+                      icon: Icons.add_rounded,
+                      tooltip: 'Increase',
+                      onTap: () {
+                        item.incrementQty();
+                        _syncTotalsFromControllers();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: costFlex,
+                child: TextField(
+                  controller: item.costController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  textAlign: TextAlign.center,
+                  style: textStyle,
+                  decoration: denseFieldDecoration('', narrow: narrow),
+                ),
+              ),
+              SizedBox(width: gap),
+              Expanded(
+                flex: sellFlex,
+                child: TextField(
+                  controller: item.sellController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  textAlign: TextAlign.center,
+                  style: textStyle,
+                  decoration: denseFieldDecoration('', narrow: narrow),
+                ),
+              ),
+              SizedBox(width: gap),
+              SizedBox(
+                width: removeWidth,
+                child: IconButton(
+                  tooltip: 'Remove',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  onPressed: () => _removeItemAt(index),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      return Card(
+        clipBehavior: Clip.antiAlias,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final narrow = constraints.maxWidth < 380;
+            final gap = constraints.maxWidth < 360 ? 4.0 : 6.0;
+            final indexWidth = narrow ? 22.0 : 26.0;
+            final removeWidth = narrow ? 30.0 : 34.0;
+
+            // Give Qty a bit more room on narrow screens.
+            final productFlex = narrow ? 5 : 5;
+            final qtyFlex = narrow ? 6 : 4;
+            final costFlex = narrow ? 2 : 3;
+            final sellFlex = narrow ? 2 : 3;
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                buildHeaderRow(
+                  gap: gap,
+                  indexWidth: indexWidth,
+                  removeWidth: removeWidth,
+                  productFlex: productFlex,
+                  qtyFlex: qtyFlex,
+                  costFlex: costFlex,
+                  sellFlex: sellFlex,
+                ),
+                const Divider(height: 1),
+                ...List<Widget>.generate(_items.length, (i) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      buildDataRow(
+                        i,
+                        gap: gap,
+                        indexWidth: indexWidth,
+                        removeWidth: removeWidth,
+                        narrow: narrow,
+                        productFlex: productFlex,
+                        qtyFlex: qtyFlex,
+                        costFlex: costFlex,
+                        sellFlex: sellFlex,
+                      ),
+                      if (i != _items.length - 1) const Divider(height: 1),
+                    ],
+                  );
+                }),
+              ],
+            );
+          },
+        ),
+      );
+    }
 
     Widget actionRow({
       required IconData icon,
@@ -565,46 +823,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                 ),
               )
             else ...[
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: SwitchListTile(
-                  title: const Text('Adjust selling price'),
-                  subtitle: Text(
-                    _adjustSellingPrice
-                        ? 'Selling price can be edited'
-                        : 'Selling price is auto-filled',
-                  ),
-                  value: _adjustSellingPrice,
-                  onChanged: _toggleAdjustSellingPrice,
-                ),
-              ),
-              const SizedBox(height: 14),
-              ...List.generate(_items.length, (index) {
-                final item = _items[index];
-
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: index == _items.length - 1 ? 0 : 12,
-                  ),
-                  child: ProductScanCard(
-                    productName: _displayName(item.draft),
-                    metaLine: _metaLine(item.draft),
-                    quantityController: item.qtyController,
-                    costPriceController: item.costController,
-                    sellingPriceController: item.sellController,
-                    allowSellingPriceEdit: _adjustSellingPrice,
-                    onRemove: () => _removeItemAt(index),
-                    onIncrementQty: () {
-                      item.incrementQty();
-                      _syncTotalsFromControllers();
-                    },
-                    onDecrementQty: () {
-                      item.decrementQty();
-                      _syncTotalsFromControllers();
-                    },
-                  ),
-                );
-              }),
+              buildItemsTable(),
             ],
 
             const SizedBox(height: 14),
@@ -734,10 +953,6 @@ class _EditableDraftItem {
     final current = quantity;
     if (current <= 1) return;
     qtyController.text = (current - 1).toString();
-  }
-
-  void resetSellingPriceToDefault() {
-    sellController.text = defaultSellingPrice.toStringAsFixed(2);
   }
 
   void dispose() {
