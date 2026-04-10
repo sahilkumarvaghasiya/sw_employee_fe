@@ -41,6 +41,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   DateTime? _deadline;
 
   bool _showPaymentSection = false;
+  bool _itemsLocked = false;
 
   double _totalStockValue = 0;
   double _paidAmount = 0;
@@ -95,7 +96,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   void _syncTotalsFromControllers() {
     final total = _items.fold<double>(
       0,
-      (sum, e) => sum + (e.costPrice * e.quantity),
+      (sum, e) => sum + (e.sellingPrice * e.quantity),
     );
 
     final paid = double.tryParse(_paidAmountController.text.trim()) ?? 0;
@@ -207,12 +208,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         _showSnack('Quantity must be at least 1.');
         return false;
       }
-      if (item.costPrice <= 0) {
-        _showSnack('Cost price must be > 0.');
-        return false;
-      }
-      if (item.sellingPrice < 0) {
-        _showSnack('Selling price cannot be negative.');
+      if (item.sellingPrice <= 0) {
+        _showSnack('Selling price must be > 0.');
         return false;
       }
     }
@@ -251,6 +248,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     setState(() {
       _showPaymentSection = true;
+      _itemsLocked = true;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -383,7 +381,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         required double removeWidth,
         required int productFlex,
         required int qtyFlex,
-        required int costFlex,
         required int sellFlex,
       }) {
         return Container(
@@ -407,11 +404,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
               ),
               SizedBox(width: gap),
               Expanded(
-                flex: costFlex,
-                child: Text('Cost', style: headerStyle),
-              ),
-              SizedBox(width: gap),
-              Expanded(
                 flex: sellFlex,
                 child: Text('Sell', style: headerStyle),
               ),
@@ -428,9 +420,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         required double indexWidth,
         required double removeWidth,
         required bool narrow,
+        required bool locked,
         required int productFlex,
         required int qtyFlex,
-        required int costFlex,
         required int sellFlex,
       }) {
         final item = _items[index];
@@ -452,7 +444,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: onTap,
+                onTap: locked ? null : onTap,
                 customBorder: const CircleBorder(),
                 child: Tooltip(
                   message: tooltip,
@@ -464,7 +456,12 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         }
 
         return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          padding: EdgeInsets.fromLTRB(
+            narrow ? 8 : 12,
+            narrow ? 8 : 10,
+            narrow ? 8 : 12,
+            narrow ? 8 : 10,
+          ),
           child: Row(
             children: [
               SizedBox(
@@ -491,54 +488,58 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
               SizedBox(width: gap),
               Expanded(
                 flex: qtyFlex,
-                child: Row(
-                  children: [
-                    qtyControl(
-                      icon: Icons.remove_rounded,
-                      tooltip: 'Decrease',
-                      onTap: () {
-                        item.decrementQty();
-                        _syncTotalsFromControllers();
-                      },
-                    ),
-                    Expanded(
-                      child: TextField(
+                child: narrow
+                    ? TextField(
                         controller: item.qtyController,
+                        enabled: !locked,
+                        readOnly: locked,
                         keyboardType: TextInputType.number,
                         textAlign: TextAlign.center,
                         style: textStyle,
                         decoration: denseFieldDecoration('', narrow: narrow),
+                      )
+                    : Row(
+                        children: [
+                          qtyControl(
+                            icon: Icons.remove_rounded,
+                            tooltip: 'Decrease',
+                            onTap: () {
+                              item.decrementQty();
+                              _syncTotalsFromControllers();
+                            },
+                          ),
+                          Expanded(
+                            child: TextField(
+                              controller: item.qtyController,
+                              enabled: !locked,
+                              readOnly: locked,
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              style: textStyle,
+                              decoration: denseFieldDecoration(
+                                '',
+                                narrow: narrow,
+                              ),
+                            ),
+                          ),
+                          qtyControl(
+                            icon: Icons.add_rounded,
+                            tooltip: 'Increase',
+                            onTap: () {
+                              item.incrementQty();
+                              _syncTotalsFromControllers();
+                            },
+                          ),
+                        ],
                       ),
-                    ),
-                    qtyControl(
-                      icon: Icons.add_rounded,
-                      tooltip: 'Increase',
-                      onTap: () {
-                        item.incrementQty();
-                        _syncTotalsFromControllers();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: gap),
-              Expanded(
-                flex: costFlex,
-                child: TextField(
-                  controller: item.costController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  textAlign: TextAlign.center,
-                  style: textStyle,
-                  decoration: denseFieldDecoration('', narrow: narrow),
-                ),
               ),
               SizedBox(width: gap),
               Expanded(
                 flex: sellFlex,
                 child: TextField(
                   controller: item.sellController,
+                  enabled: !locked,
+                  readOnly: locked,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -558,8 +559,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                     minWidth: 32,
                     minHeight: 32,
                   ),
-                  onPressed: () => _removeItemAt(index),
-                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: locked ? null : () => _removeItemAt(index),
+                  icon: Icon(Icons.close_rounded, size: narrow ? 16 : 18),
                 ),
               ),
             ],
@@ -577,10 +578,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
             final removeWidth = narrow ? 30.0 : 34.0;
 
             // Give Qty a bit more room on narrow screens.
-            final productFlex = narrow ? 5 : 5;
-            final qtyFlex = narrow ? 6 : 4;
-            final costFlex = narrow ? 2 : 3;
-            final sellFlex = narrow ? 2 : 3;
+            final productFlex = narrow ? 6 : 7;
+            final qtyFlex = narrow ? 3 : 4;
+            final sellFlex = narrow ? 3 : 3;
 
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -591,7 +591,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                   removeWidth: removeWidth,
                   productFlex: productFlex,
                   qtyFlex: qtyFlex,
-                  costFlex: costFlex,
                   sellFlex: sellFlex,
                 ),
                 const Divider(height: 1),
@@ -605,9 +604,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                         indexWidth: indexWidth,
                         removeWidth: removeWidth,
                         narrow: narrow,
+                        locked: _itemsLocked,
                         productFlex: productFlex,
                         qtyFlex: qtyFlex,
-                        costFlex: costFlex,
                         sellFlex: sellFlex,
                       ),
                       if (i != _items.length - 1) const Divider(height: 1),
@@ -626,53 +625,53 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       required String title,
       required String subtitle,
       required VoidCallback onTap,
+      required BorderRadius borderRadius,
     }) {
-      return Material(
-        color: colorScheme.surfaceContainerHigh,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-            child: Row(
-              children: [
-                Container(
-                  height: 42,
-                  width: 42,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withAlpha(18),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: colorScheme.outlineVariant),
-                  ),
-                  child: Icon(icon, color: colorScheme.primary),
+      return InkWell(
+        borderRadius: borderRadius,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          child: Row(
+            children: [
+              Container(
+                height: 44,
+                width: 44,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withAlpha(22),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                child: Icon(icon, color: colorScheme.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ],
-            ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
           ),
         ),
       );
@@ -682,61 +681,67 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       key: _formKey,
       child: Scaffold(
         appBar: AppBar(
-          title: Text('Stock Entry • ${widget.vendor.name}'),
+          elevation: 0,
+          scrolledUnderElevation: 2,
+          backgroundColor: colorScheme.surface.withOpacity(0.94),
+          title: Row(
+            children: [
+              Container(
+                height: 34,
+                width: 34,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.inventory_2_outlined,
+                  color: colorScheme.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Stock Entry',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${widget.vendor.name} • ${widget.vendor.address}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
           actions: [
-            IconButton(
+            IconButton.filledTonal(
               tooltip: 'Vendor history',
               onPressed: () {
                 Navigator.of(
                   context,
                 ).push(StockEntryHistoryScreen.route(vendor: widget.vendor));
               },
-              icon: const Icon(Icons.history),
+              icon: const Icon(Icons.history_rounded),
             ),
           ],
         ),
         body: ListView(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 140),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
           children: [
-            Card(
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor: colorScheme.primary.withAlpha(33),
-                      child: Icon(Icons.store, color: colorScheme.primary),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.vendor.name,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            widget.vendor.address,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-
             Card(
               clipBehavior: Clip.antiAlias,
               child: Padding(
@@ -746,9 +751,23 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                   children: [
                     Row(
                       children: [
+                        Container(
+                          height: 34,
+                          width: 34,
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.qr_code_scanner_rounded,
+                            color: colorScheme.primary,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Add items',
+                            'Quick actions',
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w900,
                             ),
@@ -763,32 +782,45 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Scan an existing barcode or generate a new one.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 10),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: colorScheme.outlineVariant),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            actionRow(
-                              icon: Icons.document_scanner_outlined,
-                              title: 'Scan barcode',
-                              subtitle: 'Scan existing barcode using camera',
-                              onTap: _scanBarcode,
+                    Material(
+                      color: colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          actionRow(
+                            icon: Icons.document_scanner_outlined,
+                            title: 'Scan barcode',
+                            subtitle: 'Use camera to scan an existing barcode',
+                            onTap: _scanBarcode,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(20),
                             ),
-                            const Divider(height: 1),
-                            actionRow(
-                              icon: Icons.auto_fix_high_rounded,
-                              title: 'Generate barcode',
-                              subtitle: 'Create new barcode with item details',
-                              onTap: _generateBarcode,
+                          ),
+                          Divider(
+                            height: 1,
+                            color: colorScheme.outlineVariant.withAlpha(120),
+                          ),
+                          actionRow(
+                            icon: Icons.auto_fix_high_rounded,
+                            title: 'Generate barcode',
+                            subtitle: 'Create a new barcode with item details',
+                            onTap: _generateBarcode,
+                            borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(20),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -801,22 +833,39 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
               Card(
                 clipBehavior: Clip.antiAlias,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                  child: Row(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Icon(
-                        Icons.qr_code_2,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'No items yet. Scan or generate a barcode to add products.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      Container(
+                        height: 54,
+                        width: 54,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(18),
                         ),
+                        child: Icon(
+                          Icons.qr_code_2_rounded,
+                          color: colorScheme.primary,
+                          size: 30,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'No items added yet',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Use Quick actions to scan or generate barcodes.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),

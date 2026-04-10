@@ -90,7 +90,7 @@ class BillingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addOrIncrementProduct(BillingProduct product) {
+  BillingLineItem addOrIncrementProduct(BillingProduct product) {
     final existingIndex = _items.indexWhere((i) => i.id == product.id);
     if (existingIndex >= 0) {
       final existing = _items[existingIndex];
@@ -98,7 +98,7 @@ class BillingProvider extends ChangeNotifier {
         quantity: existing.quantity + 1,
       );
       notifyListeners();
-      return;
+      return _items[existingIndex];
     }
 
     _items.insert(
@@ -112,9 +112,13 @@ class BillingProvider extends ChangeNotifier {
       ),
     );
     notifyListeners();
+    return _items.first;
   }
 
-  void addManualProduct({required String name, required double unitPrice}) {
+  BillingLineItem addManualProduct({
+    required String name,
+    required double unitPrice,
+  }) {
     final id = 'manual_${DateTime.now().microsecondsSinceEpoch}';
     _items.insert(
       0,
@@ -127,6 +131,7 @@ class BillingProvider extends ChangeNotifier {
       ),
     );
     notifyListeners();
+    return _items.first;
   }
 
   void updateItemPrice(String id, double unitPrice) {

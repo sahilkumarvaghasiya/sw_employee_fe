@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../../../core/config/api_config.dart';
+
 class AuthService {
-  final String baseUrl =
-      'https://your-backend.com/api'; // Change to your backend
+  final String baseUrl = ApiConfig.baseUrl;
 
   Future<Map<String, String>> login(String email, String password) async {
     final response = await http.post(

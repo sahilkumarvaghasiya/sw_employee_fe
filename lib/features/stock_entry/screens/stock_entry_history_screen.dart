@@ -8,6 +8,20 @@ import 'stock_entry_detail_screen.dart';
 
 enum _PaymentFilter { paid, halfPaid, unpaid }
 
+abstract class _DateRangeDialogResult {
+  const _DateRangeDialogResult();
+}
+
+class _DateRangeApplied extends _DateRangeDialogResult {
+  const _DateRangeApplied(this.range);
+
+  final DateTimeRange range;
+}
+
+class _DateRangeCleared extends _DateRangeDialogResult {
+  const _DateRangeCleared();
+}
+
 class StockEntryHistoryScreen extends StatefulWidget {
   const StockEntryHistoryScreen({super.key, this.vendor});
 
@@ -33,9 +47,155 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
   _PaymentFilter _paymentFilter = _PaymentFilter.unpaid;
   DateTimeRange? _dateRange;
 
-  bool _showInlineDatePicker = false;
-  DateTime? _draftRangeStart;
-  DateTime? _draftRangeEnd;
+  String _paymentLabel(_PaymentFilter filter) {
+    switch (filter) {
+      case _PaymentFilter.paid:
+        return 'Paid';
+      case _PaymentFilter.halfPaid:
+        return 'Half paid';
+      case _PaymentFilter.unpaid:
+        return 'Unpaid';
+    }
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _paymentFilter = _PaymentFilter.unpaid;
+      _dateRange = null;
+    });
+  }
+
+  Future<void> _openFiltersSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        final media = MediaQuery.of(context);
+
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              6,
+              16,
+              16 + media.viewInsets.bottom,
+            ),
+            child: StatefulBuilder(
+              builder: (context, setModalState) {
+                Widget statusTile(_PaymentFilter value) {
+                  final selected = _paymentFilter == value;
+                  return RadioListTile<_PaymentFilter>(
+                    contentPadding: EdgeInsets.zero,
+                    value: value,
+                    groupValue: _paymentFilter,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _paymentFilter = v);
+                      setModalState(() {});
+                    },
+                    title: Text(
+                      _paymentLabel(value),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: selected
+                            ? FontWeight.w900
+                            : FontWeight.w700,
+                      ),
+                    ),
+                    secondary: Icon(
+                      _statusIcon(value),
+                      color: _statusColor(value),
+                    ),
+                  );
+                }
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Filters',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Close',
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    Text(
+                      'Payment status',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    statusTile(_PaymentFilter.paid),
+                    statusTile(_PaymentFilter.halfPaid),
+                    statusTile(_PaymentFilter.unpaid),
+                    const SizedBox(height: 10),
+
+                    Text(
+                      'Date',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await _pickDateRange();
+                        setModalState(() {});
+                      },
+                      icon: const Icon(Icons.date_range_outlined),
+                      label: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(_rangeLabel(context, _dateRange)),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            _clearFilters();
+                            setModalState(() {});
+                          },
+                          child: const Text('Clear'),
+                        ),
+                        const Spacer(),
+                        FilledButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Apply'),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -59,6 +219,36 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
   }
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
+
+  String _rangeLabel(BuildContext context, DateTimeRange? range) {
+    if (range == null) return 'Select date range';
+    final loc = MaterialLocalizations.of(context);
+    final start = loc.formatShortDate(range.start);
+    final end = loc.formatShortDate(range.end);
+    return '$start – $end';
+  }
+
+  Color _statusColor(_PaymentFilter filter) {
+    switch (filter) {
+      case _PaymentFilter.paid:
+        return Colors.green;
+      case _PaymentFilter.halfPaid:
+        return Colors.orange;
+      case _PaymentFilter.unpaid:
+        return Colors.red;
+    }
+  }
+
+  IconData _statusIcon(_PaymentFilter filter) {
+    switch (filter) {
+      case _PaymentFilter.paid:
+        return Icons.check_circle_outline_rounded;
+      case _PaymentFilter.halfPaid:
+        return Icons.timelapse_outlined;
+      case _PaymentFilter.unpaid:
+        return Icons.warning_amber_rounded;
+    }
+  }
 
   DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -106,46 +296,126 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
   }
 
   Future<void> _pickDateRange() async {
-    // Intentionally left as a no-op: date picking is inline.
-    // Kept to avoid breaking any older call-sites.
-    return;
-  }
-
-  void _toggleInlineDatePicker() {
     final now = DateTime.now();
-    final current = _dateRange;
+    final firstDate = DateTime(now.year - 2, 1, 1);
+    final lastDate = DateTime(now.year + 1, 12, 31);
 
-    setState(() {
-      _showInlineDatePicker = !_showInlineDatePicker;
-      if (_showInlineDatePicker) {
-        _draftRangeStart =
-            current?.start ?? now.subtract(const Duration(days: 7));
-        _draftRangeEnd = current?.end;
-      }
-    });
-  }
+    DateTime? start = _dateRange?.start;
+    DateTime? end = _dateRange?.end;
 
-  void _onInlineDatePicked(DateTime day) {
-    setState(() {
-      final start = _draftRangeStart;
-      final end = _draftRangeEnd;
+    DateTime clamp(DateTime d) {
+      if (d.isBefore(firstDate)) return firstDate;
+      if (d.isAfter(lastDate)) return lastDate;
+      return d;
+    }
 
-      if (start == null || (start != null && end != null)) {
-        _draftRangeStart = day;
-        _draftRangeEnd = null;
-        return;
-      }
+    if (start != null) start = clamp(start!);
+    if (end != null) end = clamp(end!);
 
-      _draftRangeEnd = day;
+    if (start == null || end == null) {
+      start = clamp(now.subtract(const Duration(days: 7)));
+      end = clamp(now);
+    }
 
-      final s = _draftRangeStart!;
-      final e = _draftRangeEnd!;
-      final startFinal = e.isBefore(s) ? e : s;
-      final endFinal = e.isBefore(s) ? s : e;
+    if (end!.isBefore(start!)) {
+      end = start;
+    }
 
-      _dateRange = DateTimeRange(start: startFinal, end: endFinal);
-      _showInlineDatePicker = false;
-    });
+    final picked = await showDialog<_DateRangeDialogResult?>(
+      context: context,
+      builder: (dialogContext) {
+        String fmt(DateTime d) {
+          final loc = MaterialLocalizations.of(dialogContext);
+          return loc.formatShortDate(d);
+        }
+
+        Future<void> pickStart() async {
+          final next = await showDatePicker(
+            context: dialogContext,
+            initialDate: start ?? lastDate,
+            firstDate: firstDate,
+            lastDate: lastDate,
+          );
+          if (next == null) return;
+          start = clamp(next);
+          if (end != null && end!.isBefore(start!)) {
+            end = start;
+          }
+          (dialogContext as Element).markNeedsBuild();
+        }
+
+        Future<void> pickEnd() async {
+          final next = await showDatePicker(
+            context: dialogContext,
+            initialDate: end ?? start ?? lastDate,
+            firstDate: firstDate,
+            lastDate: lastDate,
+          );
+          if (next == null) return;
+          end = clamp(next);
+          if (start != null && end!.isBefore(start!)) {
+            start = end;
+          }
+          (dialogContext as Element).markNeedsBuild();
+        }
+
+        return AlertDialog(
+          title: const Text('Date'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.calendar_today_outlined),
+                title: const Text('Start date'),
+                subtitle: Text(fmt(start!)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: pickStart,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event_outlined),
+                title: const Text('End date'),
+                subtitle: Text(fmt(end!)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: pickEnd,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(null),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(const _DateRangeCleared());
+              },
+              child: const Text('Clear'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(
+                  _DateRangeApplied(DateTimeRange(start: start!, end: end!)),
+                );
+              },
+              child: const Text('Apply'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || picked == null) return;
+
+    if (picked is _DateRangeCleared) {
+      setState(() => _dateRange = null);
+      return;
+    }
+
+    if (picked is _DateRangeApplied) {
+      setState(() => _dateRange = picked.range);
+    }
   }
 
   @override
@@ -163,9 +433,9 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
 
     final filteredEntries = _applyFilters(baseEntries);
 
-    final title = widget.vendor == null
-        ? 'Stock Entry History'
-        : 'History • ${widget.vendor!.name}';
+    final subtitle = widget.vendor?.name ?? 'All traders';
+
+    final hasAnyFilter = _dateRange != null;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -177,9 +447,48 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
               pinned: true,
               centerTitle: false,
               titleSpacing: 0,
-              title: Text(title),
+              toolbarHeight: 78,
+              title: Padding(
+                padding: const EdgeInsets.only(left: 16, right: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'History',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'Clear filters',
+                  onPressed: hasAnyFilter ? _clearFilters : null,
+                  icon: const Icon(Icons.filter_alt_off_outlined),
+                ),
+              ],
               backgroundColor: colorScheme.surface,
               surfaceTintColor: colorScheme.surfaceTint,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(1),
+                child: Container(
+                  height: 1,
+                  color: colorScheme.outlineVariant.withAlpha(120),
+                ),
+              ),
             ),
             if (provider.isLoadingInitial)
               const SliverFillRemaining(
@@ -219,215 +528,41 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
             else ...[
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: colorScheme.outlineVariant),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Builder(
-                            builder: (context) {
-                              String dateLabel() {
-                                final range = _dateRange;
-                                if (range == null) return 'Any date';
-                                final loc = MaterialLocalizations.of(context);
-                                final start = loc.formatShortDate(range.start);
-                                final end = loc.formatShortDate(range.end);
-                                return '$start–$end';
-                              }
-
-                              final segmented = SegmentedButton<_PaymentFilter>(
-                                showSelectedIcon: false,
-                                style: ButtonStyle(
-                                  visualDensity: VisualDensity.compact,
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  padding: const WidgetStatePropertyAll(
-                                    EdgeInsets.symmetric(horizontal: 10),
-                                  ),
-                                  side: WidgetStatePropertyAll(
-                                    BorderSide(
-                                      color: colorScheme.outlineVariant,
-                                    ),
-                                  ),
-                                ),
-                                segments: const [
-                                  ButtonSegment<_PaymentFilter>(
-                                    value: _PaymentFilter.paid,
-                                    label: Text('Paid'),
-                                  ),
-                                  ButtonSegment<_PaymentFilter>(
-                                    value: _PaymentFilter.halfPaid,
-                                    label: Text('Half'),
-                                  ),
-                                  ButtonSegment<_PaymentFilter>(
-                                    value: _PaymentFilter.unpaid,
-                                    label: Text('Unpaid'),
-                                  ),
-                                ],
-                                selected: <_PaymentFilter>{_paymentFilter},
-                                onSelectionChanged: (value) {
-                                  setState(() {
-                                    _paymentFilter = value.first;
-                                  });
-                                },
-                              );
-
-                              final dateButton = FilledButton.tonalIcon(
-                                style: const ButtonStyle(
-                                  visualDensity: VisualDensity(
-                                    horizontal: -2,
-                                    vertical: -2,
-                                  ),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                onPressed: _toggleInlineDatePicker,
-                                icon: const Icon(Icons.date_range_outlined),
-                                label: Text(dateLabel()),
-                              );
-
-                              final clearButton = _dateRange == null
-                                  ? const SizedBox.shrink()
-                                  : IconButton(
-                                      tooltip: 'Clear date',
-                                      visualDensity: VisualDensity.compact,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 36,
-                                        minHeight: 36,
-                                      ),
-                                      onPressed: () => setState(() {
-                                        _dateRange = null;
-                                        _draftRangeStart = null;
-                                        _draftRangeEnd = null;
-                                        _showInlineDatePicker = false;
-                                      }),
-                                      icon: const Icon(Icons.close_rounded),
-                                    );
-
-                              return LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final bool narrow =
-                                      constraints.maxWidth < 520;
-
-                                  if (narrow) {
-                                    return Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.tune_rounded,
-                                              size: 18,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(child: segmented),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Row(
-                                          children: [
-                                            Expanded(child: dateButton),
-                                            if (_dateRange != null) ...[
-                                              const SizedBox(width: 6),
-                                              clearButton,
-                                            ],
-                                          ],
-                                        ),
-                                      ],
-                                    );
-                                  }
-
-                                  return Row(
-                                    children: [
-                                      const Icon(Icons.tune_rounded, size: 18),
-                                      const SizedBox(width: 8),
-                                      Expanded(child: segmented),
-                                      const SizedBox(width: 10),
-                                      dateButton,
-                                      if (_dateRange != null) ...[
-                                        const SizedBox(width: 6),
-                                        clearButton,
-                                      ],
-                                    ],
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (_showInlineDatePicker)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainer,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: colorScheme.outlineVariant),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    (() {
-                                      final start = _draftRangeStart;
-                                      final end = _draftRangeEnd;
-                                      if (start == null || end != null) {
-                                        return 'Pick start date';
-                                      }
-                                      return 'Pick end date';
-                                    })(),
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: 'Close',
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: () => setState(() {
-                                    _showInlineDatePicker = false;
-                                  }),
-                                  icon: const Icon(
-                                    Icons.keyboard_arrow_up_rounded,
-                                  ),
-                                ),
-                              ],
+                            ActionChip(
+                              avatar: Icon(
+                                _statusIcon(_paymentFilter),
+                                color: _statusColor(_paymentFilter),
+                              ),
+                              label: Text(_paymentLabel(_paymentFilter)),
+                              onPressed: _openFiltersSheet,
                             ),
-                            const SizedBox(height: 8),
-                            CalendarDatePicker(
-                              initialDate:
-                                  _draftRangeEnd ??
-                                  _draftRangeStart ??
-                                  DateTime.now(),
-                              firstDate: DateTime(DateTime.now().year - 2),
-                              lastDate: DateTime(DateTime.now().year + 1),
-                              onDateChanged: _onInlineDatePicked,
-                            ),
+                            if (_dateRange != null)
+                              ActionChip(
+                                avatar: const Icon(Icons.date_range_outlined),
+                                label: Text(_rangeLabel(context, _dateRange)),
+                                onPressed: _openFiltersSheet,
+                              ),
                           ],
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      FilledButton.tonalIcon(
+                        onPressed: _openFiltersSheet,
+                        icon: const Icon(Icons.tune),
+                        label: const Text('Filters'),
+                      ),
+                    ],
                   ),
                 ),
+              ),
               if (baseEntries.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -439,25 +574,23 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                         children: [
                           Icon(
                             Icons.receipt_long_outlined,
-                            size: 48,
-                            color: colorScheme.onSurfaceVariant,
+                            size: 64,
+                            color: colorScheme.onSurfaceVariant.withAlpha(180),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Text(
-                            widget.vendor == null
-                                ? 'No stock entries yet'
-                                : 'No stock entries for this vendor yet',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
+                            'No transactions found',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
                             ),
                             textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           Text(
-                            'New entries will appear here as soon as you save a stock entry.',
+                            'Try changing filters or date range',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
+                              height: 1.3,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -476,24 +609,24 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            Icons.filter_alt_off_outlined,
-                            size: 44,
-                            color: colorScheme.onSurfaceVariant,
+                            Icons.search_off_rounded,
+                            size: 64,
+                            color: colorScheme.onSurfaceVariant.withAlpha(180),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Text(
-                            'No entries match your filter',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
+                            'No transactions found',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
                             ),
                             textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           Text(
-                            'Try a different payment status or clear the date range.',
+                            'Try changing filters or date range',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
+                              height: 1.3,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -504,7 +637,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   sliver: SliverList.separated(
                     itemCount: filteredEntries.length,
                     separatorBuilder: (context, index) =>
@@ -514,6 +647,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                       return _HistoryRow(
                         entry: entry,
                         money: _money,
+                        showVendor: widget.vendor == null,
                         onTap: () {
                           Navigator.of(
                             context,
@@ -543,15 +677,277 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
   }
 }
 
+class _HistoryFiltersCard extends StatelessWidget {
+  const _HistoryFiltersCard({
+    required this.selected,
+    required this.dateLabel,
+    required this.hasDate,
+    required this.paidColor,
+    required this.halfColor,
+    required this.unpaidColor,
+    required this.paidIcon,
+    required this.halfIcon,
+    required this.unpaidIcon,
+    required this.onSelectStatus,
+    required this.onPickDate,
+    required this.onClearDate,
+  });
+
+  final _PaymentFilter selected;
+  final String dateLabel;
+  final bool hasDate;
+
+  final Color paidColor;
+  final Color halfColor;
+  final Color unpaidColor;
+
+  final IconData paidIcon;
+  final IconData halfIcon;
+  final IconData unpaidIcon;
+
+  final ValueChanged<_PaymentFilter> onSelectStatus;
+  final VoidCallback onPickDate;
+  final VoidCallback onClearDate;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    Widget statusPills() {
+      return Row(
+        children: [
+          Expanded(
+            child: _StatusPill(
+              label: 'Paid',
+              icon: paidIcon,
+              color: paidColor,
+              selected: selected == _PaymentFilter.paid,
+              onTap: () => onSelectStatus(_PaymentFilter.paid),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatusPill(
+              label: 'Half Paid',
+              icon: halfIcon,
+              color: halfColor,
+              selected: selected == _PaymentFilter.halfPaid,
+              onTap: () => onSelectStatus(_PaymentFilter.halfPaid),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatusPill(
+              label: 'Unpaid',
+              icon: unpaidIcon,
+              color: unpaidColor,
+              selected: selected == _PaymentFilter.unpaid,
+              onTap: () => onSelectStatus(_PaymentFilter.unpaid),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final dateInput = Material(
+      color: colorScheme.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onPickDate,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colorScheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.calendar_month_outlined,
+                size: 20,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Date',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      dateLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (hasDate)
+                IconButton(
+                  tooltip: 'Clear date',
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                  onPressed: onClearDate,
+                  icon: const Icon(Icons.close_rounded),
+                )
+              else
+                const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return Material(
+      color: colorScheme.surfaceContainerLow,
+      elevation: 0,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final bool narrow = constraints.maxWidth < 520;
+            if (narrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Filters',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  statusPills(),
+                  const SizedBox(height: 12),
+                  dateInput,
+                ],
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: statusPills()),
+                    const SizedBox(width: 12),
+                    SizedBox(width: 260, child: dateInput),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    final bg = selected ? color.withAlpha(28) : colorScheme.surface;
+    final border = selected ? color.withAlpha(170) : colorScheme.outlineVariant;
+    final fg = selected ? color : colorScheme.onSurfaceVariant;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: color.withAlpha(24),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : const [],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: fg),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    style: theme.textTheme.labelLarge!.copyWith(
+                      color: selected ? colorScheme.onSurface : fg,
+                      fontWeight: FontWeight.w900,
+                    ),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HistoryRow extends StatelessWidget {
   const _HistoryRow({
     required this.entry,
     required this.money,
+    required this.showVendor,
     required this.onTap,
   });
 
   final StockEntry entry;
   final String Function(double) money;
+  final bool showVendor;
   final VoidCallback onTap;
 
   @override
@@ -572,125 +968,123 @@ class _HistoryRow extends StatelessWidget {
 
     final String statusText = isPaid
         ? 'Paid'
-        : (isHalfPaid ? 'Half paid' : 'Unpaid');
-
+        : (isHalfPaid ? 'Half Paid' : 'Unpaid');
     final Color statusColor = isPaid
-        ? colorScheme.tertiary
-        : (isHalfPaid ? colorScheme.primary : colorScheme.error);
+        ? Colors.green
+        : (isHalfPaid ? Colors.orange : Colors.red);
+    final IconData statusIcon = isPaid
+        ? Icons.check_circle_outline_rounded
+        : (isHalfPaid ? Icons.timelapse_outlined : Icons.warning_amber_rounded);
 
     final double due = remaining <= 0 ? 0 : remaining;
 
     return Card(
-      color: colorScheme.surfaceContainerLow,
+      elevation: 1,
+      color: colorScheme.surface,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: colorScheme.outlineVariant),
+        side: BorderSide(color: colorScheme.outlineVariant.withAlpha(110)),
       ),
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: const EdgeInsets.all(16),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    height: 44,
-                    width: 44,
-                    decoration: BoxDecoration(
-                      color: statusColor.withAlpha(20),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: statusColor.withAlpha(90)),
-                    ),
-                    child: Icon(
-                      isPaid
-                          ? Icons.check_circle_outline
-                          : (isHalfPaid
-                                ? Icons.timelapse_outlined
-                                : Icons.warning_amber_outlined),
-                      color: statusColor,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          entry.vendor.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
+                        if (showVendor) ...[
+                          Text(
+                            entry.vendor.name,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
+                          const SizedBox(height: 4),
+                        ],
                         Text(
-                          '$dateLabel • ${entry.items.length} item${entry.items.length == 1 ? '' : 's'}',
+                          dateLabel,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withAlpha(20),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: statusColor.withAlpha(90)),
-                    ),
-                    child: Text(
-                      statusText,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: statusColor,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                  _StatusBadge(
+                    text: statusText,
+                    color: statusColor,
+                    icon: statusIcon,
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Container(
-                height: 1,
-                color: colorScheme.outlineVariant.withAlpha(120),
+              const SizedBox(height: 14),
+              Text(
+                money(total),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.2,
+                ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _AmountPill(
-                      label: 'Total',
-                      value: money(total),
-                      icon: Icons.receipt_long_outlined,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _AmountPill(
-                      label: 'Paid',
-                      value: money(paid),
-                      icon: Icons.payments_outlined,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _AmountPill(
-                      label: 'Due',
-                      value: money(due),
-                      icon: Icons.account_balance_wallet_outlined,
-                      emphasisColor: statusColor,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 6),
+              Text(
+                'Paid ${money(paid)}  •  Due ${money(due)}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({
+    required this.text,
+    required this.color,
+    required this.icon,
+  });
+
+  final String text;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withAlpha(24),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withAlpha(140)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }

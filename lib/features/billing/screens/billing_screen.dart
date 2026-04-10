@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/billing_models.dart';
 import '../providers/billing_provider.dart';
+import '../widgets/billing_bottom_sheets.dart';
 import '../widgets/product_item_widget.dart';
 import 'bill_preview_screen.dart';
 
@@ -95,7 +96,9 @@ class _BillingScreenState extends State<BillingScreen> {
     try {
       final product = _findProductByBarcode(barcode);
       if (product != null) {
-        context.read<BillingProvider>().addOrIncrementProduct(product);
+        final provider = context.read<BillingProvider>();
+        final item = provider.addOrIncrementProduct(product);
+        await _editItem(item, originalUnitPrice: product.unitPrice);
         _showSnack('${product.name} added');
         return;
       }
@@ -109,30 +112,36 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 
   Future<void> _addUnknownProduct() async {
-    final result = await showModalBottomSheet<_ManualProductResult>(
+    final result = await showModalBottomSheet<BillingManualProductResult>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => const _ManualProductSheet(),
+      builder: (context) => const BillingManualProductSheet(),
     );
 
     if (!mounted) return;
     if (result == null) return;
 
-    context.read<BillingProvider>().addManualProduct(
+    final item = context.read<BillingProvider>().addManualProduct(
       name: result.name,
       unitPrice: result.price,
     );
-
+    await _editItem(item, originalUnitPrice: result.price);
     _showSnack('${result.name} added');
   }
 
-  Future<void> _editItem(BillingLineItem item) async {
-    final action = await showModalBottomSheet<_ItemEditResult>(
+  Future<void> _editItem(
+    BillingLineItem item, {
+    double? originalUnitPrice,
+  }) async {
+    final action = await showModalBottomSheet<BillingItemEditResult>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => _ItemEditSheet(item: item),
+      builder: (context) => BillingItemEditSheet(
+        item: item,
+        originalUnitPrice: originalUnitPrice,
+      ),
     );
 
     if (!mounted) return;
@@ -195,170 +204,190 @@ class _BillingScreenState extends State<BillingScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) {
-        final theme = Theme.of(context);
-        final colorScheme = theme.colorScheme;
+        return ChangeNotifierProvider.value(
+          value: provider,
+          child: Builder(
+            builder: (context) {
+              final theme = Theme.of(context);
+              final colorScheme = theme.colorScheme;
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Consumer<BillingProvider>(
-              builder: (context, p, _) {
-                final title = method == BillingPaymentMethod.paytm
-                    ? 'Paytm'
-                    : 'UPI';
-                final selectedLabel = method == BillingPaymentMethod.paytm
-                    ? p.selectedPaytmQr?.label
-                    : p.selectedUpiQr?.label;
+              return SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Consumer<BillingProvider>(
+                    builder: (context, p, _) {
+                      final title = method == BillingPaymentMethod.paytm
+                          ? 'Paytm'
+                          : 'UPI';
+                      final selectedLabel = method == BillingPaymentMethod.paytm
+                          ? p.selectedPaytmQr?.label
+                          : p.selectedUpiQr?.label;
 
-                final canContinue = method == BillingPaymentMethod.paytm
-                    ? p.selectedPaytmQr != null
-                    : p.selectedUpiQr != null;
+                      final canContinue = method == BillingPaymentMethod.paytm
+                          ? p.selectedPaytmQr != null
+                          : p.selectedUpiQr != null;
 
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.qr_code_2_rounded,
-                          color: colorScheme.primary,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '$title payment',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Close',
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      'Select a QR and show it to the customer.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    if (selectedLabel != null)
-                      Card(
-                        elevation: 0,
-                        color: colorScheme.surfaceContainerHigh,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          side: BorderSide(color: colorScheme.outlineVariant),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                          child: Column(
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
                             children: [
-                              Text(
-                                selectedLabel,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
+                              Icon(
+                                Icons.qr_code_2_rounded,
+                                color: colorScheme.primary,
                               ),
-                              const SizedBox(height: 10),
-                              Container(
-                                height: 180,
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: colorScheme.outlineVariant,
-                                  ),
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    Icons.qr_code_2_rounded,
-                                    size: 120,
-                                    color: colorScheme.onSurfaceVariant,
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '$title payment',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Show this QR to customer to scan and pay.',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
+                              IconButton(
+                                tooltip: 'Close',
+                                onPressed: () => Navigator.of(context).pop(),
+                                icon: const Icon(Icons.close_rounded),
                               ),
                             ],
                           ),
-                        ),
-                      ),
-
-                    const SizedBox(height: 12),
-                    Text(
-                      'Choose QR',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        if (method == BillingPaymentMethod.paytm)
-                          ...p.paytmQrs.map(
-                            (qr) => ChoiceChip(
-                              label: Text(qr.label),
-                              selected: p.selectedPaytmQr?.id == qr.id,
-                              onSelected: (_) {
-                                p.setPaymentMethod(BillingPaymentMethod.paytm);
-                                p.selectPaytmQr(qr);
-                              },
-                            ),
-                          )
-                        else
-                          ...p.upiQrs.map(
-                            (qr) => ChoiceChip(
-                              label: Text(qr.label),
-                              selected: p.selectedUpiQr?.id == qr.id,
-                              onSelected: (_) {
-                                p.setPaymentMethod(BillingPaymentMethod.upi);
-                                p.selectUpiQr(qr);
-                              },
+                          Text(
+                            'Select a QR and show it to the customer.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
                             ),
                           ),
-                      ],
-                    ),
+                          const SizedBox(height: 12),
 
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: FilledButton.icon(
-                        onPressed: canContinue
-                            ? () {
-                                provider.setPaymentMethod(method);
-                                provider.setMarkPaid(true);
-                                Navigator.of(context).pop();
-                                Navigator.of(
-                                  this.context,
-                                ).push(BillPreviewScreen.route(this.context));
-                              }
-                            : null,
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('Payment received'),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
+                          if (selectedLabel != null)
+                            Card(
+                              elevation: 0,
+                              color: colorScheme.surfaceContainerHigh,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                side: BorderSide(
+                                  color: colorScheme.outlineVariant,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  16,
+                                  16,
+                                  16,
+                                ),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      selectedLabel,
+                                      style: theme.textTheme.titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Container(
+                                      height: 180,
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surface,
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                          color: colorScheme.outlineVariant,
+                                        ),
+                                      ),
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.qr_code_2_rounded,
+                                          size: 120,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      'Show this QR to customer to scan and pay.',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                          const SizedBox(height: 12),
+                          Text(
+                            'Choose QR',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              if (method == BillingPaymentMethod.paytm)
+                                ...p.paytmQrs.map(
+                                  (qr) => ChoiceChip(
+                                    label: Text(qr.label),
+                                    selected: p.selectedPaytmQr?.id == qr.id,
+                                    onSelected: (_) {
+                                      p.setPaymentMethod(
+                                        BillingPaymentMethod.paytm,
+                                      );
+                                      p.selectPaytmQr(qr);
+                                    },
+                                  ),
+                                )
+                              else
+                                ...p.upiQrs.map(
+                                  (qr) => ChoiceChip(
+                                    label: Text(qr.label),
+                                    selected: p.selectedUpiQr?.id == qr.id,
+                                    onSelected: (_) {
+                                      p.setPaymentMethod(
+                                        BillingPaymentMethod.upi,
+                                      );
+                                      p.selectUpiQr(qr);
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: FilledButton.icon(
+                              onPressed: canContinue
+                                  ? () {
+                                      provider.setPaymentMethod(method);
+                                      provider.setMarkPaid(true);
+                                      Navigator.of(context).pop();
+                                      Navigator.of(this.context).push(
+                                        BillPreviewScreen.route(this.context),
+                                      );
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.check_circle_outline),
+                              label: const Text('Payment received'),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
           ),
         );
       },
@@ -516,23 +545,32 @@ class _BillingScreenState extends State<BillingScreen> {
 
     final totals = Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: colorScheme.outlineVariant),
-      ),
+      color: colorScheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Row(
           children: [
-            const Icon(Icons.receipt_long_outlined),
-            const SizedBox(width: 10),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withAlpha(20),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                Icons.receipt_long_outlined,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Live totals',
-                    style: theme.textTheme.titleSmall?.copyWith(
+                    'Total',
+                    style: theme.textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -541,6 +579,7 @@ class _BillingScreenState extends State<BillingScreen> {
                     'Items ${provider.totalItems} • Subtotal ${_money(provider.subtotal)} • Discount ${_money(provider.totalDiscount)}',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -548,7 +587,7 @@ class _BillingScreenState extends State<BillingScreen> {
             ),
             Text(
               _money(provider.finalAmount),
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -559,31 +598,31 @@ class _BillingScreenState extends State<BillingScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Billing'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(42),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: Row(
-              children: [
-                Icon(Icons.person_outline, color: colorScheme.onSurfaceVariant),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    customer == null
-                        ? 'Customer'
-                        : '${customer.name} • ${customer.phone}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        backgroundColor: colorScheme.surfaceContainerLow.withAlpha(235),
+        surfaceTintColor: colorScheme.surfaceTint,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Billing',
+              style: TextStyle(fontWeight: FontWeight.w800),
             ),
-          ),
+            Text(
+              customer == null
+                  ? 'Customer not selected'
+                  : '${customer.name} • ${customer.phone}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+                height: 1.05,
+              ),
+            ),
+          ],
         ),
       ),
       body: CustomScrollView(
@@ -593,9 +632,9 @@ class _BillingScreenState extends State<BillingScreen> {
             sliver: SliverToBoxAdapter(
               child: Card(
                 elevation: 0,
+                color: colorScheme.surfaceContainerHighest,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(color: colorScheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(22),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
@@ -636,9 +675,8 @@ class _BillingScreenState extends State<BillingScreen> {
                       child: Container(
                         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                         decoration: BoxDecoration(
-                          color: colorScheme.surface.withOpacity(0.88),
+                          color: colorScheme.surfaceContainerLow.withAlpha(235),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: colorScheme.outlineVariant),
                         ),
                         child: Row(
                           children: [
@@ -671,7 +709,7 @@ class _BillingScreenState extends State<BillingScreen> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             sliver: SliverToBoxAdapter(
               child: Text(
-                'Scanned items',
+                'Scanned items (${provider.items.length})',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w900,
                 ),
@@ -706,7 +744,7 @@ class _BillingScreenState extends State<BillingScreen> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 220),
               sliver: SliverList.separated(
                 itemCount: provider.items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final item = provider.items[index];
                   return ProductItemWidget(
@@ -724,9 +762,9 @@ class _BillingScreenState extends State<BillingScreen> {
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           child: Card(
             elevation: 0,
+            color: colorScheme.surfaceContainerHigh,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: BorderSide(color: colorScheme.outlineVariant),
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -767,270 +805,6 @@ class _BillingScreenState extends State<BillingScreen> {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-@immutable
-class _ManualProductResult {
-  const _ManualProductResult({required this.name, required this.price});
-
-  final String name;
-  final double price;
-}
-
-class _ManualProductSheet extends StatefulWidget {
-  const _ManualProductSheet();
-
-  @override
-  State<_ManualProductSheet> createState() => _ManualProductSheetState();
-}
-
-class _ManualProductSheetState extends State<_ManualProductSheet> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _priceController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final form = _formKey.currentState;
-    if (form == null) return;
-    if (!form.validate()) return;
-
-    final price = double.parse(_priceController.text.trim());
-    Navigator.of(context).pop(
-      _ManualProductResult(name: _nameController.text.trim(), price: price),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
-        top: 10,
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Unknown product',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Enter details to add it manually.',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _nameController,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'Product Name',
-                prefixIcon: Icon(Icons.inventory_2_outlined),
-              ),
-              validator: (v) {
-                final value = v?.trim() ?? '';
-                if (value.isEmpty) return 'Product name is required';
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _priceController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                labelText: 'Price',
-                prefixText: '₹',
-                prefixIcon: Icon(Icons.payments_outlined),
-              ),
-              validator: (v) {
-                final value = v?.trim() ?? '';
-                final parsed = double.tryParse(value);
-                if (parsed == null || parsed <= 0) return 'Enter a valid price';
-                return null;
-              },
-              onFieldSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _submit,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 14),
-                  child: Text('Add Product'),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-@immutable
-class _ItemEditResult {
-  const _ItemEditResult({
-    this.unitPrice,
-    this.discountPercent,
-    this.remove = false,
-  });
-
-  final double? unitPrice;
-  final double? discountPercent;
-  final bool remove;
-}
-
-class _ItemEditSheet extends StatefulWidget {
-  const _ItemEditSheet({required this.item});
-
-  final BillingLineItem item;
-
-  @override
-  State<_ItemEditSheet> createState() => _ItemEditSheetState();
-}
-
-class _ItemEditSheetState extends State<_ItemEditSheet> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-
-  late final TextEditingController _priceController = TextEditingController(
-    text: widget.item.unitPrice.toStringAsFixed(2),
-  );
-  late final TextEditingController _discountController = TextEditingController(
-    text: widget.item.discountPercent.toStringAsFixed(0),
-  );
-
-  @override
-  void dispose() {
-    _priceController.dispose();
-    _discountController.dispose();
-    super.dispose();
-  }
-
-  void _apply() {
-    final form = _formKey.currentState;
-    if (form == null) return;
-    if (!form.validate()) return;
-
-    final unitPrice = double.parse(_priceController.text.trim());
-    final discount = double.parse(_discountController.text.trim());
-
-    Navigator.of(
-      context,
-    ).pop(_ItemEditResult(unitPrice: unitPrice, discountPercent: discount));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
-        top: 10,
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.item.productName,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _priceController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Edit Original Price',
-                prefixText: '₹',
-                prefixIcon: Icon(Icons.sell_outlined),
-              ),
-              validator: (v) {
-                final parsed = double.tryParse((v ?? '').trim());
-                if (parsed == null || parsed <= 0) {
-                  return 'Enter a valid price';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _discountController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Apply Discount (%)',
-                prefixIcon: Icon(Icons.percent),
-              ),
-              validator: (v) {
-                final parsed = double.tryParse((v ?? '').trim());
-                if (parsed == null || parsed < 0 || parsed > 100) {
-                  return 'Enter 0 to 100';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => Navigator.of(
-                      context,
-                    ).pop(const _ItemEditResult(remove: true)),
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      child: Text('Remove'),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _apply,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                      child: Text('Apply'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );

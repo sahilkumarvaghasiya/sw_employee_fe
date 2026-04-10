@@ -7,6 +7,7 @@ import '../providers/products_provider.dart';
 import '../widgets/product_card.dart';
 import '../widgets/products_filter_section.dart';
 import '../widgets/products_search_bar.dart';
+import '../widgets/searchable_dropdown.dart';
 import 'product_detail_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
@@ -29,10 +30,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _sizeController = TextEditingController();
-  final FocusNode _sizeFocusNode = FocusNode();
-
-  final MenuController _sizeMenuController = MenuController();
-  Timer? _sizeDebounce;
 
   @override
   void initState() {
@@ -55,8 +52,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
     _scrollController.dispose();
     _searchController.dispose();
     _sizeController.dispose();
-    _sizeFocusNode.dispose();
-    _sizeDebounce?.cancel();
     super.dispose();
   }
 
@@ -67,20 +62,23 @@ class _ProductsScreenState extends State<ProductsScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) {
+        final media = MediaQuery.of(context);
         return SafeArea(
           child: Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-              top: 12,
+            padding: EdgeInsets.fromLTRB(
+              16,
+              6,
+              16,
+              16 + media.viewInsets.bottom,
             ),
             child: ChangeNotifierProvider<ProductsProvider>.value(
               value: productsProvider,
-              child: ProductsFilterSection(
-                onCloseRequested: () {
-                  Navigator.of(context).pop();
-                },
+              child: SingleChildScrollView(
+                child: ProductsFilterSection(
+                  onCloseRequested: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
               ),
             ),
           ),
@@ -96,14 +94,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     final provider = context.watch<ProductsProvider>();
 
-    if (!_sizeFocusNode.hasFocus) {
-      final desiredText = provider.selectedSize ?? '';
-      if (_sizeController.text != desiredText) {
-        _sizeController.value = TextEditingValue(
-          text: desiredText,
-          selection: TextSelection.collapsed(offset: desiredText.length),
-        );
-      }
+    final desiredText = provider.selectedSize ?? '';
+    if (_sizeController.text != desiredText) {
+      _sizeController.value = TextEditingValue(
+        text: desiredText,
+        selection: TextSelection.collapsed(offset: desiredText.length),
+      );
     }
 
     return Scaffold(
@@ -137,97 +133,33 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         onChanged: provider.setSearchQuery,
                       );
 
-                      void applyTypedSize(String value) {
-                        _sizeDebounce?.cancel();
-                        _sizeDebounce = Timer(
-                          const Duration(milliseconds: 250),
-                          () {
-                            if (!mounted) return;
-                            provider.setSelectedSize(value);
-                          },
-                        );
-                      }
+                      final sizeOptions = provider.availableSizes
+                          .map(
+                            (s) => SearchableDropdownOption<String>(
+                              label: s,
+                              value: s,
+                            ),
+                          )
+                          .toList(growable: false);
 
-                      final sizeMenu = MenuAnchor(
-                        controller: _sizeMenuController,
-                        style: MenuStyle(
-                          maximumSize: WidgetStatePropertyAll(
-                            Size(constraints.maxWidth, 320),
-                          ),
-                        ),
-                        menuChildren: [
-                          MenuItemButton(
-                            onPressed: () {
-                              _sizeController.clear();
-                              provider.setSelectedSize(null);
-                              _sizeMenuController.close();
-                            },
-                            child: const Text('All sizes'),
-                          ),
-                          ...provider.availableSizes.map(
-                            (s) => MenuItemButton(
-                              onPressed: () {
-                                _sizeController.text = s;
-                                _sizeController.selection =
-                                    TextSelection.collapsed(offset: s.length);
-                                provider.setSelectedSize(s);
-                                _sizeMenuController.close();
-                              },
-                              child: Text(s),
-                            ),
-                          ),
-                        ],
-                        builder: (context, controller, child) {
-                          return TextField(
-                            controller: _sizeController,
-                            focusNode: _sizeFocusNode,
-                            textInputAction: TextInputAction.done,
-                            onChanged: applyTypedSize,
-                            onSubmitted: provider.setSelectedSize,
-                            decoration: InputDecoration(
-                              isDense: true,
-                              filled: true,
-                              fillColor: colorScheme.surfaceContainerHigh,
-                              prefixIcon: const Icon(Icons.straighten_outlined),
-                              prefixIconConstraints: const BoxConstraints(
-                                minWidth: 42,
-                                minHeight: 42,
-                              ),
-                              hintText: 'Size',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(
-                                  color: colorScheme.outlineVariant,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                              suffixIcon: IconButton(
-                                tooltip: 'Show sizes',
-                                visualDensity: VisualDensity.compact,
-                                constraints: const BoxConstraints(
-                                  minWidth: 40,
-                                  minHeight: 40,
-                                ),
-                                onPressed: () {
-                                  if (controller.isOpen) {
-                                    controller.close();
-                                  } else {
-                                    controller.open();
-                                  }
-                                },
-                                icon: const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                ),
-                              ),
-                            ),
+                      final sizeMenu = SearchableDropdown<String>(
+                        placeholder: 'Size',
+                        width: isNarrow ? 140 : 190,
+                        height: 48,
+                        selectedLabel: provider.selectedSize,
+                        options: sizeOptions,
+                        filterHintText: 'Type size',
+                        onClear: () {
+                          _sizeController.clear();
+                          provider.setSelectedSize(null);
+                        },
+                        clearLabel: 'All sizes',
+                        onSelected: (opt) {
+                          _sizeController.text = opt.label;
+                          _sizeController.selection = TextSelection.collapsed(
+                            offset: opt.label.length,
                           );
+                          provider.setSelectedSize(opt.value);
                         },
                       );
 
@@ -236,7 +168,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           children: [
                             Expanded(child: search),
                             const SizedBox(width: 10),
-                            SizedBox(width: 140, child: sizeMenu),
+                            sizeMenu,
                           ],
                         );
                       }
@@ -245,7 +177,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         children: [
                           Expanded(child: search),
                           const SizedBox(width: 10),
-                          SizedBox(width: 190, child: sizeMenu),
+                          sizeMenu,
                         ],
                       );
                     },

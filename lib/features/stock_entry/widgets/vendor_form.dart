@@ -1,17 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../models/vendor.dart';
-
 class VendorFormValues {
-  VendorFormValues({
-    required this.name,
-    required this.address,
-    required this.gender,
-  });
+  VendorFormValues({required this.name, required this.address});
 
   final String name;
   final String address;
-  final VendorGender gender;
 }
 
 class VendorForm extends StatefulWidget {
@@ -29,8 +22,6 @@ class _VendorFormState extends State<VendorForm> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
 
-  VendorGender _gender = VendorGender.other;
-
   @override
   void dispose() {
     _nameController.dispose();
@@ -47,7 +38,6 @@ class _VendorFormState extends State<VendorForm> {
       VendorFormValues(
         name: _nameController.text.trim(),
         address: _addressController.text.trim(),
-        gender: _gender,
       ),
     );
   }
@@ -57,25 +47,85 @@ class _VendorFormState extends State<VendorForm> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    InputDecoration decoration({
+      required String label,
+      required IconData icon,
+      String? hint,
+    }) {
+      return InputDecoration(
+        isDense: true,
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 44,
+          minHeight: 44,
+        ),
+        filled: true,
+        fillColor: colorScheme.surfaceContainerHighest,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+      );
+    }
+
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Vendor details',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 38,
+                width: 38,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.badge_outlined,
+                  color: colorScheme.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Vendor details',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Enter details to start stock entry.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           TextFormField(
             controller: _nameController,
             textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Vendor Name',
-              prefixIcon: Icon(Icons.storefront_outlined),
+            textCapitalization: TextCapitalization.words,
+            decoration: decoration(
+              label: 'Vendor name',
+              icon: Icons.storefront_outlined,
+              hint: 'Example: Shree Traders',
             ),
             validator: (v) {
               if (v == null || v.trim().isEmpty)
@@ -89,10 +139,13 @@ class _VendorFormState extends State<VendorForm> {
           TextFormField(
             controller: _addressController,
             textInputAction: TextInputAction.done,
+            textCapitalization: TextCapitalization.sentences,
+            keyboardType: TextInputType.streetAddress,
             maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'Address',
-              prefixIcon: Icon(Icons.location_on_outlined),
+            decoration: decoration(
+              label: 'Address',
+              icon: Icons.location_on_outlined,
+              hint: 'Street / area / city',
             ),
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Address is required';
@@ -101,48 +154,14 @@ class _VendorFormState extends State<VendorForm> {
           ),
           const SizedBox(height: 16),
 
-          Text(
-            'Gender',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          SegmentedButton<VendorGender>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(
-                value: VendorGender.male,
-                label: Text('Male'),
-                icon: Icon(Icons.male),
-              ),
-              ButtonSegment(
-                value: VendorGender.female,
-                label: Text('Female'),
-                icon: Icon(Icons.female),
-              ),
-              ButtonSegment(
-                value: VendorGender.other,
-                label: Text('Other'),
-                icon: Icon(Icons.person_outline),
-              ),
-            ],
-            selected: {_gender},
-            onSelectionChanged: (value) {
-              if (value.isEmpty) return;
-              setState(() => _gender = value.first);
-            },
-          ),
-          const SizedBox(height: 20),
-
           FilledButton.icon(
             onPressed: _submit,
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Start Stock Entry'),
+            style: FilledButton.styleFrom(
+              shape: const StadiumBorder(),
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const Text('Start Stock Entry'),
           ),
         ],
       ),

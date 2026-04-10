@@ -51,6 +51,9 @@ class StockEntryProvider extends ChangeNotifier {
   }
 
   Future<void> saveStockEntry(StockEntry entry) async {
+    if (vendorById(entry.vendor.id) == null) {
+      _vendors.insert(0, entry.vendor);
+    }
     addStockEntry(entry);
   }
 
@@ -105,19 +108,16 @@ class StockEntryProvider extends ChangeNotifier {
         id: 'v_1',
         name: 'Shree Traders',
         address: '12, Market Road, Pune',
-        gender: VendorGender.other,
       ),
       const Vendor(
         id: 'v_2',
         name: 'Kaveri Distributors',
         address: 'Near Bus Stand, Nashik',
-        gender: VendorGender.female,
       ),
       const Vendor(
         id: 'v_3',
         name: 'Omkar Wholesale',
         address: 'Industrial Area, Mumbai',
-        gender: VendorGender.male,
       ),
     ]);
 
