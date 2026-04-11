@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/token_storage.dart';
@@ -10,10 +9,10 @@ class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
   bool get isAuthenticated => _isAuthenticated;
 
-  String _employeeName = 'Employee';
+  String _employeeName = '';
   String get employeeName => _employeeName;
 
-  String _branchName = 'Main Branch';
+  String _branchName = '';
   String get branchName => _branchName;
 
   bool _isLoading = false;
@@ -23,8 +22,33 @@ class AuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> loadToken() async {
-    final token = await _tokenStorage.getAccessToken();
-    _isAuthenticated = token != null;
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final restored = await _authService.restoreSession();
+    if (restored) {
+      final savedUserName = (await _tokenStorage.getUserName())?.trim() ?? '';
+      final savedShopName = (await _tokenStorage.getShopName())?.trim() ?? '';
+
+      if (savedUserName.isNotEmpty && savedShopName.isNotEmpty) {
+        _isAuthenticated = true;
+        _employeeName = savedUserName;
+        _branchName = savedShopName;
+      } else {
+        await _tokenStorage.deleteTokens();
+        _isAuthenticated = false;
+        _employeeName = '';
+        _branchName = '';
+      }
+    } else {
+      await _tokenStorage.deleteTokens();
+      _isAuthenticated = false;
+      _employeeName = '';
+      _branchName = '';
+    }
+
+    _isLoading = false;
     notifyListeners();
   }
 
@@ -33,35 +57,32 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    // DEV ONLY: Allow a quick preview of the app without a backend.
-    // This will not run in release builds.
-    if (kDebugMode) {
-      final normalizedEmail = email.trim().toLowerCase();
-      final normalizedPassword = password.trim();
-      if (normalizedEmail == 'demo@retailagent.com' &&
-          normalizedPassword == 'demo123') {
-        _employeeName = 'Demo Employee';
-        _branchName = 'Demo Branch';
-        _isAuthenticated = true;
-        _isLoading = false;
-        notifyListeners();
-        return;
-      }
-    }
-
     try {
-      final tokens = await _authService.login(email, password);
-      await _tokenStorage.saveTokens(tokens['access']!, tokens['refresh']!);
+      final loginData = await _authService.login(email, password);
+      await _tokenStorage.saveTokens(
+        loginData['access']!.toString(),
+        loginData['refresh']!.toString(),
+      );
+
+      final userName = loginData['user_name']?.toString().trim() ?? '';
+      final shopName = loginData['shop_name']?.toString().trim() ?? '';
+      if (userName.isEmpty || shopName.isEmpty) {
+        throw Exception('Login response missing user_name or shop_name');
+      }
+
+      await _tokenStorage.saveUserContext(
+        userName: userName,
+        shopName: shopName,
+      );
+
       _isAuthenticated = true;
-
-      final localPart = email.trim().split('@').first;
-      _employeeName = localPart.isEmpty ? 'Employee' : localPart;
-
-      // Placeholder until branch details are fetched from the backend.
-      _branchName = 'Main Branch';
+      _employeeName = userName;
+      _branchName = shopName;
     } catch (e) {
-      _errorMessage = 'Invalid email or password';
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
       _isAuthenticated = false;
+      _employeeName = '';
+      _branchName = '';
     }
     _isLoading = false;
     notifyListeners();
@@ -70,8 +91,8 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _tokenStorage.deleteTokens();
     _isAuthenticated = false;
-    _employeeName = 'Employee';
-    _branchName = 'Main Branch';
+    _employeeName = '';
+    _branchName = '';
     notifyListeners();
   }
 
@@ -88,19 +109,7 @@ class AuthProvider extends ChangeNotifier {
       throw Exception('Password cannot be empty');
     }
 
-    // DEV ONLY: allow UX testing without backend.
-    if (kDebugMode) {
-      await Future<void>.delayed(const Duration(milliseconds: 450));
-      return;
-    }
-
-    final accessToken = await _tokenStorage.getAccessToken();
-    if (accessToken == null) {
-      throw Exception('Not authenticated');
-    }
-
     await _authService.changePassword(
-      accessToken: accessToken,
       newPassword: normalized,
     );
   }
