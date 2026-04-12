@@ -107,17 +107,26 @@ class StockEntryProvider extends ChangeNotifier {
       const Vendor(
         id: 'v_1',
         name: 'Shree Traders',
+        phone: '9876543210',
+        email: null,
         address: '12, Market Road, Pune',
+        gst: '27AAAAA0000A1Z5',
       ),
       const Vendor(
         id: 'v_2',
         name: 'Kaveri Distributors',
+        phone: '9123456780',
+        email: 'kaveri@example.com',
         address: 'Near Bus Stand, Nashik',
+        gst: '27BBBBB0000B1Z5',
       ),
       const Vendor(
         id: 'v_3',
         name: 'Omkar Wholesale',
+        phone: '9988776655',
+        email: null,
         address: 'Industrial Area, Mumbai',
+        gst: '27CCCCC0000C1Z5',
       ),
     ]);
 
@@ -126,6 +135,7 @@ class StockEntryProvider extends ChangeNotifier {
     _allEntries.addAll([
       StockEntry(
         id: 'se_1003',
+        invoiceNumber: 'INV-1003',
         vendor: _vendors[0],
         createdAt: now.subtract(const Duration(days: 1, hours: 4)),
         items: const [
@@ -152,6 +162,7 @@ class StockEntryProvider extends ChangeNotifier {
       ),
       StockEntry(
         id: 'se_1002',
+        invoiceNumber: 'INV-1002',
         vendor: _vendors[1],
         createdAt: now.subtract(const Duration(days: 3, hours: 2)),
         items: const [
@@ -178,6 +189,7 @@ class StockEntryProvider extends ChangeNotifier {
       ),
       StockEntry(
         id: 'se_1001',
+        invoiceNumber: 'INV-1001',
         vendor: _vendors[2],
         createdAt: now.subtract(const Duration(days: 6, hours: 6)),
         items: const [

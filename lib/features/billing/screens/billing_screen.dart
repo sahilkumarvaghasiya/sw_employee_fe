@@ -749,7 +749,16 @@ class _BillingScreenState extends State<BillingScreen> {
                   final item = provider.items[index];
                   return ProductItemWidget(
                     item: item,
-                    onTap: () => _editItem(item),
+                    onPriceChanged: (value) {
+                      provider.updateItemPrice(item.id, value);
+                    },
+                    onDiscountChanged: (value) {
+                      provider.updateItemDiscountPercent(item.id, value);
+                    },
+                    onRemove: () {
+                      provider.removeItem(item.id);
+                      _showSnack('Removed ${item.productName}');
+                    },
                   );
                 },
               ),

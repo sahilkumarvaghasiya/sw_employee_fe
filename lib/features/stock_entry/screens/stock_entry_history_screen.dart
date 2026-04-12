@@ -65,6 +65,90 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
     });
   }
 
+  Widget _filtersSummaryBar(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    final paymentLabel = _paymentLabel(_paymentFilter);
+    final statusIcon = _statusIcon(_paymentFilter);
+    final statusColor = _statusColor(_paymentFilter);
+
+    final dateRange = _dateRange;
+    final dateLabel = dateRange == null
+        ? null
+        : _rangeLabel(context, dateRange);
+
+    return Material(
+      color: colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(statusIcon, size: 18, color: statusColor),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Payment: $paymentLabel',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (dateLabel != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.date_range_outlined,
+                            size: 18,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Date: $dateLabel',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton.filledTonal(
+                tooltip: 'Filters',
+                onPressed: _openFiltersSheet,
+                icon: const Icon(Icons.tune),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openFiltersSheet() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -220,12 +304,16 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
+  String _ddMMyyyy(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yyyy = d.year.toString();
+    return '$dd/$mm/$yyyy';
+  }
+
   String _rangeLabel(BuildContext context, DateTimeRange? range) {
     if (range == null) return 'Select date range';
-    final loc = MaterialLocalizations.of(context);
-    final start = loc.formatShortDate(range.start);
-    final end = loc.formatShortDate(range.end);
-    return '$start – $end';
+    return '${_ddMMyyyy(range.start)} – ${_ddMMyyyy(range.end)}';
   }
 
   Color _statusColor(_PaymentFilter filter) {
@@ -298,7 +386,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
     final firstDate = DateTime(now.year - 2, 1, 1);
-    final lastDate = DateTime(now.year + 1, 12, 31);
+    final lastDate = DateTime(now.year, now.month, now.day);
 
     DateTime? start = _dateRange?.start;
     DateTime? end = _dateRange?.end;
@@ -325,8 +413,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
       context: context,
       builder: (dialogContext) {
         String fmt(DateTime d) {
-          final loc = MaterialLocalizations.of(dialogContext);
-          return loc.formatShortDate(d);
+          return _ddMMyyyy(d);
         }
 
         Future<void> pickStart() async {
@@ -435,7 +522,8 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
 
     final subtitle = widget.vendor?.name ?? 'All traders';
 
-    final hasAnyFilter = _dateRange != null;
+    final hasAnyFilter =
+        _dateRange != null || _paymentFilter != _PaymentFilter.unpaid;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -528,39 +616,8 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
             else ...[
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            ActionChip(
-                              avatar: Icon(
-                                _statusIcon(_paymentFilter),
-                                color: _statusColor(_paymentFilter),
-                              ),
-                              label: Text(_paymentLabel(_paymentFilter)),
-                              onPressed: _openFiltersSheet,
-                            ),
-                            if (_dateRange != null)
-                              ActionChip(
-                                avatar: const Icon(Icons.date_range_outlined),
-                                label: Text(_rangeLabel(context, _dateRange)),
-                                onPressed: _openFiltersSheet,
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      FilledButton.tonalIcon(
-                        onPressed: _openFiltersSheet,
-                        icon: const Icon(Icons.tune),
-                        label: const Text('Filters'),
-                      ),
-                    ],
-                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: _filtersSummaryBar(context),
                 ),
               ),
               if (baseEntries.isEmpty)
@@ -955,6 +1012,8 @@ class _HistoryRow extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final invoiceNo = entry.invoiceNumber?.trim();
+
     final dateLabel = MaterialLocalizations.of(
       context,
     ).formatMediumDate(entry.createdAt);
@@ -1008,6 +1067,17 @@ class _HistoryRow extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
+                        ],
+                        if (invoiceNo != null && invoiceNo.isNotEmpty) ...[
+                          Text(
+                            'Invoice #$invoiceNo',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
                         ],
                         Text(
                           dateLabel,

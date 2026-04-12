@@ -8,7 +8,6 @@ import '../widgets/product_card.dart';
 import '../widgets/products_filter_section.dart';
 import '../widgets/products_search_bar.dart';
 import '../widgets/searchable_dropdown.dart';
-import 'product_detail_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -27,29 +26,11 @@ class ProductsScreen extends StatefulWidget {
 }
 
 class _ProductsScreenState extends State<ProductsScreen> {
-  final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _sizeController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-
-    _scrollController.addListener(() {
-      if (!_scrollController.hasClients) return;
-      final position = _scrollController.position;
-      if (position.maxScrollExtent <= 0) return;
-
-      // Trigger pagination when close to the bottom.
-      if (position.pixels >= position.maxScrollExtent - 320) {
-        context.read<ProductsProvider>().loadMore();
-      }
-    });
-  }
-
-  @override
   void dispose() {
-    _scrollController.dispose();
     _searchController.dispose();
     _sizeController.dispose();
     super.dispose();
@@ -116,7 +97,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
       body: RefreshIndicator(
         onRefresh: provider.refresh,
         child: CustomScrollView(
-          controller: _scrollController,
           slivers: [
             SliverPersistentHeader(
               pinned: true,
@@ -235,12 +215,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     return ProductCard(
                       product: product,
                       onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) =>
-                                ProductDetailScreen(product: product),
-                          ),
-                        );
+                        ScaffoldMessenger.of(context)
+                          ..clearSnackBars()
+                          ..showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Product details will be enabled later.',
+                              ),
+                            ),
+                          );
                       },
                     );
                   },
@@ -255,6 +238,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 child: _PaginationFooter(
                   isLoadingMore: provider.isLoadingMore,
                   hasMore: provider.hasMore,
+                  onLoadMore: provider.loadMore,
                 ),
               ),
             ),
@@ -266,10 +250,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
 }
 
 class _PaginationFooter extends StatelessWidget {
-  const _PaginationFooter({required this.isLoadingMore, required this.hasMore});
+  const _PaginationFooter({
+    required this.isLoadingMore,
+    required this.hasMore,
+    required this.onLoadMore,
+  });
 
   final bool isLoadingMore;
   final bool hasMore;
+  final Future<void> Function() onLoadMore;
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +285,14 @@ class _PaginationFooter extends StatelessWidget {
       );
     }
 
-    return const SizedBox(height: 8);
+    return Center(
+      child: FilledButton.tonal(
+        onPressed: () {
+          unawaited(onLoadMore());
+        },
+        child: const Text('Load more'),
+      ),
+    );
   }
 }
 

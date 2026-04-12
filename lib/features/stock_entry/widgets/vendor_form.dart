@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 
 class VendorFormValues {
-  VendorFormValues({required this.name, required this.address});
+  VendorFormValues({
+    required this.name,
+    required this.phone,
+    required this.gst,
+    this.email,
+    this.address,
+  });
 
   final String name;
-  final String address;
+  final String phone;
+  final String gst;
+  final String? email;
+  final String? address;
 }
 
 class VendorForm extends StatefulWidget {
@@ -20,12 +29,18 @@ class _VendorFormState extends State<VendorForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _gstController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
     _addressController.dispose();
+    _gstController.dispose();
     super.dispose();
   }
 
@@ -37,7 +52,14 @@ class _VendorFormState extends State<VendorForm> {
     widget.onStartStockEntry(
       VendorFormValues(
         name: _nameController.text.trim(),
-        address: _addressController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim().isEmpty
+            ? null
+            : _emailController.text.trim(),
+        address: _addressController.text.trim().isEmpty
+            ? null
+            : _addressController.text.trim(),
+        gst: _gstController.text.trim(),
       ),
     );
   }
@@ -137,18 +159,71 @@ class _VendorFormState extends State<VendorForm> {
           const SizedBox(height: 12),
 
           TextFormField(
+            controller: _phoneController,
+            textInputAction: TextInputAction.next,
+            keyboardType: TextInputType.phone,
+            decoration: decoration(
+              label: 'Phone number',
+              icon: Icons.phone_outlined,
+              hint: 'Example: 9876543210',
+            ),
+            validator: (v) {
+              final value = v?.trim() ?? '';
+              if (value.isEmpty) return 'Phone number is required';
+              final digits = value.replaceAll(RegExp(r'\D'), '');
+              if (digits.length < 10) return 'Enter a valid phone number';
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+
+          TextFormField(
+            controller: _emailController,
+            textInputAction: TextInputAction.next,
+            keyboardType: TextInputType.emailAddress,
+            decoration: decoration(
+              label: 'Email address (optional)',
+              icon: Icons.email_outlined,
+              hint: 'Example: vendor@email.com',
+            ),
+            validator: (v) {
+              final value = v?.trim() ?? '';
+              if (value.isEmpty) return null;
+              if (!value.contains('@') || !value.contains('.')) {
+                return 'Enter a valid email address';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+
+          TextFormField(
             controller: _addressController,
-            textInputAction: TextInputAction.done,
+            textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.sentences,
             keyboardType: TextInputType.streetAddress,
             maxLines: 2,
             decoration: decoration(
-              label: 'Address',
+              label: 'Address (optional)',
               icon: Icons.location_on_outlined,
               hint: 'Street / area / city',
             ),
+          ),
+          const SizedBox(height: 12),
+
+          TextFormField(
+            controller: _gstController,
+            textInputAction: TextInputAction.done,
+            textCapitalization: TextCapitalization.characters,
+            decoration: decoration(
+              label: 'GST',
+              icon: Icons.receipt_long_outlined,
+              hint: 'Example: 22AAAAA0000A1Z5',
+            ),
             validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Address is required';
+              final value = v?.trim() ?? '';
+              if (value.isEmpty) return 'GST is required';
+              if (value.length < 5) return 'Enter a valid GST';
               return null;
             },
           ),

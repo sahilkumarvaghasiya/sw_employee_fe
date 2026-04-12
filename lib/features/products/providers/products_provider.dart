@@ -1,32 +1,43 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../services/products_service.dart';
 
 class ProductsProvider extends ChangeNotifier {
-  ProductsProvider({this.pageSize = 20}) {
-    _allProducts = _generateDummyProducts(count: 240);
-
-    _availableSizes = _allProducts
-        .map((p) => p.size.trim().toUpperCase())
-        .toSet()
-        .toList();
-    _availableSizes.sort(_compareSizes);
-
-    _priceBounds = _computePriceBounds(_allProducts);
+  ProductsProvider({this.pageSize = 10, ProductsService? service})
+    : _service = service ?? ProductsService() {
+    _priceBounds = (0, 5000);
     _selectedPriceRange = RangeValues(_priceBounds.$1, _priceBounds.$2);
   }
 
   final int pageSize;
+  final ProductsService _service;
+
   late final (double, double) _priceBounds;
 
-  late final List<String> _availableSizes;
+  static final List<String> _staticSizes = <String>[
+    'XS',
+    'S',
+    'M',
+    'L',
+    'XL',
+    'XXL',
+    'XXXL',
+    '28',
+    '30',
+    '32',
+    '34',
+    '36',
+    '38',
+    '40',
+    '42',
+    '44',
+  ];
 
-  late List<Product> _allProducts;
-  List<Product> _filteredProducts = const [];
+  int _page = 1;
   final List<Product> _items = [];
 
   bool _isLoadingInitial = false;
@@ -55,7 +66,7 @@ class ProductsProvider extends ChangeNotifier {
   DateTimeRange? get selectedDateRange => _selectedDateRange;
   (double, double) get priceBounds => _priceBounds;
 
-  List<String> get availableSizes => List.unmodifiable(_availableSizes);
+  List<String> get availableSizes => List.unmodifiable(_staticSizes);
   String? get selectedSize => _selectedSize;
 
   bool get hasActiveFilters {
@@ -66,6 +77,12 @@ class ProductsProvider extends ChangeNotifier {
         _selectedPriceRange.end != _priceBounds.$2;
   }
 
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
   void setSelectedSize(String? size) {
     final normalized = (size == null || size.trim().isEmpty)
         ? null
@@ -73,23 +90,24 @@ class ProductsProvider extends ChangeNotifier {
     if (_selectedSize == normalized) return;
 
     _selectedSize = normalized;
-
-    _error = null;
-    _applyFiltersAndResetPaging();
-    notifyListeners();
-    unawaited(_loadNextPage());
+    _refetch();
   }
 
   Future<void> init() async {
+    await refresh();
+  }
+
+  Future<void> refresh() async {
+    if (_isLoadingInitial) return;
+
     _isLoadingInitial = true;
     _error = null;
+    _resetPaging(notify: false);
     notifyListeners();
 
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 350));
-      _applyFiltersAndResetPaging();
-      await _loadNextPage();
-    } catch (e) {
+      await _fetchNextPage(notify: false);
+    } catch (_) {
       _error = 'Failed to load products';
     } finally {
       _isLoadingInitial = false;
@@ -97,22 +115,12 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh() async {
-    _error = null;
-    _applyFiltersAndResetPaging();
-    notifyListeners();
-    await _loadNextPage();
-  }
-
   void setSearchQuery(String value) {
     _searchQuery = value;
 
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 250), () {
-      _error = null;
-      _applyFiltersAndResetPaging();
-      notifyListeners();
-      unawaited(_loadNextPage());
+      _refetch();
     });
 
     notifyListeners();
@@ -129,10 +137,7 @@ class ProductsProvider extends ChangeNotifier {
     _selectedPriceRange = priceRange;
     _selectedDateRange = dateRange;
 
-    _error = null;
-    _applyFiltersAndResetPaging();
-    notifyListeners();
-    unawaited(_loadNextPage());
+    _refetch();
   }
 
   void resetFilters() {
@@ -140,23 +145,19 @@ class ProductsProvider extends ChangeNotifier {
     _selectedDateRange = null;
     _selectedPriceRange = RangeValues(_priceBounds.$1, _priceBounds.$2);
     _selectedSize = null;
-
-    _error = null;
-    _applyFiltersAndResetPaging();
-    notifyListeners();
-    unawaited(_loadNextPage());
+    _refetch();
   }
 
   Future<void> loadMore() async {
     if (_isLoadingMore || _isLoadingInitial || !_hasMore) return;
+
     _error = null;
     _isLoadingMore = true;
     notifyListeners();
 
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 450));
-      await _loadNextPage();
-    } catch (e) {
+      await _fetchNextPage(notify: false);
+    } catch (_) {
       _error = 'Failed to load more products';
     } finally {
       _isLoadingMore = false;
@@ -164,208 +165,77 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  void _applyFiltersAndResetPaging() {
+  void _resetPaging({bool notify = true}) {
+    _page = 1;
     _items.clear();
     _hasMore = true;
-    _filteredProducts = _applyFilters(_allProducts);
+    if (notify) notifyListeners();
   }
 
-  List<Product> _applyFilters(List<Product> products) {
-    final q = _searchQuery.trim().toLowerCase();
-
-    return products
-        .where((p) {
-          if (q.isNotEmpty) {
-            final matchesName = p.name.toLowerCase().contains(q);
-            final matchesBrand = p.companyName.toLowerCase().contains(q);
-            if (!matchesName && !matchesBrand) return false;
-          }
-
-          if (_selectedGenders.isNotEmpty &&
-              !_selectedGenders.contains(p.gender)) {
-            return false;
-          }
-
-          if (p.price < _selectedPriceRange.start ||
-              p.price > _selectedPriceRange.end) {
-            return false;
-          }
-
-          if (_selectedDateRange != null) {
-            final start = _selectedDateRange!.start;
-            final end = _selectedDateRange!.end;
-            if (p.createdAt.isBefore(
-              DateTime(start.year, start.month, start.day),
-            )) {
-              return false;
-            }
-            if (p.createdAt.isAfter(
-              DateTime(end.year, end.month, end.day, 23, 59, 59),
-            )) {
-              return false;
-            }
-          }
-
-          if (_selectedSize != null &&
-              !p.size.trim().toUpperCase().contains(_selectedSize!)) {
-            return false;
-          }
-
-          return true;
-        })
-        .toList(growable: false);
+  void _refetch() {
+    _error = null;
+    _resetPaging(notify: false);
+    notifyListeners();
+    unawaited(_fetchNextPage());
   }
 
-  static int _compareSizes(String a, String b) {
-    const order = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-    final aTrim = a.trim();
-    final bTrim = b.trim();
+  Map<String, String> _buildApiFilters() {
+    final out = <String, String>{};
 
-    final ai = order.indexOf(aTrim.toUpperCase());
-    final bi = order.indexOf(bTrim.toUpperCase());
+    final q = _searchQuery.trim();
+    if (q.isNotEmpty) out['search'] = q;
 
-    final aNum = int.tryParse(aTrim);
-    final bNum = int.tryParse(bTrim);
-
-    // If both are numeric sizes, sort numerically.
-    if (aNum != null && bNum != null) {
-      return aNum.compareTo(bNum);
+    // Backend supports a single gender filter value.
+    if (_selectedGenders.length == 1) {
+      out['gender'] = _selectedGenders.first.name;
     }
 
-    // Keep known clothing sizes (XS..XXXL) before other values.
-    if (ai != -1 || bi != -1) {
-      if (ai == -1) return 1;
-      if (bi == -1) return -1;
-      return ai.compareTo(bi);
+    if (_selectedPriceRange.start != _priceBounds.$1) {
+      out['min_price'] = _selectedPriceRange.start.toStringAsFixed(0);
+    }
+    if (_selectedPriceRange.end != _priceBounds.$2) {
+      out['max_price'] = _selectedPriceRange.end.toStringAsFixed(0);
     }
 
-    // Keep numeric sizes before other unknown strings.
-    if (aNum != null && bNum == null) return -1;
-    if (aNum == null && bNum != null) return 1;
+    // Only send dates when the user has selected a range.
+    if (_selectedDateRange != null) {
+      out['start_date'] = _ddMMyyyy(_selectedDateRange!.start);
+      out['end_date'] = _ddMMyyyy(_selectedDateRange!.end);
+    }
 
-    return aTrim.toUpperCase().compareTo(bTrim.toUpperCase());
+    // NOTE: Backend expects size_id, but size filter stays static/client-side for now.
+    return out;
   }
 
-  Future<void> _loadNextPage() async {
+  static String _ddMMyyyy(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yyyy = d.year.toString();
+    return '$dd-$mm-$yyyy';
+  }
+
+  Future<void> _fetchNextPage({bool notify = true}) async {
     if (!_hasMore) return;
 
-    final startIndex = _items.length;
-    final endIndex = min(startIndex + pageSize, _filteredProducts.length);
+    final page = await _service.fetchProductVariants(
+      page: _page,
+      pageSize: pageSize,
+      filters: _buildApiFilters(),
+    );
 
-    if (startIndex >= _filteredProducts.length) {
-      _hasMore = false;
-      return;
-    }
+    final normalizedSize = _selectedSize;
+    final List<Product> filtered = normalizedSize == null
+        ? page.items
+        : page.items
+              .where(
+                (p) => p.size.trim().toUpperCase().contains(normalizedSize),
+              )
+              .toList(growable: false);
 
-    _items.addAll(_filteredProducts.sublist(startIndex, endIndex));
-    _hasMore = endIndex < _filteredProducts.length;
-  }
+    _items.addAll(filtered);
+    _hasMore = page.hasMore;
+    _page += 1;
 
-  static (double, double) _computePriceBounds(List<Product> products) {
-    if (products.isEmpty) return (0, 0);
-
-    double minPrice = products.first.price;
-    double maxPrice = products.first.price;
-
-    for (final p in products) {
-      if (p.price < minPrice) minPrice = p.price;
-      if (p.price > maxPrice) maxPrice = p.price;
-    }
-
-    // Round to nice bounds.
-    final minRounded = (minPrice / 50).floor() * 50.0;
-    final maxRounded = (maxPrice / 50).ceil() * 50.0;
-    return (minRounded, maxRounded);
-  }
-
-  static List<Product> _generateDummyProducts({required int count}) {
-    final random = Random(7);
-
-    const brands = [
-      'Nova Apparel',
-      'UrbanCo',
-      'BluePeak',
-      'Astra',
-      'DashWear',
-      'MintMode',
-    ];
-
-    const sizes = [
-      'XS',
-      'S',
-      'M',
-      'L',
-      'XL',
-      'XXL',
-      '28',
-      '30',
-      '32',
-      '34',
-      '36',
-      '38',
-      '40',
-      '42',
-      '44',
-    ];
-
-    const productBases = [
-      'Cotton T-Shirt',
-      'Slim Fit Jeans',
-      'Sports Shoes',
-      'Casual Shirt',
-      'Hoodie',
-      'Track Pants',
-      'Kurti',
-      'Sneakers',
-      'Formal Trousers',
-      'Jacket',
-      'Socks Pack',
-      'Cap',
-      'Belt',
-      'Wallet',
-      'Handbag',
-    ];
-
-    final now = DateTime.now();
-
-    return List<Product>.generate(count, (i) {
-      final brand = brands[random.nextInt(brands.length)];
-      final size = sizes[random.nextInt(sizes.length)];
-      final base = productBases[random.nextInt(productBases.length)];
-
-      final genderRoll = random.nextDouble();
-      final gender = genderRoll < 0.42
-          ? ProductGender.men
-          : genderRoll < 0.84
-          ? ProductGender.women
-          : genderRoll < 0.92
-          ? ProductGender.boy
-          : ProductGender.girl;
-
-      final price = 99 + random.nextInt(4901) + (random.nextInt(99) / 100.0);
-      final qty = random.nextInt(160);
-
-      final createdAt = now.subtract(Duration(days: random.nextInt(45)));
-      final id = 'P${(i + 1).toString().padLeft(5, '0')}';
-      final barcode = '890${(100000000 + i).toString()}';
-
-      return Product(
-        id: id,
-        name: '$base ${(i % 6) + 1}',
-        barcode: barcode,
-        quantityInStock: qty,
-        size: size,
-        companyName: brand,
-        price: double.parse(price.toStringAsFixed(2)),
-        gender: gender,
-        createdAt: createdAt,
-      );
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchDebounce?.cancel();
-    super.dispose();
+    if (notify) notifyListeners();
   }
 }

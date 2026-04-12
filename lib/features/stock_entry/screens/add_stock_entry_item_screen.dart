@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/stock_entry_draft_item.dart';
+import '../services/stock_entry_service.dart';
 import 'barcode_preview_screen.dart';
 
 class AddStockEntryItemScreen extends StatefulWidget {
@@ -12,16 +13,19 @@ class AddStockEntryItemScreen extends StatefulWidget {
     super.key,
     required this.initialBarcode,
     required this.allowBarcodeEdit,
+    this.initialDrafts,
     this.enableBarcodeGeneration = false,
   });
 
   final String initialBarcode;
   final bool allowBarcodeEdit;
+  final List<StockEntryDraftItem>? initialDrafts;
   final bool enableBarcodeGeneration;
 
   static Route<List<StockEntryDraftItem>?> route({
     required String initialBarcode,
     required bool allowBarcodeEdit,
+    List<StockEntryDraftItem>? initialDrafts,
     bool enableBarcodeGeneration = false,
   }) {
     return MaterialPageRoute<List<StockEntryDraftItem>?>(
@@ -29,6 +33,7 @@ class AddStockEntryItemScreen extends StatefulWidget {
       builder: (_) => AddStockEntryItemScreen(
         initialBarcode: initialBarcode,
         allowBarcodeEdit: allowBarcodeEdit,
+        initialDrafts: initialDrafts,
         enableBarcodeGeneration: enableBarcodeGeneration,
       ),
     );
@@ -55,6 +60,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   bool get _isBrandCustom => _brandSelection == _customOption;
 
   bool _isGeneratingBarcode = false;
+  String? _barcodeUrl;
 
   final _VariantDraftRow _draftRow = _VariantDraftRow();
   final List<_VariantEntry> _entries = <_VariantEntry>[];
@@ -153,13 +159,65 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   @override
   void initState() {
     super.initState();
-    _barcodeController = TextEditingController(text: widget.initialBarcode);
+    final prefill = widget.initialDrafts;
+    final initialBarcode = (prefill != null && prefill.isNotEmpty)
+        ? prefill.first.barcode
+        : widget.initialBarcode;
+
+    _barcodeController = TextEditingController(text: initialBarcode);
     _loadCustomOptions();
+
+    if (prefill != null && prefill.isNotEmpty) {
+      _prefillFromDrafts(prefill);
+    }
 
     _sellUnitPrice = double.tryParse(_draftRow.sellController.text.trim());
     _draftRow.sellController.addListener(_onSellTextChanged);
     _draftRow.qtyController.addListener(_onQtyChanged);
     _sellFocusNode.addListener(_onSellFocusChanged);
+  }
+
+  void _prefillFromDrafts(List<StockEntryDraftItem> drafts) {
+    final first = drafts.first;
+
+    _barcodeUrl = first.barcodeUrl;
+
+    _gender = first.gender;
+    _itemType = first.itemType1;
+
+    final brand = first.brandName.trim();
+    if (brand.isEmpty) {
+      _brandSelection = null;
+      _brandController.text = '';
+    } else if (_brandOptions.contains(brand)) {
+      _brandSelection = brand;
+      _brandController.text = '';
+    } else {
+      _brandSelection = _customOption;
+      _brandController.text = brand;
+    }
+
+    _entries
+      ..clear()
+      ..addAll(
+        drafts.map(
+          (d) => _VariantEntry(
+            size: d.size,
+            colour: d.colour,
+            qty: d.quantity,
+            sellUnit: d.sellingPrice,
+          ),
+        ),
+      );
+
+    _commonExpanded = true;
+    _itemsExpanded = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_entries.isEmpty) return;
+      _startEditEntry(0);
+    });
   }
 
   @override
@@ -346,7 +404,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     return true;
   }
 
-  Future<void> _addItemToTable() async {
+  Future<bool> _addItemToTable() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
     final size = _draftRow.resolvedSize.trim();
@@ -356,23 +414,23 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
     if (size.isEmpty) {
       _showSnack('Select a size.');
-      return;
+      return false;
     }
     if (colour.isEmpty) {
       _showSnack('Select a colour.');
-      return;
+      return false;
     }
     if (qty <= 0) {
       _showSnack('Enter pieces (qty).');
-      return;
+      return false;
     }
     if (sell == null) {
       _showSnack('Enter selling price.');
-      return;
+      return false;
     }
     if (sell < 0) {
       _showSnack('Selling cannot be negative.');
-      return;
+      return false;
     }
 
     setState(() {
@@ -394,6 +452,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _sellUnitPrice = 0;
       _setSellText('0');
     });
+
+    return true;
   }
 
   Future<void> _addNewSizeFromField() async {
@@ -523,14 +583,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _stubGenerateBarcodeValue() {
-    final ts = DateTime.now().millisecondsSinceEpoch.toString();
-    return '89$ts';
-  }
-
-  Future<String> _generateBarcodeFromBackend() async {
-    // TODO: Replace with backend API.
-    return _stubGenerateBarcodeValue();
+  Future<GeneratedBarcode> _generateBarcodeFromBackend() async {
+    return StockEntryService().generateBarcode();
   }
 
   Future<bool> _confirmEntryIsRight() async {
@@ -601,6 +655,12 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         ? _brandController.text.trim()
         : (_brandSelection ?? '').trim();
 
+    // If user is editing an existing row, commit it before submit.
+    if (_editingIndex != null) {
+      final ok = await _addItemToTable();
+      if (!ok) return;
+    }
+
     if (_entries.isEmpty) {
       setState(() => _itemsExpanded = true);
       _ensureVisible(_itemsSectionKey);
@@ -619,13 +679,17 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       setState(() => _isGeneratingBarcode = true);
       try {
         final generated = await _generateBarcodeFromBackend();
-        finalBarcode = generated.trim();
+        finalBarcode = generated.barcode.trim();
+        _barcodeUrl = generated.barcodeUrl.trim();
         _barcodeController.text = finalBarcode;
 
         if (!mounted) return;
-        await Navigator.of(
-          context,
-        ).push<void>(BarcodePreviewScreen.route(barcode: finalBarcode));
+        await Navigator.of(context).push<void>(
+          BarcodePreviewScreen.route(
+            barcode: finalBarcode,
+            barcodeUrl: _barcodeUrl,
+          ),
+        );
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context)
@@ -646,6 +710,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       out.add(
         StockEntryDraftItem(
           barcode: finalBarcode,
+          barcodeUrl: _barcodeUrl,
           brandName: brand,
           size: row.size,
           colour: row.colour,
@@ -950,7 +1015,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                     textInputAction: TextInputAction.next,
                     decoration: decoration(
                       label: 'Brand name (optional)',
-                      icon: Icons.edit_outlined,
+                      icon: Icons.storefront_outlined,
                       hint: 'Example: Nike',
                     ),
                   ),
@@ -1023,7 +1088,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                       child: Row(
                         children: [
                           Icon(
-                            Icons.edit_outlined,
+                            Icons.tune_rounded,
                             color: colorScheme.primary,
                             size: 18,
                           ),
@@ -1438,7 +1503,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         Align(
                           alignment: Alignment.centerRight,
                           child: OutlinedButton.icon(
-                            onPressed: _addItemToTable,
+                            onPressed: () async {
+                              await _addItemToTable();
+                            },
                             icon: Icon(
                               _editingIndex == null
                                   ? Icons.add_rounded
@@ -1501,58 +1568,53 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                           borderRadius: BorderRadius.circular(14),
                           side: BorderSide(color: colorScheme.outlineVariant),
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${e.size} • ${e.colour}',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Pieces: ${e.qty} • Price: ₹${(e.sellUnit * e.qty).toStringAsFixed(0)}',
-                                      style: theme.textTheme.labelMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => _startEditEntry(i),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${e.size} • ${e.colour}',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Pieces: ${e.qty} • Price: ₹${(e.sellUnit * e.qty).toStringAsFixed(0)}',
+                                        style: theme.textTheme.labelMedium
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              IconButton(
-                                tooltip: 'Edit',
-                                onPressed: () => _startEditEntry(i),
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 44,
-                                  height: 44,
+                                IconButton(
+                                  tooltip: 'Delete',
+                                  onPressed: () => _removeEntryAt(i),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 44,
+                                    height: 44,
+                                  ),
+                                  icon: const Icon(Icons.delete_outline),
                                 ),
-                                icon: const Icon(Icons.edit_outlined),
-                              ),
-                              IconButton(
-                                tooltip: 'Delete',
-                                onPressed: () => _removeEntryAt(i),
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 44,
-                                  height: 44,
-                                ),
-                                icon: const Icon(Icons.delete_outline),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

@@ -77,6 +77,7 @@ class StockEntryPayment {
 class StockEntry {
   const StockEntry({
     required this.id,
+    this.invoiceNumber,
     required this.vendor,
     required this.createdAt,
     required this.items,
@@ -84,6 +85,7 @@ class StockEntry {
   });
 
   final String id;
+  final String? invoiceNumber;
   final Vendor vendor;
   final DateTime createdAt;
   final List<StockEntryLineItem> items;

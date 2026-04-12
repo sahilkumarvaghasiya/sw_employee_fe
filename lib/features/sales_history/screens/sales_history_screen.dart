@@ -36,10 +36,16 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
+  String _ddMMyyyy(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yyyy = d.year.toString();
+    return '$dd/$mm/$yyyy';
+  }
+
   String _dateLabel(BuildContext context, DateTimeRange? range) {
     if (range == null) return 'Any date';
-    final loc = MaterialLocalizations.of(context);
-    return '${loc.formatShortDate(range.start)} – ${loc.formatShortDate(range.end)}';
+    return '${_ddMMyyyy(range.start)} – ${_ddMMyyyy(range.end)}';
   }
 
   double? _parseMaxTotal() {
@@ -75,11 +81,18 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
 
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
+
+    final today = DateTime(now.year, now.month, now.day);
+    DateTimeRange? initialRange = _dateRange;
+    if (initialRange != null && initialRange.end.isAfter(today)) {
+      initialRange = DateTimeRange(start: initialRange.start, end: today);
+    }
+
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(now.year - 2),
-      lastDate: DateTime(now.year + 1),
-      initialDateRange: _dateRange,
+      lastDate: today,
+      initialDateRange: initialRange,
     );
 
     if (!mounted) return;

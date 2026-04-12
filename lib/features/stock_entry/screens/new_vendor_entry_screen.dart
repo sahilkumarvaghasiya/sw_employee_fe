@@ -69,7 +69,10 @@ class NewVendorEntryScreen extends StatelessWidget {
                     final vendor = Vendor(
                       id: 'v_${DateTime.now().millisecondsSinceEpoch}',
                       name: values.name,
+                      phone: values.phone,
+                      email: values.email,
                       address: values.address,
+                      gst: values.gst,
                     );
 
                     Navigator.of(context).pushReplacement(

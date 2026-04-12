@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/billing_models.dart';
 import '../providers/billing_provider.dart';
+import '../services/billing_service.dart';
 
 class BillPreviewScreen extends StatelessWidget {
   const BillPreviewScreen({super.key});
@@ -26,6 +27,97 @@ class BillPreviewScreen extends StatelessWidget {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _confirmAndSendWhatsApp(BuildContext context) async {
+    final provider = context.read<BillingProvider>();
+    final customer = provider.customer;
+    if (customer == null) {
+      _showSnack(context, 'Customer details are missing');
+      return;
+    }
+    if (provider.items.isEmpty) {
+      _showSnack(context, 'No products in the bill');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        bool isSending = false;
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            Future<void> send() async {
+              if (isSending) return;
+              setState(() => isSending = true);
+
+              try {
+                await BillingService().sendWhatsAppInvoice(
+                  customer: customer,
+                  items: provider.items,
+                  paymentMethod: provider.paymentMethod,
+                  markPaid: provider.markPaid,
+                  paidAmount: provider.paidAmount,
+                  subtotal: provider.subtotal,
+                  totalDiscount: provider.totalDiscount,
+                  finalAmount: provider.finalAmount,
+                );
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop(true);
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  _showSnack(context, e.toString());
+                }
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop(false);
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Send bill on WhatsApp?'),
+              content: Text(
+                BillingService.whatsAppApiIntegrated
+                    ? 'This will send the invoice to ${customer.phone} and finish billing.'
+                    : 'This will finish billing. WhatsApp sending will be enabled once the backend API is integrated.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSending
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: isSending ? null : send,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: isSending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            BillingService.whatsAppApiIntegrated
+                                ? 'Send & Done'
+                                : 'Done',
+                          ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed == true && context.mounted) {
+      provider.clearAll();
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   String _methodLabel(BillingPaymentMethod? method) {
@@ -153,35 +245,16 @@ class BillPreviewScreen extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: () {
-                    _showSnack(context, 'Send via WhatsApp (simulated)');
-                  },
-                  icon: const Icon(Icons.send_outlined),
-                  label: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Text('Send via WhatsApp'),
-                  ),
-                ),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => _confirmAndSendWhatsApp(context),
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Text('Done'),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () {
-                    context.read<BillingProvider>().clearAll();
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                  },
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Text('Done'),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

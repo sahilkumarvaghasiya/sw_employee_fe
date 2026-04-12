@@ -81,6 +81,13 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
 
   String _moneyLabel(double value) => '₹${value.toStringAsFixed(0)}';
 
+  String _ddMMyyyy(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yyyy = d.year.toString();
+    return '$dd/$mm/$yyyy';
+  }
+
   String _maxMoneyLabel(double actual, double effective) {
     if (actual > _sliderMax) return '₹${_sliderMax.toStringAsFixed(0)}+';
     return _moneyLabel(effective);
@@ -112,7 +119,7 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
       builder: (dialogContext) {
         String fmt(DateTime? d) {
           if (d == null) return 'Not set';
-          return '${d.day}/${d.month}/${d.year}';
+          return _ddMMyyyy(d);
         }
 
         Future<void> pickStart() async {
@@ -522,7 +529,7 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                   label: Text(
                     _dateRange == null
                         ? 'Select range'
-                        : '${_dateRange!.start.day}/${_dateRange!.start.month}/${_dateRange!.start.year} - ${_dateRange!.end.day}/${_dateRange!.end.month}/${_dateRange!.end.year}',
+                        : '${_ddMMyyyy(_dateRange!.start)} - ${_ddMMyyyy(_dateRange!.end)}',
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),

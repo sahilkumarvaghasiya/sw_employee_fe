@@ -44,7 +44,8 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
         : vendors
               .where((v) {
                 return v.name.toLowerCase().contains(query) ||
-                    v.address.toLowerCase().contains(query);
+                    (v.address ?? '').toLowerCase().contains(query) ||
+                    v.phone.toLowerCase().contains(query);
               })
               .toList(growable: false);
 
@@ -54,7 +55,7 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
           borderRadius: BorderRadius.circular(32),
           boxShadow: [
             BoxShadow(
-              color: colorScheme.primary.withOpacity(0.18),
+              color: colorScheme.primaryContainer.withOpacity(0.22),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -68,8 +69,8 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
           elevation: 2,
           icon: const Icon(Icons.add),
           label: const Text('New vendor'),
-          backgroundColor: colorScheme.primary,
-          foregroundColor: colorScheme.onPrimary,
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.onPrimaryContainer,
         ),
       ),
       body: CustomScrollView(
@@ -267,7 +268,7 @@ class _VendorCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          vendor.address,
+                          vendor.address ?? '—',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -278,28 +279,75 @@ class _VendorCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  FilledButton(
-                    onPressed: onTap,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: colorScheme.onPrimary,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      textStyle: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    child: const Text('Start Entry'),
-                  ),
+                  _PulsingArrowButton(onPressed: onTap),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PulsingArrowButton extends StatefulWidget {
+  const _PulsingArrowButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  State<_PulsingArrowButton> createState() => _PulsingArrowButtonState();
+}
+
+class _PulsingArrowButtonState extends State<_PulsingArrowButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    )..repeat(reverse: true);
+
+    _scale = Tween<double>(
+      begin: 0.92,
+      end: 1.15,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return ScaleTransition(
+      scale: _scale,
+      child: Material(
+        color: colorScheme.primaryContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        child: InkWell(
+          onTap: widget.onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Icon(
+              Icons.arrow_forward_rounded,
+              size: 22,
+              color: colorScheme.onPrimaryContainer,
+            ),
+          ),
         ),
       ),
     );

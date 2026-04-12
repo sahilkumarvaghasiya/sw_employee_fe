@@ -14,7 +14,7 @@ class ApiConfig {
   static const String _physicalDeviceBaseUrl = 'https://8435-2401-4900-ae2b-6669-f59d-2912-cf15-bc3.ngrok-free.app/api';
 
   // Set true when running on a real device.
-  static const bool usePhysicalDeviceBaseUrl = true;
+  static const bool usePhysicalDeviceBaseUrl = false;
 
   static String get baseUrl {
     if (usePhysicalDeviceBaseUrl) return _physicalDeviceBaseUrl;

@@ -8,14 +8,20 @@ import 'package:flutter/rendering.dart';
 import '../../../core/utils/barcode_saver.dart';
 
 class BarcodePreviewScreen extends StatefulWidget {
-  const BarcodePreviewScreen({super.key, required this.barcode});
+  const BarcodePreviewScreen({
+    super.key,
+    required this.barcode,
+    this.barcodeUrl,
+  });
 
   final String barcode;
+  final String? barcodeUrl;
 
-  static Route<void> route({required String barcode}) {
+  static Route<void> route({required String barcode, String? barcodeUrl}) {
     return MaterialPageRoute<void>(
       settings: const RouteSettings(name: '/stock-entry/barcode-preview'),
-      builder: (_) => BarcodePreviewScreen(barcode: barcode),
+      builder: (_) =>
+          BarcodePreviewScreen(barcode: barcode, barcodeUrl: barcodeUrl),
     );
   }
 
@@ -122,13 +128,32 @@ class _BarcodePreviewScreenState extends State<BarcodePreviewScreen> {
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: colorScheme.outlineVariant),
                       ),
-                      child: BarcodeWidget(
-                        barcode: Barcode.code128(),
-                        data: widget.barcode,
-                        drawText: true,
-                        color: colorScheme.onSurface,
-                        backgroundColor: colorScheme.surface,
-                      ),
+                      child:
+                          widget.barcodeUrl != null &&
+                              widget.barcodeUrl!.trim().isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                widget.barcodeUrl!,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return BarcodeWidget(
+                                    barcode: Barcode.code128(),
+                                    data: widget.barcode,
+                                    drawText: true,
+                                    color: colorScheme.onSurface,
+                                    backgroundColor: colorScheme.surface,
+                                  );
+                                },
+                              ),
+                            )
+                          : BarcodeWidget(
+                              barcode: Barcode.code128(),
+                              data: widget.barcode,
+                              drawText: true,
+                              color: colorScheme.onSurface,
+                              backgroundColor: colorScheme.surface,
+                            ),
                     ),
                   ),
                   const SizedBox(height: 14),

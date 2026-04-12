@@ -43,7 +43,12 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   bool _showHowBillingWorks = true;
   bool _scanMode = false;
 
-  final MobileScannerController _scannerController = MobileScannerController();
+  bool _scannerActive = false;
+  bool _startingScanner = false;
+
+  final MobileScannerController _scannerController = MobileScannerController(
+    autoStart: false,
+  );
 
   String? _lastBarcode;
   DateTime? _lastBarcodeAt;
@@ -121,8 +126,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       final product = _findProductByBarcode(barcode);
       if (product != null) {
         final provider = context.read<BillingProvider>();
-        final item = provider.addOrIncrementProduct(product);
-        await _editItem(item, originalUnitPrice: product.unitPrice);
+        provider.addOrIncrementProduct(product);
         _showSnack('${product.name} added');
         return;
       }
@@ -149,8 +153,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       name: result.name,
       unitPrice: result.price,
     );
-    await _editItem(item, originalUnitPrice: result.price);
-    _showSnack('${result.name} added');
+    _showSnack('${item.productName} added');
   }
 
   Future<void> _editItem(
@@ -598,11 +601,52 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _scanMode = true;
+      _scannerActive = false;
+      _startingScanner = false;
       _showHowBillingWorks = false;
     });
   }
 
+  Future<void> _startScanner() async {
+    if (_startingScanner || _scannerActive) return;
+    setState(() => _startingScanner = true);
+
+    try {
+      FocusManager.instance.primaryFocus?.unfocus();
+      await _scannerController.start();
+      if (!mounted) return;
+      setState(() {
+        _scannerActive = true;
+        _startingScanner = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _scannerActive = false;
+        _startingScanner = false;
+      });
+      _showSnack(
+        'Camera could not start on this device. Use manual add or try again.',
+      );
+    }
+  }
+
+  Future<void> _stopScanner() async {
+    try {
+      await _scannerController.stop();
+    } catch (_) {
+      // ignore
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _scannerActive = false;
+      _startingScanner = false;
+    });
+  }
+
   void _editCustomer() {
+    unawaited(_stopScanner());
     setState(() => _scanMode = false);
   }
 
@@ -764,36 +808,203 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               children: [
                                 AspectRatio(
                                   aspectRatio: 16 / 9,
-                                  child: MobileScanner(
-                                    controller: _scannerController,
-                                    fit: BoxFit.cover,
-                                    onDetect: (capture) {
-                                      final barcodes = capture.barcodes;
-                                      if (barcodes.isEmpty) return;
+                                  child: _scannerActive
+                                      ? MobileScanner(
+                                          controller: _scannerController,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, child) {
+                                            return Container(
+                                              color: colorScheme
+                                                  .surfaceContainerHighest,
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                    16,
+                                                    16,
+                                                    16,
+                                                    16,
+                                                  ),
+                                              child: Center(
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.camera_alt_outlined,
+                                                      color: colorScheme
+                                                          .onSurfaceVariant,
+                                                      size: 28,
+                                                    ),
+                                                    const SizedBox(height: 10),
+                                                    Text(
+                                                      'Camera unavailable',
+                                                      style: theme
+                                                          .textTheme
+                                                          .titleMedium
+                                                          ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.w900,
+                                                          ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      'This emulator/device may not support camera scanning.',
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      style: theme
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            color: colorScheme
+                                                                .onSurfaceVariant,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    FilledButton.icon(
+                                                      onPressed: () {
+                                                        unawaited(
+                                                          _stopScanner(),
+                                                        );
+                                                      },
+                                                      icon: const Icon(
+                                                        Icons.close_rounded,
+                                                      ),
+                                                      label: const Text(
+                                                        'Close scanner',
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          onDetect: (capture) {
+                                            final barcodes = capture.barcodes;
+                                            if (barcodes.isEmpty) return;
 
-                                      final raw = barcodes.first.rawValue;
-                                      final value = raw?.trim();
-                                      if (value == null || value.isEmpty) {
-                                        return;
-                                      }
+                                            final raw = barcodes.first.rawValue;
+                                            final value = raw?.trim();
+                                            if (value == null ||
+                                                value.isEmpty) {
+                                              return;
+                                            }
 
-                                      final now = DateTime.now();
-                                      final last = _lastBarcodeAt;
-                                      final same = _lastBarcode == value;
-                                      final tooSoon =
-                                          last != null &&
-                                          now.difference(last) <
-                                              const Duration(
-                                                milliseconds: 1200,
-                                              );
-                                      if (same && tooSoon) return;
+                                            final now = DateTime.now();
+                                            final last = _lastBarcodeAt;
+                                            final same = _lastBarcode == value;
+                                            final tooSoon =
+                                                last != null &&
+                                                now.difference(last) <
+                                                    const Duration(
+                                                      milliseconds: 1200,
+                                                    );
+                                            if (same && tooSoon) return;
 
-                                      _lastBarcode = value;
-                                      _lastBarcodeAt = now;
+                                            _lastBarcode = value;
+                                            _lastBarcodeAt = now;
 
-                                      unawaited(_handleBarcode(value));
-                                    },
-                                  ),
+                                            unawaited(_handleBarcode(value));
+                                          },
+                                        )
+                                      : Container(
+                                          color: colorScheme
+                                              .surfaceContainerHighest,
+                                          padding: const EdgeInsets.fromLTRB(
+                                            16,
+                                            16,
+                                            16,
+                                            16,
+                                          ),
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  height: 44,
+                                                  width: 44,
+                                                  decoration: BoxDecoration(
+                                                    color: colorScheme.primary
+                                                        .withOpacity(0.12),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          16,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons
+                                                        .qr_code_scanner_rounded,
+                                                    color: colorScheme.primary,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                Text(
+                                                  'Camera scanning is off',
+                                                  style: theme
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w900,
+                                                      ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Start scanning to add products faster.',
+                                                  textAlign: TextAlign.center,
+                                                  style: theme
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: colorScheme
+                                                            .onSurfaceVariant,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                FilledButton.icon(
+                                                  onPressed: _startingScanner
+                                                      ? null
+                                                      : () {
+                                                          unawaited(
+                                                            _startScanner(),
+                                                          );
+                                                        },
+                                                  icon: _startingScanner
+                                                      ? const SizedBox(
+                                                          width: 18,
+                                                          height: 18,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                              ),
+                                                        )
+                                                      : const Icon(
+                                                          Icons
+                                                              .camera_alt_rounded,
+                                                        ),
+                                                  label: Text(
+                                                    _startingScanner
+                                                        ? 'Starting…'
+                                                        : 'Start scanning',
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                TextButton(
+                                                  onPressed: () {
+                                                    unawaited(
+                                                      _addUnknownProduct(),
+                                                    );
+                                                  },
+                                                  child: const Text(
+                                                    'Add product manually',
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                 ),
                                 Positioned(
                                   left: 12,
@@ -817,7 +1028,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                         const SizedBox(width: 10),
                                         Expanded(
                                           child: Text(
-                                            'Keep scanning products one by one. The bill updates automatically.',
+                                            _scannerActive
+                                                ? 'Keep scanning products one by one. The bill updates automatically.'
+                                                : 'Tap “Start scanning” to use camera. You can also add products manually.',
                                             style: theme.textTheme.bodyMedium
                                                 ?.copyWith(
                                                   fontWeight: FontWeight.w600,
@@ -884,7 +1097,22 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               final item = provider.items[index];
                               return ProductItemWidget(
                                 item: item,
-                                onTap: () => _editItem(item),
+                                onPriceChanged: (v) {
+                                  context
+                                      .read<BillingProvider>()
+                                      .updateItemPrice(item.id, v);
+                                },
+                                onDiscountChanged: (v) {
+                                  context
+                                      .read<BillingProvider>()
+                                      .updateItemDiscountPercent(item.id, v);
+                                },
+                                onRemove: () {
+                                  context.read<BillingProvider>().removeItem(
+                                    item.id,
+                                  );
+                                  _showSnack('Removed ${item.productName}');
+                                },
                               );
                             },
                           ),

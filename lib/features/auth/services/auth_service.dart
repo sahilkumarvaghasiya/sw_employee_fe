@@ -21,7 +21,9 @@ class AuthService {
 
   static String _normalizeBase(String base) {
     final trimmed = base.trim();
-    return trimmed.endsWith('/') ? trimmed.substring(0, trimmed.length - 1) : trimmed;
+    return trimmed.endsWith('/')
+        ? trimmed.substring(0, trimmed.length - 1)
+        : trimmed;
   }
 
   Uri _accountUri(String path) {
@@ -48,11 +50,7 @@ class AuthService {
           throw Exception('Invalid login response from server');
         }
 
-        return {
-          ...data,
-          'access': access,
-          'refresh': refresh,
-        };
+        return {...data, 'access': access, 'refresh': refresh};
       }
 
       throw Exception(_errorMessageFromResponse(response));
@@ -135,9 +133,7 @@ class AuthService {
     return null;
   }
 
-  Future<void> changePassword({
-    required String newPassword,
-  }) async {
+  Future<void> changePassword({required String newPassword}) async {
     final accessToken = await getValidAccessToken();
     if (accessToken == null) {
       throw Exception('Not authenticated');
@@ -179,7 +175,10 @@ class AuthService {
     throw Exception('Change password failed');
   }
 
-  bool _isJwtExpired(String token, {Duration grace = const Duration(seconds: 30)}) {
+  bool _isJwtExpired(
+    String token, {
+    Duration grace = const Duration(seconds: 30),
+  }) {
     final exp = _jwtExp(token);
     if (exp == null) return true;
     final now = DateTime.now().add(grace).millisecondsSinceEpoch ~/ 1000;
@@ -192,9 +191,9 @@ class AuthService {
 
     try {
       final normalizedPayload = base64Url.normalize(parts[1]);
-      final payloadMap = jsonDecode(
-        utf8.decode(base64Url.decode(normalizedPayload)),
-      ) as Map<String, dynamic>;
+      final payloadMap =
+          jsonDecode(utf8.decode(base64Url.decode(normalizedPayload)))
+              as Map<String, dynamic>;
       final expValue = payloadMap['exp'];
       if (expValue is int) return expValue;
       if (expValue is String) return int.tryParse(expValue);
