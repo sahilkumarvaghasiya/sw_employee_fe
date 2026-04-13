@@ -938,13 +938,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
           'Add Stock Items',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Close',
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close_rounded),
-          ),
-        ],
       ),
       body: Form(
         key: _formKey,
@@ -1285,7 +1278,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       ),
                                   isEmpty: isEmpty,
                                   child: Text(
-                                    isEmpty ? hint : value!,
+                                    isEmpty ? hint : value,
                                     overflow: TextOverflow.ellipsis,
                                     style: theme.textTheme.bodyLarge?.copyWith(
                                       fontWeight: isEmpty

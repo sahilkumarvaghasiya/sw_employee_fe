@@ -156,41 +156,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _showSnack('${item.productName} added');
   }
 
-  Future<void> _editItem(
-    BillingLineItem item, {
-    double? originalUnitPrice,
-  }) async {
-    final action = await showModalBottomSheet<BillingItemEditResult>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => BillingItemEditSheet(
-        item: item,
-        originalUnitPrice: originalUnitPrice,
-      ),
-    );
-
-    if (!mounted) return;
-    if (action == null) return;
-
-    final provider = context.read<BillingProvider>();
-
-    if (action.remove) {
-      provider.removeItem(item.id);
-      _showSnack('Removed ${item.productName}');
-      return;
-    }
-
-    if (action.unitPrice != null) {
-      provider.updateItemPrice(item.id, action.unitPrice!);
-    }
-    if (action.discountPercent != null) {
-      provider.updateItemDiscountPercent(item.id, action.discountPercent!);
-    }
-
-    _showSnack('Updated ${item.productName}');
-  }
-
   Future<void> _confirmCashAndGenerateBill() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1091,7 +1056,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 220),
                           sliver: SliverList.separated(
                             itemCount: provider.items.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               final item = provider.items[index];
@@ -1296,7 +1261,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                             ),
                                             shrinkWrap: true,
                                             itemCount: options.length,
-                                            separatorBuilder: (_, __) =>
+                                            separatorBuilder: (_, _) =>
                                                 const Divider(height: 1),
                                             itemBuilder: (context, index) {
                                               final c = options.elementAt(

@@ -36,7 +36,8 @@ class _ExistingVendorEntryScreenState extends State<ExistingVendorEntryScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final vendors = context.watch<StockEntryProvider>().vendors;
+    final provider = context.watch<StockEntryProvider>();
+    final vendors = provider.vendors;
 
     final query = _searchController.text.trim().toLowerCase();
     final filtered = query.isEmpty
@@ -65,7 +66,30 @@ class _ExistingVendorEntryScreenState extends State<ExistingVendorEntryScreen> {
             ),
           ),
           Expanded(
-            child: filtered.isEmpty
+            child: (provider.isLoadingVendors && vendors.isEmpty)
+                ? const Center(child: CircularProgressIndicator())
+                : (provider.vendorsError != null && vendors.isEmpty)
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            provider.vendorsError!,
+                            style: theme.textTheme.titleMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: provider.refreshVendors,
+                            child: const Text('Try again'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : filtered.isEmpty
                 ? Center(
                     child: Text(
                       'No vendors found',
@@ -109,6 +133,12 @@ class _VendorCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final subtitle = vendor.phone.trim().isNotEmpty
+        ? vendor.phone
+        : (vendor.address?.trim().isNotEmpty ?? false)
+        ? vendor.address!
+        : '—';
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -135,7 +165,7 @@ class _VendorCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      vendor.address ?? '—',
+                      subtitle,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),

@@ -28,11 +28,47 @@ class ProductsScreen extends StatefulWidget {
 class _ProductsScreenState extends State<ProductsScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _sizeController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  bool _postFramePaginationScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+
+    // If the first page doesn't fill the viewport, auto-fetch until it does
+    // (or until there's no more data).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _maybeLoadMore(context.read<ProductsProvider>());
+    });
+  }
+
+  void _onScroll() {
+    if (!mounted) return;
+    _maybeLoadMore(context.read<ProductsProvider>());
+  }
+
+  void _maybeLoadMore(ProductsProvider provider) {
+    if (!provider.hasMore) return;
+    if (provider.isLoadingInitial || provider.isLoadingMore) return;
+    if (!_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+    final shouldLoad = position.pixels >= (position.maxScrollExtent - 240);
+    if (!shouldLoad) return;
+
+    unawaited(provider.loadMore());
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     _sizeController.dispose();
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     super.dispose();
   }
 
@@ -75,6 +111,23 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     final provider = context.watch<ProductsProvider>();
 
+    // If content doesn't fill the viewport, keep auto-fetching pages until it
+    // does (or until there's no more data). This runs after layout.
+    if (!_postFramePaginationScheduled &&
+        provider.items.isNotEmpty &&
+        provider.hasMore &&
+        !provider.isLoadingInitial &&
+        !provider.isLoadingMore &&
+        _scrollController.hasClients &&
+        _scrollController.position.maxScrollExtent <= 0) {
+      _postFramePaginationScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _postFramePaginationScheduled = false;
+        if (!mounted) return;
+        _maybeLoadMore(context.read<ProductsProvider>());
+      });
+    }
+
     final desiredText = provider.selectedSize ?? '';
     if (_sizeController.text != desiredText) {
       _sizeController.value = TextEditingValue(
@@ -97,6 +150,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       body: RefreshIndicator(
         onRefresh: provider.refresh,
         child: CustomScrollView(
+          controller: _scrollController,
           slivers: [
             SliverPersistentHeader(
               pinned: true,
@@ -170,7 +224,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 hasScrollBody: false,
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (provider.error != null)
+            else if (provider.error != null && provider.items.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
@@ -227,7 +281,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       },
                     );
                   },
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemCount: provider.items.length,
                 ),
               ),
@@ -238,7 +292,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 child: _PaginationFooter(
                   isLoadingMore: provider.isLoadingMore,
                   hasMore: provider.hasMore,
-                  onLoadMore: provider.loadMore,
                 ),
               ),
             ),
@@ -250,15 +303,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
 }
 
 class _PaginationFooter extends StatelessWidget {
-  const _PaginationFooter({
-    required this.isLoadingMore,
-    required this.hasMore,
-    required this.onLoadMore,
-  });
+  const _PaginationFooter({required this.isLoadingMore, required this.hasMore});
 
   final bool isLoadingMore;
   final bool hasMore;
-  final Future<void> Function() onLoadMore;
 
   @override
   Widget build(BuildContext context) {
@@ -285,14 +333,8 @@ class _PaginationFooter extends StatelessWidget {
       );
     }
 
-    return Center(
-      child: FilledButton.tonal(
-        onPressed: () {
-          unawaited(onLoadMore());
-        },
-        child: const Text('Load more'),
-      ),
-    );
+    // Infinite scroll: next page loads automatically as the user reaches bottom.
+    return const SizedBox.shrink();
   }
 }
 

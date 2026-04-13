@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
@@ -185,9 +184,9 @@ class ProductsProvider extends ChangeNotifier {
     final q = _searchQuery.trim();
     if (q.isNotEmpty) out['search'] = q;
 
-    // Backend supports a single gender filter value.
-    if (_selectedGenders.length == 1) {
-      out['gender'] = _selectedGenders.first.name;
+    // Backend supports multiple genders as a comma-separated list.
+    if (_selectedGenders.isNotEmpty) {
+      out['gender'] = _selectedGenders.map((g) => g.name).join(',');
     }
 
     if (_selectedPriceRange.start != _priceBounds.$1) {

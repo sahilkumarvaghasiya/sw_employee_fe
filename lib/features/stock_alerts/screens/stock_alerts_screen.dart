@@ -92,7 +92,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               itemCount: alerts.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
                 final alert = alerts[index];
                 final color = _severityColor(scheme, alert.severity);

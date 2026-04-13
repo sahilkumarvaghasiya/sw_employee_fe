@@ -30,7 +30,6 @@ class ProductsFilterSection extends StatefulWidget {
 
 class _ProductsFilterSectionState extends State<ProductsFilterSection> {
   final Set<ProductGender> _genders = {};
-  RangeValues? _priceRange;
   DateTimeRange? _dateRange;
 
   final TextEditingController _minPriceController = TextEditingController();
@@ -38,11 +37,7 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
   final FocusNode _minPriceFocusNode = FocusNode();
   final FocusNode _maxPriceFocusNode = FocusNode();
 
-  double? _maxPriceActual;
-
-  static const double _sliderMin = 0;
-  static const double _sliderMax = 5000;
-  static const double _minMaxPrice = 100;
+  bool _initialized = false;
 
   @override
   void dispose() {
@@ -59,38 +54,30 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
 
     final provider = context.watch<ProductsProvider>();
 
-    if (_priceRange == null || _maxPriceActual == null) {
-      _genders
-        ..clear()
-        ..addAll(provider.selectedGenders);
+    if (_initialized) return;
+    _initialized = true;
 
-      final selected = provider.selectedPriceRange;
-      final rawStart = selected.start < _sliderMin
-          ? _sliderMin
-          : selected.start;
-      final rawEnd = selected.end < _minMaxPrice ? _minMaxPrice : selected.end;
+    _genders
+      ..clear()
+      ..addAll(provider.selectedGenders);
 
-      final effectiveEnd = rawEnd > _sliderMax ? _sliderMax : rawEnd;
-      final effectiveStart = rawStart > effectiveEnd ? effectiveEnd : rawStart;
+    _dateRange = provider.selectedDateRange;
 
-      _priceRange = RangeValues(effectiveStart, effectiveEnd);
-      _maxPriceActual = rawEnd;
-      _dateRange = provider.selectedDateRange;
-    }
+    final bounds = provider.priceBounds;
+    final selected = provider.selectedPriceRange;
+    final min = selected.start;
+    final max = selected.end;
+
+    // Show empty fields when there's effectively no price filter.
+    _minPriceController.text = (min <= bounds.$1) ? '' : min.toStringAsFixed(0);
+    _maxPriceController.text = (max >= bounds.$2) ? '' : max.toStringAsFixed(0);
   }
-
-  String _moneyLabel(double value) => '₹${value.toStringAsFixed(0)}';
 
   String _ddMMyyyy(DateTime d) {
     final dd = d.day.toString().padLeft(2, '0');
     final mm = d.month.toString().padLeft(2, '0');
     final yyyy = d.year.toString();
     return '$dd/$mm/$yyyy';
-  }
-
-  String _maxMoneyLabel(double actual, double effective) {
-    if (actual > _sliderMax) return '₹${_sliderMax.toStringAsFixed(0)}+';
-    return _moneyLabel(effective);
   }
 
   Future<void> _pickDateRangeDialog() async {
@@ -238,40 +225,14 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
     final colorScheme = theme.colorScheme;
 
     final provider = context.watch<ProductsProvider>();
-    final range = _priceRange ?? const RangeValues(_sliderMin, _minMaxPrice);
-    final maxActual = _maxPriceActual ?? range.end;
+    final bounds = provider.priceBounds;
+    final minBound = bounds.$1;
+    final maxBound = bounds.$2;
 
-    if (!_minPriceFocusNode.hasFocus) {
-      final nextText = range.start.toStringAsFixed(0);
-      if (_minPriceController.text != nextText) {
-        _minPriceController.value = TextEditingValue(
-          text: nextText,
-          selection: TextSelection.collapsed(offset: nextText.length),
-        );
-      }
-    }
-
-    if (!_maxPriceFocusNode.hasFocus) {
-      final nextText = maxActual.toStringAsFixed(0);
-      if (_maxPriceController.text != nextText) {
-        _maxPriceController.value = TextEditingValue(
-          text: nextText,
-          selection: TextSelection.collapsed(offset: nextText.length),
-        );
-      }
-    }
-
-    void setEffectiveRange(RangeValues v, {double? actualMax}) {
-      var start = v.start.clamp(_sliderMin, _sliderMax);
-      var end = v.end.clamp(_sliderMin, _sliderMax);
-
-      if (end < _minMaxPrice) {
-        end = _minMaxPrice;
-      }
-      if (start > end) start = end;
-
-      _priceRange = RangeValues(start, end);
-      _maxPriceActual = actualMax ?? end;
+    void showError(String message) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(message)));
     }
 
     return Container(
@@ -303,10 +264,13 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                 onPressed: () {
                   setState(() {
                     _genders.clear();
-                    _priceRange = const RangeValues(_sliderMin, _minMaxPrice);
-                    _maxPriceActual = _minMaxPrice;
                     _dateRange = null;
+                    _minPriceController.clear();
+                    _maxPriceController.clear();
                   });
+
+                  // Reset means: remove all filters so the full list is visible.
+                  provider.resetFilters();
                 },
                 child: const Text('Reset'),
               ),
@@ -356,47 +320,6 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Text(
-                _moneyLabel(range.start),
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              Text(
-                '  —  ',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                _maxMoneyLabel(maxActual, range.end),
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const Spacer(),
-            ],
-          ),
-          RangeSlider(
-            values: range,
-            min: _sliderMin,
-            max: _sliderMax,
-            labels: RangeLabels(
-              _moneyLabel(range.start),
-              _maxMoneyLabel(maxActual, range.end),
-            ),
-            onChanged: (v) {
-              setState(() {
-                setEffectiveRange(v, actualMax: v.end);
-              });
-            },
-          ),
-
-          const SizedBox(height: 10),
-
-          Row(
-            children: [
               Expanded(
                 child: TextField(
                   controller: _minPriceController,
@@ -421,18 +344,6 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                       vertical: 14,
                     ),
                   ),
-                  onChanged: (value) {
-                    final parsed = double.tryParse(value.trim());
-                    if (parsed == null) return;
-                    setState(() {
-                      final start = parsed.clamp(_sliderMin, _sliderMax);
-                      final end = (_priceRange?.end ?? _minMaxPrice);
-                      setEffectiveRange(
-                        RangeValues(start, end),
-                        actualMax: _maxPriceActual,
-                      );
-                    });
-                  },
                 ),
               ),
               const SizedBox(width: 10),
@@ -459,52 +370,7 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                       horizontal: 12,
                       vertical: 14,
                     ),
-                    suffixIcon: IconButton(
-                      tooltip: 'Clear max',
-                      onPressed: () {
-                        setState(() {
-                          _maxPriceActual = _minMaxPrice;
-                          setEffectiveRange(
-                            RangeValues(
-                              _priceRange?.start ?? _sliderMin,
-                              _minMaxPrice,
-                            ),
-                            actualMax: _minMaxPrice,
-                          );
-                        });
-                      },
-                      icon: const Icon(Icons.close_rounded),
-                    ),
                   ),
-                  onChanged: (value) {
-                    final parsedRaw = double.tryParse(value.trim());
-                    if (parsedRaw == null) return;
-                    final parsed = parsedRaw < _minMaxPrice
-                        ? _minMaxPrice
-                        : parsedRaw;
-                    final effectiveEnd = parsed > _sliderMax
-                        ? _sliderMax
-                        : parsed;
-                    setState(() {
-                      setEffectiveRange(
-                        RangeValues(
-                          _priceRange?.start ?? _sliderMin,
-                          effectiveEnd,
-                        ),
-                        actualMax: parsed,
-                      );
-                    });
-
-                    if (parsedRaw < _minMaxPrice) {
-                      final nextText = _minMaxPrice.toStringAsFixed(0);
-                      _maxPriceController.value = TextEditingValue(
-                        text: nextText,
-                        selection: TextSelection.collapsed(
-                          offset: nextText.length,
-                        ),
-                      );
-                    }
-                  },
                 ),
               ),
             ],
@@ -534,16 +400,17 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              IconButton(
-                tooltip: 'Clear date',
-                onPressed: _dateRange == null
-                    ? null
-                    : () => setState(() => _dateRange = null),
-                icon: const Icon(Icons.close),
-              ),
             ],
           ),
+
+          if (_dateRange != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => setState(() => _dateRange = null),
+                child: const Text('Clear date'),
+              ),
+            ),
 
           const SizedBox(height: 18),
 
@@ -552,13 +419,36 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
             height: 48,
             child: FilledButton.icon(
               onPressed: () {
+                final minText = _minPriceController.text.trim();
+                final maxText = _maxPriceController.text.trim();
+
+                final minParsed = minText.isEmpty
+                    ? null
+                    : double.tryParse(minText.replaceAll(',', ''));
+                final maxParsed = maxText.isEmpty
+                    ? null
+                    : double.tryParse(maxText.replaceAll(',', ''));
+
+                if (minParsed == null && minText.isNotEmpty) {
+                  showError('Enter a valid minimum price.');
+                  return;
+                }
+                if (maxParsed == null && maxText.isNotEmpty) {
+                  showError('Enter a valid maximum price.');
+                  return;
+                }
+
+                final min = (minParsed ?? minBound).clamp(minBound, maxBound);
+                final max = (maxParsed ?? maxBound).clamp(minBound, maxBound);
+
+                if (min > max) {
+                  showError('Minimum price cannot exceed maximum price.');
+                  return;
+                }
+
                 provider.applyFilters(
                   genders: _genders,
-                  priceRange: RangeValues(
-                    (_priceRange ?? provider.selectedPriceRange).start,
-                    _maxPriceActual ??
-                        (_priceRange ?? provider.selectedPriceRange).end,
-                  ),
+                  priceRange: RangeValues(min, max),
                   dateRange: _dateRange,
                 );
                 widget.onCloseRequested();

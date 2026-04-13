@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -44,6 +46,8 @@ class StockEntryHistoryScreen extends StatefulWidget {
 class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
   final ScrollController _scrollController = ScrollController();
 
+  bool _didRequestInitialHistory = false;
+
   _PaymentFilter _paymentFilter = _PaymentFilter.unpaid;
   DateTimeRange? _dateRange;
 
@@ -63,6 +67,29 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
       _paymentFilter = _PaymentFilter.unpaid;
       _dateRange = null;
     });
+  }
+
+  String _backendStatusParam(_PaymentFilter filter) {
+    switch (filter) {
+      case _PaymentFilter.paid:
+        return 'paid';
+      case _PaymentFilter.halfPaid:
+        // Backend uses "partial".
+        return 'partial';
+      case _PaymentFilter.unpaid:
+        return 'unpaid';
+    }
+  }
+
+  Future<void> _refreshBackendHistory() async {
+    final vendor = widget.vendor;
+    if (vendor == null) return;
+
+    await context.read<StockEntryProvider>().refreshHistory(
+      vendor: vendor,
+      status: _backendStatusParam(_paymentFilter),
+      dateRange: _dateRange,
+    );
   }
 
   Widget _filtersSummaryBar(BuildContext context) {
@@ -261,12 +288,16 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                           onPressed: () {
                             _clearFilters();
                             setModalState(() {});
+                            unawaited(_refreshBackendHistory());
                           },
                           child: const Text('Clear'),
                         ),
                         const Spacer(),
                         FilledButton(
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            unawaited(_refreshBackendHistory());
+                          },
                           child: const Text('Apply'),
                         ),
                       ],
@@ -293,6 +324,26 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
       if (position.pixels >= position.maxScrollExtent - 320) {
         context.read<StockEntryProvider>().loadMoreHistory();
       }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final vendor = widget.vendor;
+    if (vendor == null) return;
+    if (_didRequestInitialHistory) return;
+    _didRequestInitialHistory = true;
+
+    // Load vendor-specific history from backend when opening this screen.
+    Future.microtask(() {
+      if (!mounted) return;
+      context.read<StockEntryProvider>().refreshHistory(
+        vendor: vendor,
+        status: _backendStatusParam(_paymentFilter),
+        dateRange: _dateRange,
+      );
     });
   }
 
@@ -397,15 +448,15 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
       return d;
     }
 
-    if (start != null) start = clamp(start!);
-    if (end != null) end = clamp(end!);
+    if (start != null) start = clamp(start);
+    if (end != null) end = clamp(end);
 
     if (start == null || end == null) {
       start = clamp(now.subtract(const Duration(days: 7)));
       end = clamp(now);
     }
 
-    if (end!.isBefore(start!)) {
+    if (end.isBefore(start)) {
       end = start;
     }
 
@@ -527,7 +578,11 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: provider.refreshHistory,
+        onRefresh: () async {
+          final vendor = widget.vendor;
+          if (vendor == null) return;
+          await provider.refreshHistory(vendor: vendor);
+        },
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
@@ -605,7 +660,11 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                         ),
                         const SizedBox(height: 12),
                         FilledButton(
-                          onPressed: provider.refreshHistory,
+                          onPressed: () {
+                            final vendor = widget.vendor;
+                            if (vendor == null) return;
+                            provider.refreshHistory(vendor: vendor);
+                          },
                           child: const Text('Try again'),
                         ),
                       ],
@@ -734,266 +793,6 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
   }
 }
 
-class _HistoryFiltersCard extends StatelessWidget {
-  const _HistoryFiltersCard({
-    required this.selected,
-    required this.dateLabel,
-    required this.hasDate,
-    required this.paidColor,
-    required this.halfColor,
-    required this.unpaidColor,
-    required this.paidIcon,
-    required this.halfIcon,
-    required this.unpaidIcon,
-    required this.onSelectStatus,
-    required this.onPickDate,
-    required this.onClearDate,
-  });
-
-  final _PaymentFilter selected;
-  final String dateLabel;
-  final bool hasDate;
-
-  final Color paidColor;
-  final Color halfColor;
-  final Color unpaidColor;
-
-  final IconData paidIcon;
-  final IconData halfIcon;
-  final IconData unpaidIcon;
-
-  final ValueChanged<_PaymentFilter> onSelectStatus;
-  final VoidCallback onPickDate;
-  final VoidCallback onClearDate;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    Widget statusPills() {
-      return Row(
-        children: [
-          Expanded(
-            child: _StatusPill(
-              label: 'Paid',
-              icon: paidIcon,
-              color: paidColor,
-              selected: selected == _PaymentFilter.paid,
-              onTap: () => onSelectStatus(_PaymentFilter.paid),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _StatusPill(
-              label: 'Half Paid',
-              icon: halfIcon,
-              color: halfColor,
-              selected: selected == _PaymentFilter.halfPaid,
-              onTap: () => onSelectStatus(_PaymentFilter.halfPaid),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _StatusPill(
-              label: 'Unpaid',
-              icon: unpaidIcon,
-              color: unpaidColor,
-              selected: selected == _PaymentFilter.unpaid,
-              onTap: () => onSelectStatus(_PaymentFilter.unpaid),
-            ),
-          ),
-        ],
-      );
-    }
-
-    final dateInput = Material(
-      color: colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onPickDate,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.calendar_month_outlined,
-                size: 20,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Date',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      dateLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              if (hasDate)
-                IconButton(
-                  tooltip: 'Clear date',
-                  visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                  onPressed: onClearDate,
-                  icon: const Icon(Icons.close_rounded),
-                )
-              else
-                const Icon(Icons.chevron_right_rounded),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    return Material(
-      color: colorScheme.surfaceContainerLow,
-      elevation: 0,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final bool narrow = constraints.maxWidth < 520;
-            if (narrow) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Filters',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  statusPills(),
-                  const SizedBox(height: 12),
-                  dateInput,
-                ],
-              );
-            }
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: statusPills()),
-                    const SizedBox(width: 12),
-                    SizedBox(width: 260, child: dateInput),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color color;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final bg = selected ? color.withAlpha(28) : colorScheme.surface;
-    final border = selected ? color.withAlpha(170) : colorScheme.outlineVariant;
-    final fg = selected ? color : colorScheme.onSurfaceVariant;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: border),
-        boxShadow: selected
-            ? [
-                BoxShadow(
-                  color: color.withAlpha(24),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ]
-            : const [],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 18, color: fg),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    style: theme.textTheme.labelLarge!.copyWith(
-                      color: selected ? colorScheme.onSurface : fg,
-                      fontWeight: FontWeight.w900,
-                    ),
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _HistoryRow extends StatelessWidget {
   const _HistoryRow({
     required this.entry,
@@ -1014,9 +813,14 @@ class _HistoryRow extends StatelessWidget {
 
     final invoiceNo = entry.invoiceNumber?.trim();
 
-    final dateLabel = MaterialLocalizations.of(
-      context,
-    ).formatMediumDate(entry.createdAt);
+    String ddMMyyyy(DateTime d) {
+      final dd = d.day.toString().padLeft(2, '0');
+      final mm = d.month.toString().padLeft(2, '0');
+      final yyyy = d.year.toString();
+      return '$dd/$mm/$yyyy';
+    }
+
+    final dateLabel = ddMMyyyy(entry.createdAt);
 
     final remaining = entry.payment.remainingAmount;
     final paid = entry.payment.paidAmount;
@@ -1152,66 +956,6 @@ class _StatusBadge extends StatelessWidget {
             style: theme.textTheme.labelLarge?.copyWith(
               color: color,
               fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AmountPill extends StatelessWidget {
-  const _AmountPill({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.emphasisColor,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color? emphasisColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final accent = emphasisColor;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: accent ?? colorScheme.onSurfaceVariant),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: accent ?? colorScheme.onSurface,
-                  ),
-                ),
-              ],
             ),
           ),
         ],

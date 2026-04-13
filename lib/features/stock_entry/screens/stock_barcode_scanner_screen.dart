@@ -31,16 +31,7 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scan barcode'),
-        actions: [
-          IconButton(
-            tooltip: 'Close',
-            onPressed: () => _popWithValue(null),
-            icon: const Icon(Icons.close),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Scan barcode')),
       body: Stack(
         children: [
           MobileScanner(

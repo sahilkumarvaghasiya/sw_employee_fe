@@ -150,8 +150,9 @@ class _VendorFormState extends State<VendorForm> {
               hint: 'Example: Shree Traders',
             ),
             validator: (v) {
-              if (v == null || v.trim().isEmpty)
+              if (v == null || v.trim().isEmpty) {
                 return 'Vendor name is required';
+              }
               if (v.trim().length < 2) return 'Enter a valid vendor name';
               return null;
             },

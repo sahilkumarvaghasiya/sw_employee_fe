@@ -78,6 +78,7 @@ class StockEntry {
   const StockEntry({
     required this.id,
     this.invoiceNumber,
+    this.backendStatus,
     required this.vendor,
     required this.createdAt,
     required this.items,
@@ -86,6 +87,10 @@ class StockEntry {
 
   final String id;
   final String? invoiceNumber;
+
+  /// Raw backend status for history list/details.
+  /// Expected values: paid | unpaid | partial (older: half_paid)
+  final String? backendStatus;
   final Vendor vendor;
   final DateTime createdAt;
   final List<StockEntryLineItem> items;

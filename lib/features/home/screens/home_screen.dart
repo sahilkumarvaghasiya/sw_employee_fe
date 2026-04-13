@@ -419,8 +419,9 @@ class _EmployeeChip extends StatelessWidget {
                         validator: (value) {
                           final v = (value ?? '').trim();
                           if (v.isEmpty) return 'Enter a new password';
-                          if (v.length < 6)
+                          if (v.length < 6) {
                             return 'Password must be at least 6 characters';
+                          }
                           return null;
                         },
                       ),

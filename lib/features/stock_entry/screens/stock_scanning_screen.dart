@@ -49,12 +49,14 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   @override
   void initState() {
     super.initState();
+    _totalPaymentController.addListener(_syncTotalsFromControllers);
     _paidAmountController.addListener(_syncTotalsFromControllers);
     _syncTotalsFromControllers();
   }
 
   @override
   void dispose() {
+    _totalPaymentController.removeListener(_syncTotalsFromControllers);
     _paidAmountController.removeListener(_syncTotalsFromControllers);
 
     for (final item in _items) {
@@ -82,31 +84,19 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     return '${item.brandName.trim()} • $typeText$pairText';
   }
 
-  String _metaLine(StockEntryDraftItem item) {
-    final parts = <String>[
-      'Barcode: ${item.barcode}',
-      'Size: ${item.size}',
-      'Colour: ${item.colour}',
-      'Gender: ${item.gender.label}',
-    ];
-    return parts.join(' • ');
-  }
-
   void _syncTotalsFromControllers() {
-    final total = _items.fold<double>(
-      0,
-      (sum, e) => sum + (e.sellingPrice * e.quantity),
-    );
+    final paidRaw = _paidAmountController.text.trim().replaceAll(',', '');
+    final paid = double.tryParse(paidRaw) ?? 0;
 
-    final paid = double.tryParse(_paidAmountController.text.trim()) ?? 0;
+    final totalRaw = _totalPaymentController.text.trim().replaceAll(',', '');
+    final totalParsed = double.tryParse(totalRaw);
+    final total = totalParsed ?? 0.0;
 
     setState(() {
       _totalStockValue = total;
       _paidAmount = paid;
       _remainingAmount = _totalStockValue - _paidAmount;
       if (_remainingAmount < 0) _remainingAmount = 0;
-
-      _totalPaymentController.text = _totalStockValue.toStringAsFixed(2);
     });
   }
 
@@ -306,6 +296,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     return {
       'vendor_name': widget.vendor.name,
+      'vendor_address': (widget.vendor.address?.trim().isNotEmpty ?? false)
+          ? widget.vendor.address?.trim()
+          : null,
       'total_amount': moneyString(_totalStockValue),
       'paid_amount': moneyString(_paidAmount),
       'paymentdeadlinedate': deadlineString(_deadline),
@@ -363,13 +356,19 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     if (confirmed != true) return;
     if (!mounted) return;
 
-    setState(() => _itemsLocked = true);
+    setState(() {
+      _itemsLocked = true;
+    });
+    _syncTotalsFromControllers();
 
     final didSave = await _showPaymentPopup();
     if (!mounted) return;
 
     if (didSave != true) {
-      setState(() => _itemsLocked = false);
+      setState(() {
+        _itemsLocked = false;
+      });
+      _syncTotalsFromControllers();
     }
   }
 
@@ -479,6 +478,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                     remainingAmount: _remainingAmount,
                                     deadline: _deadline,
                                     onPickDeadline: _pickDeadline,
+                                    totalPaymentEditable: true,
+                                    onTotalPaymentChanged: (_) =>
+                                        _syncTotalsFromControllers(),
                                   ),
                                   const SizedBox(height: 14),
                                   Row(
@@ -490,8 +492,10 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                               : () => Navigator.of(
                                                   dialogContext,
                                                 ).pop(false),
-                                          icon: const Icon(Icons.edit_outlined),
-                                          label: const Text('Edit items'),
+                                          icon: const Icon(
+                                            Icons.cancel_outlined,
+                                          ),
+                                          label: const Text('Cancel'),
                                         ),
                                       ),
                                       const SizedBox(width: 12),
@@ -552,6 +556,15 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   Future<void> _saveFinal() async {
     if (!_validateItemsOnly()) return;
 
+    final totalRaw = _totalPaymentController.text.trim();
+    final parsedTotal = totalRaw.isEmpty
+        ? 0.0
+        : double.tryParse(totalRaw.replaceAll(',', ''));
+    if (parsedTotal == null || parsedTotal <= 0) {
+      _showSnack('Enter a valid total payment.');
+      return;
+    }
+
     final paidRaw = _paidAmountController.text.trim();
     final parsedPaid = paidRaw.isEmpty
         ? 0.0
@@ -565,8 +578,10 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       return;
     }
 
-    if ((_paidAmount - parsedPaid).abs() > 0.0001) {
+    if ((_totalStockValue - parsedTotal).abs() > 0.0001 ||
+        (_paidAmount - parsedPaid).abs() > 0.0001) {
       setState(() {
+        _totalStockValue = parsedTotal;
         _paidAmount = parsedPaid;
         _remainingAmount = _totalStockValue - _paidAmount;
         if (_remainingAmount < 0) _remainingAmount = 0;
@@ -596,12 +611,14 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         .toList(growable: false);
 
     final invoiceNumber = await StockEntryService().createStockEntry(
+      vendor: widget.vendor,
       payload: _buildSavePayload(),
     );
 
     final entry = StockEntry(
       id: 'se_${DateTime.now().millisecondsSinceEpoch}',
       invoiceNumber: invoiceNumber,
+      backendStatus: null,
       vendor: widget.vendor,
       createdAt: DateTime.now(),
       items: items,

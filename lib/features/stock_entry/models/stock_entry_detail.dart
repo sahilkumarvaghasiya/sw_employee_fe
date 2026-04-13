@@ -21,15 +21,24 @@ DateTime? _parseDdMmYyyyDate(Object? value) {
   final raw = value.toString().trim();
   if (raw.isEmpty) return null;
 
-  // Expected: dd-MM-yyyy
+  // Expected: dd-MM-yyyy, but also accept yyyy-MM-dd.
   final parts = raw.split('-');
   if (parts.length != 3) return DateTime.tryParse(raw);
 
+  // yyyy-MM-dd
+  if (parts[0].length == 4) {
+    final yyyy = int.tryParse(parts[0]);
+    final mm = int.tryParse(parts[1]);
+    final dd = int.tryParse(parts[2]);
+    if (dd == null || mm == null || yyyy == null) return null;
+    return DateTime(yyyy, mm, dd);
+  }
+
+  // dd-MM-yyyy
   final dd = int.tryParse(parts[0]);
   final mm = int.tryParse(parts[1]);
   final yyyy = int.tryParse(parts[2]);
   if (dd == null || mm == null || yyyy == null) return null;
-
   return DateTime(yyyy, mm, dd);
 }
 
@@ -66,10 +75,10 @@ class StockEntryDetailVariant {
     final actual = actualRaw == null ? null : _toDouble(actualRaw);
 
     return StockEntryDetailVariant(
-      size: (json['size'] ?? '—').toString(),
-      color: (json['color'] ?? '—').toString(),
+      size: (json['size'] ?? json['variant_size'] ?? '—').toString(),
+      color: (json['color'] ?? json['colour'] ?? '—').toString(),
       actualPrice: actual,
-      quantity: _toInt(json['quantity']),
+      quantity: _toInt(json['quantity'] ?? json['pieces']),
     );
   }
 }

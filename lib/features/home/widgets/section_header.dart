@@ -18,7 +18,7 @@ class SectionHeader extends StatelessWidget {
             style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
         ),
-        if (action != null) action!,
+        ?action,
       ],
     );
   }

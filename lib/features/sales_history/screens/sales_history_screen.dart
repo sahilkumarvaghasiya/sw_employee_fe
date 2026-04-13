@@ -445,7 +445,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 sliver: SliverList.separated(
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final bill = filtered[index];
                     final loc = MaterialLocalizations.of(context);
@@ -652,7 +652,7 @@ class _BillDetailsSheet extends StatelessWidget {
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: bill.items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final item = bill.items[index];
                   return Card(

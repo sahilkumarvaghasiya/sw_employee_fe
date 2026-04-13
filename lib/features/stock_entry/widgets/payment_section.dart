@@ -8,6 +8,8 @@ class PaymentSection extends StatelessWidget {
     required this.remainingAmount,
     required this.deadline,
     required this.onPickDeadline,
+    this.totalPaymentEditable = false,
+    this.onTotalPaymentChanged,
   });
 
   final TextEditingController totalPaymentController;
@@ -17,6 +19,9 @@ class PaymentSection extends StatelessWidget {
   final DateTime? deadline;
 
   final VoidCallback onPickDeadline;
+
+  final bool totalPaymentEditable;
+  final ValueChanged<String>? onTotalPaymentChanged;
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
@@ -77,12 +82,28 @@ class PaymentSection extends StatelessWidget {
                 Expanded(
                   child: TextFormField(
                     controller: totalPaymentController,
-                    readOnly: true,
+                    readOnly: !totalPaymentEditable,
+                    keyboardType: totalPaymentEditable
+                        ? const TextInputType.numberWithOptions(decimal: true)
+                        : null,
+                    onChanged: totalPaymentEditable
+                        ? (v) => onTotalPaymentChanged?.call(v)
+                        : null,
                     decoration: const InputDecoration(
                       labelText: 'Total Payment',
                       prefixText: '₹',
                       prefixIcon: Icon(Icons.calculate_outlined),
                     ),
+                    validator: (v) {
+                      if (!totalPaymentEditable) return null;
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Enter a valid amount';
+                      }
+                      final parsed = double.tryParse(v.trim());
+                      if (parsed == null) return 'Enter a valid amount';
+                      if (parsed < 0) return 'Amount cannot be negative';
+                      return null;
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
