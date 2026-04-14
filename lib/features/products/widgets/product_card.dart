@@ -21,28 +21,28 @@ class ProductCard extends StatelessWidget {
 
     return Card(
       elevation: 0,
-      color: colorScheme.surfaceContainerHigh,
+      color: colorScheme.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: colorScheme.outlineVariant.withAlpha(110)),
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outlineVariant.withAlpha(80)),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: colorScheme.primary.withAlpha(28),
-                  borderRadius: BorderRadius.circular(16),
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   Icons.inventory_2_outlined,
-                  color: colorScheme.primary,
+                  color: colorScheme.onPrimaryContainer,
                 ),
               ),
               const SizedBox(width: 12),
@@ -53,17 +53,18 @@ class ProductCard extends StatelessWidget {
 
                     final name = Text(
                       product.name,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     );
 
                     final price = Text(
                       priceLabel,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.primary,
                       ),
                     );
 
@@ -76,7 +77,7 @@ class ProductCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -90,7 +91,7 @@ class ProductCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           name,
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Row(
                             children: [
                               Expanded(child: metaRow),
@@ -108,11 +109,11 @@ class ProductCard extends StatelessWidget {
                         Row(
                           children: [
                             Expanded(child: name),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             price,
                           ],
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         metaRow,
                       ],
                     );
@@ -138,17 +139,17 @@ class _MetaTag extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colorScheme.outlineVariant),
+        border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
       ),
       child: Text(
         text,
         style: theme.textTheme.labelSmall?.copyWith(
           color: colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );

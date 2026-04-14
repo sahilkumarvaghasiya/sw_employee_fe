@@ -22,7 +22,7 @@ class StockEntryService {
   final ApiService _apiService;
 
   // Backend routes (baseUrl already includes `/api`).
-  // From curl:
+  // From vendors app URLs:
   // POST /api/vendors/stock/generate-barcode/
   static const String generateBarcodePath = '/vendors/stock/generate-barcode/';
 
@@ -219,10 +219,20 @@ class StockEntryService {
     return uri.replace(queryParameters: queryParameters);
   }
 
-  Future<GeneratedBarcode> generateBarcode() async {
+  Future<GeneratedBarcode> generateBarcode({
+    required String companyName,
+    required String productType,
+    required String gender,
+    required List<Map<String, dynamic>> itemVariants,
+  }) async {
     final response = await _apiService.post(
       _url(generateBarcodePath).toString(),
-      body: const {},
+      body: <String, dynamic>{
+        'company_name': companyName,
+        'product_type': productType,
+        'gender': gender,
+        'item_variants': itemVariants,
+      },
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -236,7 +246,12 @@ class StockEntryService {
       throw const FormatException('Invalid generate barcode response');
     }
 
-    final barcode = decoded['barcode']?.toString().trim();
+    final barcode =
+        (decoded['barcode_number'] ??
+                decoded['barcode'] ??
+                decoded['qr_code_number'])
+            ?.toString()
+            .trim();
     final barcodeUrl = decoded['barcode_url']?.toString().trim();
 
     if (barcode == null || barcode.isEmpty) {

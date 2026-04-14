@@ -584,7 +584,32 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   }
 
   Future<GeneratedBarcode> _generateBarcodeFromBackend() async {
-    return StockEntryService().generateBarcode();
+    final gender = _gender!;
+    final itemType = _itemType!.trim();
+
+    final brand = _isBrandCustom
+        ? _brandController.text.trim()
+        : (_brandSelection ?? '').trim();
+
+    final companyName = brand.isEmpty ? 'Unknown' : brand;
+
+    final variants = _entries
+        .map(
+          (e) => <String, dynamic>{
+            'size': e.size,
+            'colour': e.colour,
+            'pieces': e.qty,
+            'sellprice': e.sellUnit.toStringAsFixed(2),
+          },
+        )
+        .toList(growable: false);
+
+    return StockEntryService().generateBarcode(
+      companyName: companyName,
+      productType: itemType,
+      gender: gender.name,
+      itemVariants: variants,
+    );
   }
 
   Future<bool> _confirmEntryIsRight() async {

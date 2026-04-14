@@ -106,10 +106,10 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
         : _rangeLabel(context, dateRange);
 
     return Material(
-      color: colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(18),
+      color: colorScheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: null,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
@@ -130,7 +130,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -153,7 +153,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -211,8 +211,8 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                       _paymentLabel(value),
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: selected
-                            ? FontWeight.w900
-                            : FontWeight.w700,
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                       ),
                     ),
                     secondary: Icon(
@@ -232,7 +232,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                           child: Text(
                             'Filters',
                             style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -249,7 +249,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                       'Payment status',
                       style: theme.textTheme.labelLarge?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -262,7 +262,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                       'Date',
                       style: theme.textTheme.labelLarge?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -600,7 +600,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                     Text(
                       'History',
                       style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -610,7 +610,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -697,7 +697,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                           Text(
                             'No transactions found',
                             style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -733,7 +733,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                           Text(
                             'No transactions found',
                             style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -833,8 +833,8 @@ class _HistoryRow extends StatelessWidget {
         ? 'Paid'
         : (isHalfPaid ? 'Half Paid' : 'Unpaid');
     final Color statusColor = isPaid
-        ? Colors.green
-        : (isHalfPaid ? Colors.orange : Colors.red);
+        ? colorScheme.primary
+        : (isHalfPaid ? colorScheme.tertiary : colorScheme.error);
     final IconData statusIcon = isPaid
         ? Icons.check_circle_outline_rounded
         : (isHalfPaid ? Icons.timelapse_outlined : Icons.warning_amber_rounded);
@@ -842,12 +842,12 @@ class _HistoryRow extends StatelessWidget {
     final double due = remaining <= 0 ? 0 : remaining;
 
     return Card(
-      elevation: 1,
+      elevation: 0,
       color: colorScheme.surface,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: colorScheme.outlineVariant.withAlpha(110)),
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outlineVariant.withAlpha(90)),
       ),
       child: InkWell(
         onTap: onTap,
@@ -867,7 +867,7 @@ class _HistoryRow extends StatelessWidget {
                           Text(
                             entry.vendor.name,
                             style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -878,7 +878,7 @@ class _HistoryRow extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -887,7 +887,7 @@ class _HistoryRow extends StatelessWidget {
                           dateLabel,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -903,9 +903,10 @@ class _HistoryRow extends StatelessWidget {
               const SizedBox(height: 14),
               Text(
                 money(total),
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.2,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.1,
+                  color: colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 6),
@@ -913,7 +914,7 @@ class _HistoryRow extends StatelessWidget {
                 'Paid ${money(paid)}  •  Due ${money(due)}',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
@@ -940,11 +941,11 @@ class _StatusBadge extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withAlpha(24),
+        color: color.withAlpha(20),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withAlpha(140)),
+        border: Border.all(color: color.withAlpha(120)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -955,7 +956,7 @@ class _StatusBadge extends StatelessWidget {
             text,
             style: theme.textTheme.labelLarge?.copyWith(
               color: color,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
