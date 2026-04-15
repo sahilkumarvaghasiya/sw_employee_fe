@@ -587,26 +587,6 @@ class _EmployeeChip extends StatelessWidget {
                   await _showChangePasswordDialog(context);
                 },
               ),
-              Consumer<ThemeProvider>(
-                builder: (context, themeProvider, _) {
-                  final isDark = themeProvider.isDark;
-                  return SwitchListTile.adaptive(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                    secondary: Icon(
-                      isDark
-                          ? Icons.light_mode_outlined
-                          : Icons.dark_mode_outlined,
-                    ),
-                    title: Text(isDark ? 'White mode' : 'Dark mode'),
-                    value: isDark,
-                    onChanged: (value) {
-                      themeProvider.setThemeMode(
-                        value ? ThemeMode.dark : ThemeMode.light,
-                      );
-                    },
-                  );
-                },
-              ),
               const Divider(height: 20),
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8),

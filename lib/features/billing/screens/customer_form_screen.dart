@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/billing_models.dart';
 import '../providers/billing_provider.dart';
+import '../services/billing_service.dart';
 import '../widgets/billing_bottom_sheets.dart';
 import '../widgets/product_item_widget.dart';
 import 'bill_preview_screen.dart';
@@ -54,38 +55,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   DateTime? _lastBarcodeAt;
   bool _handlingBarcode = false;
 
-  final List<BillingProduct> _catalog = const [
-    BillingProduct(
-      id: 'p_001',
-      name: 'Parle-G 250g',
-      unitPrice: 20.0,
-      barcode: '8901719100187',
-    ),
-    BillingProduct(
-      id: 'p_002',
-      name: 'Aashirvaad Atta 5kg',
-      unitPrice: 275.0,
-      barcode: '8906007280015',
-    ),
-    BillingProduct(
-      id: 'p_003',
-      name: 'Coca-Cola 750ml',
-      unitPrice: 40.0,
-      barcode: '5449000131805',
-    ),
-    BillingProduct(
-      id: 'p_004',
-      name: 'Lux Soap',
-      unitPrice: 35.0,
-      barcode: '8901030824037',
-    ),
-    BillingProduct(
-      id: 'p_005',
-      name: 'Colgate Toothpaste 200g',
-      unitPrice: 95.0,
-      barcode: '8901023012218',
-    ),
-  ];
+  final BillingService _billingService = BillingService();
 
   @override
   void dispose() {
@@ -107,35 +77,248 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
-  BillingProduct? _findProductByBarcode(String barcode) {
-    final normalized = barcode.trim();
-    if (normalized.isEmpty) return null;
-
-    for (final p in _catalog) {
-      final b = p.barcode?.trim();
-      if (b != null && b.isNotEmpty && b == normalized) return p;
-    }
-    return null;
-  }
-
   Future<void> _handleBarcode(String barcode) async {
     if (_handlingBarcode) return;
     _handlingBarcode = true;
 
     try {
-      final product = _findProductByBarcode(barcode);
-      if (product != null) {
-        final provider = context.read<BillingProvider>();
-        provider.addOrIncrementProduct(product);
-        _showSnack('${product.name} added');
+      final products = await _billingService.fetchProductsByBarcode(barcode);
+      if (!mounted) return;
+
+      if (products.isEmpty) {
+        _showSnack('No product found for barcode $barcode');
+        await _addUnknownProduct();
         return;
       }
 
+      if (products.length == 1) {
+        final selected = products.first;
+        context.read<BillingProvider>().addOrIncrementProduct(selected);
+        _showSnack('${selected.name} added');
+        return;
+      }
+
+      final selected = await _pickProductFromMatches(
+        barcode: barcode,
+        products: products,
+      );
+      if (!mounted || selected == null) return;
+
+      context.read<BillingProvider>().addOrIncrementProduct(selected);
+      _showSnack('${selected.name} added');
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Barcode lookup failed. You can add the product manually.');
       await _addUnknownProduct();
     } finally {
       await Future<void>.delayed(const Duration(milliseconds: 400));
       _handlingBarcode = false;
     }
+  }
+
+  Future<BillingProduct?> _pickProductFromMatches({
+    required String barcode,
+    required List<BillingProduct> products,
+  }) {
+    return showModalBottomSheet<BillingProduct>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Select product',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Barcode: $barcode',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: products.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final p = products[index];
+                      return Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: colorScheme.outlineVariant),
+                        ),
+                        child: ListTile(
+                          title: Text(
+                            p.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text('Price ${_money(p.unitPrice)}'),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () => Navigator.of(context).pop(p),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool> _confirmPaymentDone({required String methodLabel}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('$methodLabel payment'),
+          content: const Text('Is the payment completed?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Not yet'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed == true;
+  }
+
+  Future<bool> _reviewBillAndApplyFinalAmount() async {
+    final provider = context.read<BillingProvider>();
+    if (provider.items.isEmpty) {
+      _showSnack('Scan at least one product to continue.');
+      return false;
+    }
+
+    final controller = TextEditingController(
+      text: provider.finalAmount.toStringAsFixed(2),
+    );
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return AlertDialog(
+          title: const Text('Review bill total'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Items: ${provider.items.length}'),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 120),
+                child: Card(
+                  elevation: 0,
+                  margin: EdgeInsets.zero,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: provider.items.length,
+                    itemBuilder: (context, index) {
+                      final item = provider.items[index];
+                      return ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        title: Text(
+                          item.productName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Text('x${item.quantity}'),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text('Subtotal: ${_money(provider.subtotal)}'),
+              const SizedBox(height: 6),
+              Text('Discount: ${_money(provider.totalDiscount)}'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Final bill amount',
+                  prefixText: '₹',
+                  helperText: 'Editable for this bill only',
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'You can adjust total before payment selection.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Confirm'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      controller.dispose();
+      return false;
+    }
+
+    final parsed = double.tryParse(controller.text.trim());
+    controller.dispose();
+
+    if (parsed == null || parsed <= 0) {
+      _showSnack('Enter a valid final bill amount');
+      return false;
+    }
+
+    provider.setManualFinalAmount(parsed);
+    return true;
   }
 
   Future<void> _addUnknownProduct() async {
@@ -157,27 +340,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   }
 
   Future<void> _confirmCashAndGenerateBill() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Cash payment'),
-          content: const Text('Did you receive payment from customer?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('No'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Yes'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted || confirmed != true) return;
+    final confirmed = await _confirmPaymentDone(methodLabel: 'Cash');
+    if (!mounted || !confirmed) return;
 
     final provider = context.read<BillingProvider>();
     provider.setPaymentMethod(BillingPaymentMethod.cash);
@@ -356,7 +520,13 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             height: 48,
                             child: FilledButton.icon(
                               onPressed: canContinue
-                                  ? () {
+                                  ? () async {
+                                      final done = await _confirmPaymentDone(
+                                        methodLabel: title,
+                                      );
+                                      if (!done || !this.context.mounted) {
+                                        return;
+                                      }
                                       provider.setPaymentMethod(method);
                                       provider.setMarkPaid(true);
                                       Navigator.of(context).pop();
@@ -385,20 +555,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   Future<void> _showPaymentOptions() async {
     final provider = context.read<BillingProvider>();
 
-    if (provider.items.isEmpty) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: const Text('Scan at least one product to continue.'),
-            action: SnackBarAction(
-              label: 'Add product',
-              onPressed: () => unawaited(_addUnknownProduct()),
-            ),
-          ),
-        );
-      return;
-    }
+    final canContinue = await _reviewBillAndApplyFinalAmount();
+    if (!canContinue) return;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -1072,6 +1230,16 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                       .read<BillingProvider>()
                                       .updateItemDiscountPercent(item.id, v);
                                 },
+                                onIncrement: () {
+                                  context
+                                      .read<BillingProvider>()
+                                      .incrementItemQuantity(item.id);
+                                },
+                                onDecrement: () {
+                                  context
+                                      .read<BillingProvider>()
+                                      .decrementItemQuantity(item.id);
+                                },
                                 onRemove: () {
                                   context.read<BillingProvider>().removeItem(
                                     item.id,
@@ -1102,11 +1270,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: colorScheme.primary.withAlpha(18),
-                              borderRadius: BorderRadius.circular(16),
+                              color: colorScheme.primary.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(18),
                             ),
                             child: Icon(
-                              Icons.person_outline,
+                              Icons.account_circle_outlined,
                               color: colorScheme.primary,
                             ),
                           ),
@@ -1118,15 +1286,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                 Text(
                                   'Customer details',
                                   style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Add customer info to start scanning products.',
+                                  'Basic info to start a new bill.',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
@@ -1140,14 +1308,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             ),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
+                                horizontal: 12,
                                 vertical: 6,
                               ),
                               child: Text(
-                                'Step 1/2',
+                                'Step 1 of 2',
                                 style: theme.textTheme.labelMedium?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -1174,7 +1342,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             Text(
                               'Customer',
                               style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'We’ll use this for bills and history.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -1353,7 +1528,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                         'How billing works',
                                         style: theme.textTheme.titleSmall
                                             ?.copyWith(
-                                              fontWeight: FontWeight.w900,
+                                              fontWeight: FontWeight.w700,
                                             ),
                                       ),
                                     ),
@@ -1381,7 +1556,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                       style: theme.textTheme.labelLarge
                                           ?.copyWith(
                                             color: colorScheme.primary,
-                                            fontWeight: FontWeight.w900,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                     ),
                                   ),
@@ -1400,7 +1575,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                       style: theme.textTheme.labelLarge
                                           ?.copyWith(
                                             color: colorScheme.primary,
-                                            fontWeight: FontWeight.w900,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                     ),
                                   ),
@@ -1419,7 +1594,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                       style: theme.textTheme.labelLarge
                                           ?.copyWith(
                                             color: colorScheme.primary,
-                                            fontWeight: FontWeight.w900,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                     ),
                                   ),
@@ -1523,7 +1698,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                         ),
                         const SizedBox(width: 10),
                         FilledButton.icon(
-                          onPressed: _showPaymentOptions,
+                          onPressed: provider.items.isEmpty
+                              ? null
+                              : _showPaymentOptions,
                           icon: const Icon(Icons.payments_outlined),
                           label: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 14),

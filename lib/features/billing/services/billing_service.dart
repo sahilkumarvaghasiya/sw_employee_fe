@@ -12,6 +12,7 @@ class BillingService {
 
   // Flip this to true once the backend endpoint is available.
   static const bool whatsAppApiIntegrated = false;
+  static const String _barcodeLookupPath = '/billing/products/by-barcode/';
 
   final ApiService _apiService;
 
@@ -89,5 +90,86 @@ class BillingService {
     }
 
     return 'Failed to send invoice (${response.statusCode})';
+  }
+
+  Future<List<BillingProduct>> fetchProductsByBarcode(String barcode) async {
+    final normalized = barcode.trim();
+    if (normalized.isEmpty) return const [];
+
+    final uri = _url(
+      '$_barcodeLookupPath?barcode=${Uri.encodeQueryComponent(normalized)}',
+    );
+
+    final response = await _apiService.get(uri.toString());
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = _errorMessageFromResponse(response);
+      throw http.ClientException(
+        message.isEmpty ? 'Failed to fetch products by barcode' : message,
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    final records = _extractProductRecords(decoded);
+
+    return records
+        .map(_productFromMap)
+        .whereType<BillingProduct>()
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _extractProductRecords(dynamic decoded) {
+    if (decoded is List) {
+      return decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    }
+
+    if (decoded is! Map) return const [];
+
+    final map = Map<String, dynamic>.from(decoded);
+    final dynamic listValue =
+        map['products'] ?? map['results'] ?? map['data'] ?? map['items'];
+
+    if (listValue is List) {
+      return listValue
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    }
+
+    final productNode = map['product'];
+    if (productNode is Map) {
+      return [Map<String, dynamic>.from(productNode)];
+    }
+
+    return const [];
+  }
+
+  BillingProduct? _productFromMap(Map<String, dynamic> map) {
+    final idValue = map['id'] ?? map['product_id'] ?? map['sku'] ?? map['code'];
+    final nameValue = map['name'] ?? map['product_name'] ?? map['title'];
+    final priceValue =
+        map['unit_price'] ?? map['sell_price'] ?? map['price'] ?? map['mrp'];
+    final barcodeValue = map['barcode'] ?? map['barcode_number'] ?? map['ean'];
+
+    final id = idValue?.toString().trim() ?? '';
+    final name = nameValue?.toString().trim() ?? '';
+    final price = priceValue is num
+        ? priceValue.toDouble()
+        : double.tryParse('${priceValue ?? ''}');
+
+    if (id.isEmpty || name.isEmpty || price == null || price <= 0) {
+      return null;
+    }
+
+    final barcode = barcodeValue?.toString().trim();
+
+    return BillingProduct(
+      id: id,
+      name: name,
+      unitPrice: price,
+      barcode: barcode == null || barcode.isEmpty ? null : barcode,
+    );
   }
 }

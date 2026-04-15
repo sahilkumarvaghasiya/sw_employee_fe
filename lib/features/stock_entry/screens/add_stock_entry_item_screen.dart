@@ -77,6 +77,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   final MenuController _sizeMenuController = MenuController();
   final MenuController _colourMenuController = MenuController();
 
+  String _sizeSearchQuery = '';
+  String _colourSearchQuery = '';
+
   void _ensureVisible(GlobalKey key) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = key.currentContext;
@@ -1256,6 +1259,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                       required ValueChanged<String> onSelected,
                       required MenuController menuController,
                       required ValueGetter<String?> selectionGetter,
+                      required String searchQuery,
+                      required ValueChanged<String> onSearchChanged,
                     }) {
                       return gridField(
                         label: label,
@@ -1322,51 +1327,102 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                             SizedBox(
                               width: fieldWidth,
                               height: 320,
-                              child: ListView(
-                                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                              child: Column(
                                 children: [
-                                  dottedAddField(
-                                    controller: addController,
-                                    hint: addHint,
-                                    onAdd: () async {
-                                      final before = value;
-                                      await onAdd();
-                                      if (!mounted) return;
-                                      final after = selectionGetter();
-                                      final changed =
-                                          (after != null &&
-                                          after.trim().isNotEmpty &&
-                                          after != before);
-                                      if (changed) {
-                                        menuController.close();
-                                      }
-                                    },
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Divider(
-                                    height: 1,
-                                    color: colorScheme.outlineVariant,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  ...options.map((o) {
-                                    final isSelected = (value ?? '') == o;
-                                    return MenuItemButton(
-                                      leadingIcon: isSelected
-                                          ? const Icon(Icons.check_rounded)
-                                          : const SizedBox(
-                                              width: 24,
-                                              height: 24,
-                                            ),
-                                      onPressed: () {
-                                        onSelected(o);
-                                        menuController.close();
-                                      },
-                                      child: Text(
-                                        o,
-                                        overflow: TextOverflow.ellipsis,
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      8,
+                                      8,
+                                      8,
+                                      4,
+                                    ),
+                                    child: TextField(
+                                      autofocus: false,
+                                      decoration: InputDecoration(
+                                        isDense: true,
+                                        prefixIcon: const Icon(
+                                          Icons.search_rounded,
+                                        ),
+                                        hintText: 'Search $label',
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
                                       ),
-                                    );
-                                  }),
+                                      onChanged: onSearchChanged,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Expanded(
+                                    child: ListView(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        8,
+                                        4,
+                                        8,
+                                        8,
+                                      ),
+                                      children: [
+                                        ...options
+                                            .where((o) {
+                                              final q = searchQuery
+                                                  .trim()
+                                                  .toLowerCase();
+                                              if (q.isEmpty) return true;
+                                              return o.toLowerCase().contains(
+                                                q,
+                                              );
+                                            })
+                                            .map((o) {
+                                              final isSelected =
+                                                  (value ?? '') == o;
+                                              return MenuItemButton(
+                                                leadingIcon: isSelected
+                                                    ? const Icon(
+                                                        Icons.check_rounded,
+                                                      )
+                                                    : const SizedBox(
+                                                        width: 24,
+                                                        height: 24,
+                                                      ),
+                                                onPressed: () {
+                                                  onSelected(o);
+                                                  menuController.close();
+                                                },
+                                                child: Text(
+                                                  o,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              );
+                                            })
+                                            .toList(growable: false),
+                                        const SizedBox(height: 8),
+                                        Divider(
+                                          height: 1,
+                                          color: colorScheme.outlineVariant,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        dottedAddField(
+                                          controller: addController,
+                                          hint: addHint,
+                                          onAdd: () async {
+                                            final before = value;
+                                            await onAdd();
+                                            if (!mounted) return;
+                                            final after = selectionGetter();
+                                            final changed =
+                                                (after != null &&
+                                                after.trim().isNotEmpty &&
+                                                after != before);
+                                            if (changed) {
+                                              menuController.close();
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1393,6 +1449,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                               value: _draftRow.safeSizeSelection(_sizeOptions),
                               menuController: _sizeMenuController,
                               selectionGetter: () => _draftRow.sizeSelection,
+                              searchQuery: _sizeSearchQuery,
+                              onSearchChanged: (q) {
+                                setState(() => _sizeSearchQuery = q);
+                              },
                               onSelected: (v) {
                                 setState(() {
                                   _draftRow.sizeSelection = v;
@@ -1415,6 +1475,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                               ),
                               menuController: _colourMenuController,
                               selectionGetter: () => _draftRow.colourSelection,
+                              searchQuery: _colourSearchQuery,
+                              onSearchChanged: (q) {
+                                setState(() => _colourSearchQuery = q);
+                              },
                               onSelected: (v) {
                                 setState(() {
                                   _draftRow.colourSelection = v;
@@ -1681,8 +1745,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Icon(Icons.auto_fix_high_rounded))
-                        : const Icon(Icons.qr_code_2_rounded),
+                              : const Icon(Icons.qr_code_2_rounded))
+                        : const Icon(Icons.checklist_rounded),
                     label: Text(
                       widget.enableBarcodeGeneration
                           ? (_isGeneratingBarcode

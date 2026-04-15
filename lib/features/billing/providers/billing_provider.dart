@@ -18,6 +18,7 @@ class BillingProvider extends ChangeNotifier {
   BillingPaymentMethod? _paymentMethod;
   bool _markPaid = false;
   double _paidAmount = 0;
+  double? _manualFinalAmount;
   PaytmQrCode? _selectedPaytmQr;
   UpiQrCode? _selectedUpiQr;
 
@@ -29,6 +30,7 @@ class BillingProvider extends ChangeNotifier {
   BillingPaymentMethod? get paymentMethod => _paymentMethod;
   bool get markPaid => _markPaid;
   double get paidAmount => _paidAmount;
+  double? get manualFinalAmount => _manualFinalAmount;
   PaytmQrCode? get selectedPaytmQr => _selectedPaytmQr;
   UpiQrCode? get selectedUpiQr => _selectedUpiQr;
 
@@ -56,8 +58,11 @@ class BillingProvider extends ChangeNotifier {
   double get totalDiscount =>
       _items.fold<double>(0, (sum, i) => sum + i.lineDiscount);
 
-  double get finalAmount =>
+  double get calculatedFinalAmount =>
       (subtotal - totalDiscount).clamp(0, double.infinity);
+
+  double get finalAmount =>
+      (_manualFinalAmount ?? calculatedFinalAmount).clamp(0, double.infinity);
 
   double get remainingAmount =>
       (finalAmount - _paidAmount).clamp(0, double.infinity);
@@ -86,6 +91,7 @@ class BillingProvider extends ChangeNotifier {
     _selectedUpiQr = null;
     _markPaid = false;
     _paidAmount = 0;
+    _manualFinalAmount = null;
     _items.clear();
     notifyListeners();
   }
@@ -97,6 +103,7 @@ class BillingProvider extends ChangeNotifier {
       _items[existingIndex] = existing.copyWith(
         quantity: existing.quantity + 1,
       );
+      _manualFinalAmount = null;
       notifyListeners();
       return _items[existingIndex];
     }
@@ -111,6 +118,7 @@ class BillingProvider extends ChangeNotifier {
         discountPercent: 0,
       ),
     );
+    _manualFinalAmount = null;
     notifyListeners();
     return _items.first;
   }
@@ -130,6 +138,7 @@ class BillingProvider extends ChangeNotifier {
         discountPercent: 0,
       ),
     );
+    _manualFinalAmount = null;
     notifyListeners();
     return _items.first;
   }
@@ -138,6 +147,7 @@ class BillingProvider extends ChangeNotifier {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
     _items[index] = _items[index].copyWith(unitPrice: unitPrice);
+    _manualFinalAmount = null;
     notifyListeners();
   }
 
@@ -147,11 +157,42 @@ class BillingProvider extends ChangeNotifier {
     _items[index] = _items[index].copyWith(
       discountPercent: percent.clamp(0, 100),
     );
+    _manualFinalAmount = null;
+    notifyListeners();
+  }
+
+  void incrementItemQuantity(String id) {
+    final index = _items.indexWhere((i) => i.id == id);
+    if (index < 0) return;
+    final item = _items[index];
+    _items[index] = item.copyWith(quantity: item.quantity + 1);
+    _manualFinalAmount = null;
+    notifyListeners();
+  }
+
+  void decrementItemQuantity(String id) {
+    final index = _items.indexWhere((i) => i.id == id);
+    if (index < 0) return;
+    final item = _items[index];
+    if (item.quantity <= 1) return;
+    _items[index] = item.copyWith(quantity: item.quantity - 1);
+    _manualFinalAmount = null;
     notifyListeners();
   }
 
   void removeItem(String id) {
     _items.removeWhere((i) => i.id == id);
+    _manualFinalAmount = null;
+    notifyListeners();
+  }
+
+  void setManualFinalAmount(double? value) {
+    if (value == null) {
+      _manualFinalAmount = null;
+      notifyListeners();
+      return;
+    }
+    _manualFinalAmount = value.clamp(0, double.infinity);
     notifyListeners();
   }
 

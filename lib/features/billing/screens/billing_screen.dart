@@ -755,6 +755,12 @@ class _BillingScreenState extends State<BillingScreen> {
                     onDiscountChanged: (value) {
                       provider.updateItemDiscountPercent(item.id, value);
                     },
+                    onIncrement: () {
+                      provider.incrementItemQuantity(item.id);
+                    },
+                    onDecrement: () {
+                      provider.decrementItemQuantity(item.id);
+                    },
                     onRemove: () {
                       provider.removeItem(item.id);
                       _showSnack('Removed ${item.productName}');
@@ -803,7 +809,9 @@ class _BillingScreenState extends State<BillingScreen> {
                   ),
                   const SizedBox(width: 10),
                   FilledButton.icon(
-                    onPressed: _showPaymentOptions,
+                    onPressed: provider.items.isEmpty
+                        ? null
+                        : _showPaymentOptions,
                     icon: const Icon(Icons.payments_outlined),
                     label: const Padding(
                       padding: EdgeInsets.symmetric(vertical: 14),

@@ -10,12 +10,16 @@ class ProductItemWidget extends StatefulWidget {
     required this.item,
     required this.onPriceChanged,
     required this.onDiscountChanged,
+    required this.onIncrement,
+    required this.onDecrement,
     required this.onRemove,
   });
 
   final BillingLineItem item;
   final ValueChanged<double> onPriceChanged;
   final ValueChanged<double> onDiscountChanged;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
   final VoidCallback onRemove;
 
   @override
@@ -27,6 +31,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
   final TextEditingController _discountController = TextEditingController();
 
   _EditMode _mode = _EditMode.price;
+  bool _showOfferEditor = false;
 
   @override
   void initState() {
@@ -156,16 +161,40 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    IconButton(
-                      tooltip: 'Remove item',
-                      onPressed: widget.onRemove,
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 40,
-                        height: 40,
-                      ),
-                      icon: const Icon(Icons.delete_outline_rounded),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Offer / price override',
+                          onPressed: () {
+                            setState(
+                              () => _showOfferEditor = !_showOfferEditor,
+                            );
+                          },
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 40,
+                            height: 40,
+                          ),
+                          icon: Icon(
+                            _showOfferEditor
+                                ? Icons.local_offer
+                                : Icons.local_offer_outlined,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Remove item',
+                          onPressed: widget.onRemove,
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 40,
+                            height: 40,
+                          ),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -174,89 +203,141 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
             const SizedBox(height: 10),
             Row(
               children: [
-                DecoratedBox(
+                Container(
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: colorScheme.outlineVariant),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<_EditMode>(
-                        value: _mode,
-                        isDense: true,
-                        borderRadius: BorderRadius.circular(14),
-                        items: const [
-                          DropdownMenuItem(
-                            value: _EditMode.price,
-                            child: Text('Price'),
-                          ),
-                          DropdownMenuItem(
-                            value: _EditMode.discount,
-                            child: Text('Discount'),
-                          ),
-                        ],
-                        onChanged: (v) {
-                          if (v == null) return;
-                          setState(() => _mode = v);
-                        },
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Decrease quantity',
+                        onPressed: widget.item.quantity > 1
+                            ? widget.onDecrement
+                            : null,
+                        icon: const Icon(Icons.remove_rounded),
+                        visualDensity: VisualDensity.compact,
                       ),
-                    ),
+                      Text(
+                        widget.item.quantity.toString(),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Increase quantity',
+                        onPressed: widget.onIncrement,
+                        icon: const Icon(Icons.add_rounded),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: TextField(
-                    controller: _priceController,
-                    enabled: _mode == _EditMode.price,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                  child: Text(
+                    'Qty controls for this product',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
                     ),
-                    decoration: fieldDecoration(
-                      label: 'Unit price',
-                      suffix: '₹',
-                    ),
-                    onChanged: (v) {
-                      final parsed = double.tryParse(v.trim());
-                      if (parsed == null) return;
-                      widget.onPriceChanged(parsed.clamp(0, double.infinity));
-                    },
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _discountController,
-                    enabled: _mode == _EditMode.discount,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: fieldDecoration(label: 'Discount', suffix: '%'),
-                    onChanged: (v) {
-                      final parsed = double.tryParse(v.trim());
-                      if (parsed == null) return;
-                      widget.onDiscountChanged(parsed.clamp(0, 100));
-                    },
-                  ),
-                ),
-                const SizedBox(width: 6),
-                IconButton(
-                  tooltip: 'Reset discount',
-                  onPressed: () {
-                    _discountController.text = '0';
-                    widget.onDiscountChanged(0);
-                  },
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 40,
-                    height: 40,
-                  ),
-                  icon: const Icon(Icons.refresh_rounded),
                 ),
               ],
             ),
+
+            if (_showOfferEditor) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colorScheme.outlineVariant),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<_EditMode>(
+                          value: _mode,
+                          isDense: true,
+                          borderRadius: BorderRadius.circular(14),
+                          items: const [
+                            DropdownMenuItem(
+                              value: _EditMode.price,
+                              child: Text('Price'),
+                            ),
+                            DropdownMenuItem(
+                              value: _EditMode.discount,
+                              child: Text('Discount'),
+                            ),
+                          ],
+                          onChanged: (v) {
+                            if (v == null) return;
+                            setState(() => _mode = v);
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _priceController,
+                      enabled: _mode == _EditMode.price,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: fieldDecoration(
+                        label: 'Unit price',
+                        suffix: '₹',
+                      ),
+                      onChanged: (v) {
+                        final parsed = double.tryParse(v.trim());
+                        if (parsed == null) return;
+                        widget.onPriceChanged(parsed.clamp(0, double.infinity));
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _discountController,
+                      enabled: _mode == _EditMode.discount,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: fieldDecoration(
+                        label: 'Discount',
+                        suffix: '%',
+                      ),
+                      onChanged: (v) {
+                        final parsed = double.tryParse(v.trim());
+                        if (parsed == null) return;
+                        widget.onDiscountChanged(parsed.clamp(0, 100));
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    tooltip: 'Reset discount',
+                    onPressed: () {
+                      _discountController.text = '0';
+                      widget.onDiscountChanged(0);
+                    },
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 40,
+                      height: 40,
+                    ),
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

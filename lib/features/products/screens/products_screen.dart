@@ -141,6 +141,18 @@ class _ProductsScreenState extends State<ProductsScreen> {
         title: const Text('Products'),
         actions: [
           IconButton(
+            tooltip: 'Reset filters',
+            onPressed: provider.hasActiveFilters
+                ? () {
+                    _searchController.clear();
+                    _sizeController.clear();
+                    provider.setSearchQuery('');
+                    provider.resetFilters();
+                  }
+                : null,
+            icon: const Icon(Icons.filter_alt_off_outlined),
+          ),
+          IconButton(
             tooltip: 'Filters',
             onPressed: _openFiltersSheet,
             icon: const Icon(Icons.tune),
