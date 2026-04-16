@@ -52,6 +52,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
   late final TextEditingController _barcodeController;
   final TextEditingController _brandController = TextEditingController();
+  final TextEditingController _itemTypeController = TextEditingController();
 
   StockEntryItemGender? _gender;
   String? _itemType;
@@ -76,9 +77,13 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
   final MenuController _sizeMenuController = MenuController();
   final MenuController _colourMenuController = MenuController();
+  final MenuController _brandMenuController = MenuController();
+  final MenuController _itemTypeMenuController = MenuController();
 
   String _sizeSearchQuery = '';
   String _colourSearchQuery = '';
+  String _brandSearchQuery = '';
+  String _itemTypeSearchQuery = '';
 
   void _ensureVisible(GlobalKey key) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -116,7 +121,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     'Kurta',
     'Track Pant',
     'Dress',
-    'Other',
   ];
 
   static const List<String> _sizeOptionsDefault = <String>[
@@ -227,6 +231,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   void dispose() {
     _barcodeController.dispose();
     _brandController.dispose();
+    _itemTypeController.dispose();
     _draftRow.sellController.removeListener(_onSellTextChanged);
     _draftRow.qtyController.removeListener(_onQtyChanged);
     _sellFocusNode.removeListener(_onSellFocusChanged);
@@ -661,6 +666,32 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     return result ?? false;
   }
 
+  bool _setCustomBrandFromField() {
+    final raw = _brandController.text.trim();
+    if (raw.isEmpty) {
+      _showSnack('Enter a brand name.');
+      return false;
+    }
+    setState(() {
+      _brandSelection = _customOption;
+      _brandController.text = raw;
+    });
+    return true;
+  }
+
+  bool _setCustomItemTypeFromField() {
+    final raw = _itemTypeController.text.trim();
+    if (raw.isEmpty) {
+      _showSnack('Enter an item type.');
+      return false;
+    }
+    setState(() {
+      _itemType = raw;
+      _itemTypeController.text = raw;
+    });
+    return true;
+  }
+
   Future<void> _submit() async {
     final form = _formKey.currentState;
     if (form == null) return;
@@ -1001,69 +1032,329 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                DropdownButtonFormField<String>(
+                FormField<String>(
                   initialValue: safeBrandSelection,
-                  isExpanded: true,
-                  icon: const Icon(Icons.expand_more_rounded),
-                  items: <DropdownMenuItem<String>>[
-                    ..._brandOptions.map(
-                      (b) => DropdownMenuItem<String>(
-                        value: b,
-                        child: Text(b, overflow: TextOverflow.ellipsis),
-                      ),
-                    ),
-                    const DropdownMenuItem<String>(
-                      value: _customOption,
-                      child: Text('Custom entry'),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    setState(() {
-                      _brandSelection = v;
-                      if (v != _customOption) _brandController.text = '';
-                    });
-                  },
-                  decoration: decoration(
-                    label: 'Brand (optional)',
-                    icon: Icons.storefront_outlined,
-                  ),
-                ),
-                if (_isBrandCustom) ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _brandController,
-                    textCapitalization: TextCapitalization.words,
-                    textInputAction: TextInputAction.next,
-                    decoration: decoration(
-                      label: 'Brand name (optional)',
-                      icon: Icons.storefront_outlined,
-                      hint: 'Example: Nike',
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: _itemType,
-                  isExpanded: true,
-                  icon: const Icon(Icons.expand_more_rounded),
-                  items: _itemTypes
-                      .map(
-                        (t) => DropdownMenuItem<String>(
-                          value: t,
-                          child: Text(t, overflow: TextOverflow.ellipsis),
+                  builder: (field) {
+                    final selected = _brandSelection;
+                    final isEmpty = selected == null || selected.trim().isEmpty;
+
+                    return MenuAnchor(
+                      controller: _brandMenuController,
+                      style: MenuStyle(
+                        backgroundColor: WidgetStatePropertyAll(
+                          colorScheme.surfaceContainerHighest,
                         ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (v) => setState(() => _itemType = v),
+                        shape: WidgetStatePropertyAll(
+                          RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                      builder: (context, controller, child) {
+                        return SizedBox(
+                          height: 56,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              FocusManager.instance.primaryFocus?.unfocus();
+                              _brandMenuController.isOpen
+                                  ? _brandMenuController.close()
+                                  : _brandMenuController.open();
+                            },
+                            child: InputDecorator(
+                              isEmpty: isEmpty,
+                              decoration:
+                                  decoration(
+                                    label: 'Brand (optional)',
+                                    icon: Icons.storefront_outlined,
+                                  ).copyWith(
+                                    suffixIcon: const Icon(
+                                      Icons.expand_more_rounded,
+                                    ),
+                                    floatingLabelBehavior:
+                                        FloatingLabelBehavior.always,
+                                    errorText: field.errorText,
+                                  ),
+                              child: Text(
+                                isEmpty
+                                    ? 'Select or search brand'
+                                    : selected == _customOption
+                                    ? _brandController.text.trim()
+                                    : selected!,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: isEmpty
+                                      ? FontWeight.w600
+                                      : FontWeight.w700,
+                                  color: isEmpty
+                                      ? colorScheme.onSurfaceVariant
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      menuChildren: [
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width - 64,
+                          height: 320,
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                                child: TextField(
+                                  autofocus: false,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    prefixIcon: const Icon(
+                                      Icons.search_rounded,
+                                    ),
+                                    hintText: 'Search Brand',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  onChanged: (q) {
+                                    setState(() => _brandSearchQuery = q);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Expanded(
+                                child: ListView(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    8,
+                                    4,
+                                    8,
+                                    8,
+                                  ),
+                                  children: [
+                                    ..._brandOptions
+                                        .where((o) {
+                                          if (o.toLowerCase() == 'other') {
+                                            return false;
+                                          }
+                                          final q = _brandSearchQuery
+                                              .trim()
+                                              .toLowerCase();
+                                          if (q.isEmpty) return true;
+                                          return o.toLowerCase().contains(q);
+                                        })
+                                        .map((o) {
+                                          final isSelected = selected == o;
+                                          return MenuItemButton(
+                                            leadingIcon: isSelected
+                                                ? const Icon(
+                                                    Icons.check_rounded,
+                                                  )
+                                                : const SizedBox(
+                                                    width: 24,
+                                                    height: 24,
+                                                  ),
+                                            onPressed: () {
+                                              setState(() {
+                                                _brandSelection = o;
+                                                _brandController.clear();
+                                              });
+                                              field.didChange(o);
+                                              _brandMenuController.close();
+                                            },
+                                            child: Text(
+                                              o,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          );
+                                        }),
+                                    const SizedBox(height: 8),
+                                    Divider(
+                                      height: 1,
+                                      color: colorScheme.outlineVariant,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    dottedAddField(
+                                      controller: _brandController,
+                                      hint: 'Add brand',
+                                      onAdd: () {
+                                        final ok = _setCustomBrandFromField();
+                                        if (!ok) return;
+                                        field.didChange(_customOption);
+                                        _brandMenuController.close();
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                FormField<String>(
+                  initialValue: _itemType,
                   validator: (v) {
-                    final raw = v?.trim() ?? '';
+                    final raw = (v ?? _itemType ?? '').trim();
                     if (raw.isEmpty) return 'Item type is required';
                     return null;
                   },
-                  decoration: decoration(
-                    label: 'Item type',
-                    icon: Icons.checkroom_outlined,
-                  ),
+                  builder: (field) {
+                    final selected = _itemType;
+                    final isEmpty = selected == null || selected.trim().isEmpty;
+
+                    return MenuAnchor(
+                      controller: _itemTypeMenuController,
+                      style: MenuStyle(
+                        backgroundColor: WidgetStatePropertyAll(
+                          colorScheme.surfaceContainerHighest,
+                        ),
+                        shape: WidgetStatePropertyAll(
+                          RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                      builder: (context, controller, child) {
+                        return SizedBox(
+                          height: 56,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              FocusManager.instance.primaryFocus?.unfocus();
+                              _itemTypeMenuController.isOpen
+                                  ? _itemTypeMenuController.close()
+                                  : _itemTypeMenuController.open();
+                            },
+                            child: InputDecorator(
+                              isEmpty: isEmpty,
+                              decoration:
+                                  decoration(
+                                    label: 'Item type',
+                                    icon: Icons.checkroom_outlined,
+                                  ).copyWith(
+                                    suffixIcon: const Icon(
+                                      Icons.expand_more_rounded,
+                                    ),
+                                    floatingLabelBehavior:
+                                        FloatingLabelBehavior.always,
+                                    errorText: field.errorText,
+                                  ),
+                              child: Text(
+                                isEmpty ? 'Select item type' : selected,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: isEmpty
+                                      ? FontWeight.w600
+                                      : FontWeight.w700,
+                                  color: isEmpty
+                                      ? colorScheme.onSurfaceVariant
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      menuChildren: [
+                        SizedBox(
+                          width: MediaQuery.of(context).size.width - 64,
+                          height: 320,
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                                child: TextField(
+                                  autofocus: false,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    prefixIcon: const Icon(
+                                      Icons.search_rounded,
+                                    ),
+                                    hintText: 'Search Item type',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  onChanged: (q) {
+                                    setState(() => _itemTypeSearchQuery = q);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Expanded(
+                                child: ListView(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    8,
+                                    4,
+                                    8,
+                                    8,
+                                  ),
+                                  children:
+                                      _itemTypes
+                                          .where((o) {
+                                            if (o.toLowerCase() == 'other') {
+                                              return false;
+                                            }
+                                            final q = _itemTypeSearchQuery
+                                                .trim()
+                                                .toLowerCase();
+                                            if (q.isEmpty) return true;
+                                            return o.toLowerCase().contains(q);
+                                          })
+                                          .map<Widget>((o) {
+                                            final isSelected = selected == o;
+                                            return MenuItemButton(
+                                              leadingIcon: isSelected
+                                                  ? const Icon(
+                                                      Icons.check_rounded,
+                                                    )
+                                                  : const SizedBox(
+                                                      width: 24,
+                                                      height: 24,
+                                                    ),
+                                              onPressed: () {
+                                                setState(() {
+                                                  _itemType = o;
+                                                });
+                                                field.didChange(o);
+                                                _itemTypeMenuController.close();
+                                              },
+                                              child: Text(
+                                                o,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            );
+                                          })
+                                          .toList(growable: true)
+                                        ..addAll([
+                                          const SizedBox(height: 8),
+                                          Divider(
+                                            height: 1,
+                                            color: colorScheme.outlineVariant,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          dottedAddField(
+                                            controller: _itemTypeController,
+                                            hint: 'Add item type',
+                                            onAdd: () {
+                                              final ok =
+                                                  _setCustomItemTypeFromField();
+                                              if (!ok) return;
+                                              field.didChange(_itemType);
+                                              _itemTypeMenuController.close();
+                                            },
+                                          ),
+                                        ]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<StockEntryItemGender>(
