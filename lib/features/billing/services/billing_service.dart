@@ -13,6 +13,7 @@ class BillingService {
   // Flip this to true once the backend endpoint is available.
   static const bool whatsAppApiIntegrated = false;
   static const String _barcodeLookupPath = '/billing/products/by-barcode/';
+  static const String _customerLookupPath = '/billing/customers/by-phone/';
 
   final ApiService _apiService;
 
@@ -117,6 +118,35 @@ class BillingService {
         .toList(growable: false);
   }
 
+  Future<BillingCustomer?> fetchCustomerByPhone(String phone) async {
+    final normalized = phone.trim();
+    if (normalized.isEmpty) return null;
+
+    final uri = _url(
+      '$_customerLookupPath?phone=${Uri.encodeQueryComponent(normalized)}',
+    );
+
+    final response = await _apiService.get(uri.toString());
+    if (response.statusCode == 404) return null;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = _errorMessageFromResponse(response);
+      throw http.ClientException(
+        message.isEmpty ? 'Failed to fetch customer by phone' : message,
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    final records = _extractCustomerRecords(decoded);
+    if (records.isEmpty) return null;
+
+    for (final record in records) {
+      final customer = _customerFromMap(record);
+      if (customer != null) return customer;
+    }
+
+    return null;
+  }
+
   List<Map<String, dynamic>> _extractProductRecords(dynamic decoded) {
     if (decoded is List) {
       return decoded
@@ -152,6 +182,8 @@ class BillingService {
     final priceValue =
         map['unit_price'] ?? map['sell_price'] ?? map['price'] ?? map['mrp'];
     final barcodeValue = map['barcode'] ?? map['barcode_number'] ?? map['ean'];
+    final sizeValue =
+        map['size'] ?? map['product_size'] ?? map['variant_size'] ?? map['sz'];
 
     final id = idValue?.toString().trim() ?? '';
     final name = nameValue?.toString().trim() ?? '';
@@ -170,6 +202,56 @@ class BillingService {
       name: name,
       unitPrice: price,
       barcode: barcode == null || barcode.isEmpty ? null : barcode,
+      size: sizeValue?.toString().trim().isEmpty == true
+          ? null
+          : sizeValue?.toString().trim(),
+    );
+  }
+
+  List<Map<String, dynamic>> _extractCustomerRecords(dynamic decoded) {
+    if (decoded is List) {
+      return decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    }
+
+    if (decoded is! Map) return const [];
+
+    final map = Map<String, dynamic>.from(decoded);
+    final dynamic listValue =
+        map['customers'] ?? map['results'] ?? map['data'] ?? map['items'];
+
+    if (listValue is List) {
+      return listValue
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    }
+
+    final customerNode = map['customer'];
+    if (customerNode is Map) {
+      return [Map<String, dynamic>.from(customerNode)];
+    }
+
+    return [map];
+  }
+
+  BillingCustomer? _customerFromMap(Map<String, dynamic> map) {
+    final nameValue = map['name'] ?? map['customer_name'] ?? map['full_name'];
+    final phoneValue = map['phone'] ?? map['phone_number'] ?? map['mobile'];
+    final addressValue = map['address'] ?? map['customer_address'];
+
+    final name = nameValue?.toString().trim() ?? '';
+    final phone = phoneValue?.toString().trim() ?? '';
+    final address = addressValue?.toString().trim();
+
+    if (name.isEmpty && phone.isEmpty) return null;
+
+    return BillingCustomer(
+      name: name.isEmpty ? 'Unknown' : name,
+      phone: phone,
+      address: address == null || address.isEmpty ? null : address,
     );
   }
 }

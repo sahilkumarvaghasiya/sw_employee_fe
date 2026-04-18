@@ -83,6 +83,7 @@ class SalesHistoryProvider extends ChangeNotifier {
             id: product.id,
             productName: product.name,
             quantity: quantity,
+            originalUnitPrice: product.unitPrice,
             unitPrice: product.unitPrice,
             discountPercent: discount,
           ),

@@ -748,11 +748,12 @@ class _BillingScreenState extends State<BillingScreen> {
                 itemBuilder: (context, index) {
                   final item = provider.items[index];
                   return ProductItemWidget(
+                    key: ValueKey(item.id),
                     item: item,
-                    onPriceChanged: (value) {
+                    onPriceChanged: (double? value) {
                       provider.updateItemPrice(item.id, value);
                     },
-                    onDiscountChanged: (value) {
+                    onDiscountChanged: (double? value) {
                       provider.updateItemDiscountPercent(item.id, value);
                     },
                     onIncrement: () {

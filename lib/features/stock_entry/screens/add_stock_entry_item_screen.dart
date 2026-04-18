@@ -788,6 +788,46 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     Navigator.of(context).pop(out);
   }
 
+  Future<bool> _confirmDiscardOnBackIfNeeded() async {
+    if (_entries.isEmpty) return true;
+
+    final shouldDiscard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard entries?'),
+        content: const Text(
+          'Do you want to go back? This entry will be discarded.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    return shouldDiscard == true;
+  }
+
+  Future<void> _handleBackPressed() async {
+    final canGoBack = await _confirmDiscardOnBackIfNeeded();
+    if (!canGoBack || !mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<bool> _onWillPop() async {
+    return _confirmDiscardOnBackIfNeeded();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -989,321 +1029,172 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         ? 'Enter barcode and details.'
         : 'Barcode scanned. Fill remaining details.';
 
-    return Scaffold(
-      appBar: AppBar(
-        elevation: 0,
-        scrolledUnderElevation: 2,
-        title: const Text(
-          'Add Stock Items',
-          style: TextStyle(fontWeight: FontWeight.w800),
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        appBar: AppBar(
+          elevation: 0,
+          scrolledUnderElevation: 2,
+          leading: IconButton(
+            tooltip: 'Back',
+            onPressed: _handleBackPressed,
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          title: const Text(
+            'Add Stock Items',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
         ),
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
-          children: [
-            sectionCard(
-              key: _commonSectionKey,
-              icon: Icons.inventory_2_outlined,
-              title: 'Common Details',
-              subtitle: subtitle,
-              expanded: _commonExpanded,
-              onToggle: () =>
-                  setState(() => _commonExpanded = !_commonExpanded),
-              children: [
-                if (!widget.enableBarcodeGeneration) ...[
-                  TextFormField(
-                    controller: _barcodeController,
-                    readOnly: !widget.allowBarcodeEdit,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    textInputAction: TextInputAction.next,
-                    decoration: decoration(
-                      label: 'Barcode',
-                      icon: Icons.qr_code_2,
-                      hint: 'Example: 8901234567890',
+        body: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+            children: [
+              sectionCard(
+                key: _commonSectionKey,
+                icon: Icons.inventory_2_outlined,
+                title: 'Common Details',
+                subtitle: subtitle,
+                expanded: _commonExpanded,
+                onToggle: () =>
+                    setState(() => _commonExpanded = !_commonExpanded),
+                children: [
+                  if (!widget.enableBarcodeGeneration) ...[
+                    TextFormField(
+                      controller: _barcodeController,
+                      readOnly: !widget.allowBarcodeEdit,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      textInputAction: TextInputAction.next,
+                      decoration: decoration(
+                        label: 'Barcode',
+                        icon: Icons.qr_code_2,
+                        hint: 'Example: 8901234567890',
+                      ),
+                      validator: (v) {
+                        final raw = v?.trim() ?? '';
+                        if (raw.isEmpty) return 'Barcode is required';
+                        return null;
+                      },
                     ),
-                    validator: (v) {
-                      final raw = v?.trim() ?? '';
-                      if (raw.isEmpty) return 'Barcode is required';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                FormField<String>(
-                  initialValue: safeBrandSelection,
-                  builder: (field) {
-                    final selected = _brandSelection;
-                    final isEmpty = selected == null || selected.trim().isEmpty;
+                    const SizedBox(height: 12),
+                  ],
+                  FormField<String>(
+                    initialValue: safeBrandSelection,
+                    builder: (field) {
+                      final selected = _brandSelection;
+                      final isEmpty =
+                          selected == null || selected.trim().isEmpty;
 
-                    return MenuAnchor(
-                      controller: _brandMenuController,
-                      style: MenuStyle(
-                        backgroundColor: WidgetStatePropertyAll(
-                          colorScheme.surfaceContainerHighest,
-                        ),
-                        shape: WidgetStatePropertyAll(
-                          RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                      return MenuAnchor(
+                        controller: _brandMenuController,
+                        style: MenuStyle(
+                          backgroundColor: WidgetStatePropertyAll(
+                            colorScheme.surfaceContainerHighest,
+                          ),
+                          shape: WidgetStatePropertyAll(
+                            RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
                         ),
-                      ),
-                      builder: (context, controller, child) {
-                        return SizedBox(
-                          height: 56,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () {
-                              FocusManager.instance.primaryFocus?.unfocus();
-                              _brandMenuController.isOpen
-                                  ? _brandMenuController.close()
-                                  : _brandMenuController.open();
-                            },
-                            child: InputDecorator(
-                              isEmpty: isEmpty,
-                              decoration:
-                                  decoration(
-                                    label: 'Brand (optional)',
-                                    icon: Icons.storefront_outlined,
-                                  ).copyWith(
-                                    suffixIcon: const Icon(
-                                      Icons.expand_more_rounded,
+                        builder: (context, controller, child) {
+                          return SizedBox(
+                            height: 56,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () {
+                                FocusManager.instance.primaryFocus?.unfocus();
+                                _brandMenuController.isOpen
+                                    ? _brandMenuController.close()
+                                    : _brandMenuController.open();
+                              },
+                              child: InputDecorator(
+                                isEmpty: isEmpty,
+                                decoration:
+                                    decoration(
+                                      label: 'Brand (optional)',
+                                      icon: Icons.storefront_outlined,
+                                    ).copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.expand_more_rounded,
+                                      ),
+                                      floatingLabelBehavior:
+                                          FloatingLabelBehavior.always,
+                                      errorText: field.errorText,
                                     ),
-                                    floatingLabelBehavior:
-                                        FloatingLabelBehavior.always,
-                                    errorText: field.errorText,
+                                child: Text(
+                                  isEmpty
+                                      ? 'Select or search brand'
+                                      : selected == _customOption
+                                      ? _brandController.text.trim()
+                                      : selected!,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    fontWeight: isEmpty
+                                        ? FontWeight.w600
+                                        : FontWeight.w700,
+                                    color: isEmpty
+                                        ? colorScheme.onSurfaceVariant
+                                        : null,
                                   ),
-                              child: Text(
-                                isEmpty
-                                    ? 'Select or search brand'
-                                    : selected == _customOption
-                                    ? _brandController.text.trim()
-                                    : selected!,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  fontWeight: isEmpty
-                                      ? FontWeight.w600
-                                      : FontWeight.w700,
-                                  color: isEmpty
-                                      ? colorScheme.onSurfaceVariant
-                                      : null,
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                      menuChildren: [
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width - 64,
-                          height: 320,
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                                child: TextField(
-                                  autofocus: false,
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    prefixIcon: const Icon(
-                                      Icons.search_rounded,
-                                    ),
-                                    hintText: 'Search Brand',
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  onChanged: (q) {
-                                    setState(() => _brandSearchQuery = q);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Expanded(
-                                child: ListView(
+                          );
+                        },
+                        menuChildren: [
+                          SizedBox(
+                            width: MediaQuery.of(context).size.width - 64,
+                            height: 320,
+                            child: Column(
+                              children: [
+                                Padding(
                                   padding: const EdgeInsets.fromLTRB(
                                     8,
-                                    4,
                                     8,
-                                    8,
-                                  ),
-                                  children: [
-                                    ..._brandOptions
-                                        .where((o) {
-                                          if (o.toLowerCase() == 'other') {
-                                            return false;
-                                          }
-                                          final q = _brandSearchQuery
-                                              .trim()
-                                              .toLowerCase();
-                                          if (q.isEmpty) return true;
-                                          return o.toLowerCase().contains(q);
-                                        })
-                                        .map((o) {
-                                          final isSelected = selected == o;
-                                          return MenuItemButton(
-                                            leadingIcon: isSelected
-                                                ? const Icon(
-                                                    Icons.check_rounded,
-                                                  )
-                                                : const SizedBox(
-                                                    width: 24,
-                                                    height: 24,
-                                                  ),
-                                            onPressed: () {
-                                              setState(() {
-                                                _brandSelection = o;
-                                                _brandController.clear();
-                                              });
-                                              field.didChange(o);
-                                              _brandMenuController.close();
-                                            },
-                                            child: Text(
-                                              o,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          );
-                                        }),
-                                    const SizedBox(height: 8),
-                                    Divider(
-                                      height: 1,
-                                      color: colorScheme.outlineVariant,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    dottedAddField(
-                                      controller: _brandController,
-                                      hint: 'Add brand',
-                                      onAdd: () {
-                                        final ok = _setCustomBrandFromField();
-                                        if (!ok) return;
-                                        field.didChange(_customOption);
-                                        _brandMenuController.close();
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                FormField<String>(
-                  initialValue: _itemType,
-                  validator: (v) {
-                    final raw = (v ?? _itemType ?? '').trim();
-                    if (raw.isEmpty) return 'Item type is required';
-                    return null;
-                  },
-                  builder: (field) {
-                    final selected = _itemType;
-                    final isEmpty = selected == null || selected.trim().isEmpty;
-
-                    return MenuAnchor(
-                      controller: _itemTypeMenuController,
-                      style: MenuStyle(
-                        backgroundColor: WidgetStatePropertyAll(
-                          colorScheme.surfaceContainerHighest,
-                        ),
-                        shape: WidgetStatePropertyAll(
-                          RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-                      builder: (context, controller, child) {
-                        return SizedBox(
-                          height: 56,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () {
-                              FocusManager.instance.primaryFocus?.unfocus();
-                              _itemTypeMenuController.isOpen
-                                  ? _itemTypeMenuController.close()
-                                  : _itemTypeMenuController.open();
-                            },
-                            child: InputDecorator(
-                              isEmpty: isEmpty,
-                              decoration:
-                                  decoration(
-                                    label: 'Item type',
-                                    icon: Icons.checkroom_outlined,
-                                  ).copyWith(
-                                    suffixIcon: const Icon(
-                                      Icons.expand_more_rounded,
-                                    ),
-                                    floatingLabelBehavior:
-                                        FloatingLabelBehavior.always,
-                                    errorText: field.errorText,
-                                  ),
-                              child: Text(
-                                isEmpty ? 'Select item type' : selected,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  fontWeight: isEmpty
-                                      ? FontWeight.w600
-                                      : FontWeight.w700,
-                                  color: isEmpty
-                                      ? colorScheme.onSurfaceVariant
-                                      : null,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                      menuChildren: [
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width - 64,
-                          height: 320,
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                                child: TextField(
-                                  autofocus: false,
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    prefixIcon: const Icon(
-                                      Icons.search_rounded,
-                                    ),
-                                    hintText: 'Search Item type',
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  onChanged: (q) {
-                                    setState(() => _itemTypeSearchQuery = q);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Expanded(
-                                child: ListView(
-                                  padding: const EdgeInsets.fromLTRB(
                                     8,
                                     4,
-                                    8,
-                                    8,
                                   ),
-                                  children:
-                                      _itemTypes
+                                  child: TextField(
+                                    autofocus: false,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      prefixIcon: const Icon(
+                                        Icons.search_rounded,
+                                      ),
+                                      hintText: 'Search Brand',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onChanged: (q) {
+                                      setState(() => _brandSearchQuery = q);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Expanded(
+                                  child: ListView(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      8,
+                                      4,
+                                      8,
+                                      8,
+                                    ),
+                                    children: [
+                                      ..._brandOptions
                                           .where((o) {
                                             if (o.toLowerCase() == 'other') {
                                               return false;
                                             }
-                                            final q = _itemTypeSearchQuery
+                                            final q = _brandSearchQuery
                                                 .trim()
                                                 .toLowerCase();
                                             if (q.isEmpty) return true;
                                             return o.toLowerCase().contains(q);
                                           })
-                                          .map<Widget>((o) {
+                                          .map((o) {
                                             final isSelected = selected == o;
                                             return MenuItemButton(
                                               leadingIcon: isSelected
@@ -1316,347 +1207,156 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                                     ),
                                               onPressed: () {
                                                 setState(() {
-                                                  _itemType = o;
+                                                  _brandSelection = o;
+                                                  _brandController.clear();
                                                 });
                                                 field.didChange(o);
-                                                _itemTypeMenuController.close();
+                                                _brandMenuController.close();
                                               },
                                               child: Text(
                                                 o,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
                                             );
-                                          })
-                                          .toList(growable: true)
-                                        ..addAll([
-                                          const SizedBox(height: 8),
-                                          Divider(
-                                            height: 1,
-                                            color: colorScheme.outlineVariant,
-                                          ),
-                                          const SizedBox(height: 6),
-                                          dottedAddField(
-                                            controller: _itemTypeController,
-                                            hint: 'Add item type',
-                                            onAdd: () {
-                                              final ok =
-                                                  _setCustomItemTypeFromField();
-                                              if (!ok) return;
-                                              field.didChange(_itemType);
-                                              _itemTypeMenuController.close();
-                                            },
-                                          ),
-                                        ]),
+                                          }),
+                                      const SizedBox(height: 8),
+                                      Divider(
+                                        height: 1,
+                                        color: colorScheme.outlineVariant,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      dottedAddField(
+                                        controller: _brandController,
+                                        hint: 'Add brand',
+                                        onAdd: () {
+                                          final ok = _setCustomBrandFromField();
+                                          if (!ok) return;
+                                          field.didChange(_customOption);
+                                          _brandMenuController.close();
+                                        },
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<StockEntryItemGender>(
-                  initialValue: safeGender,
-                  isExpanded: true,
-                  icon: const Icon(Icons.expand_more_rounded),
-                  items: StockEntryItemGender.values
-                      .map(
-                        (g) => DropdownMenuItem<StockEntryItemGender>(
-                          value: g,
-                          child: Text(g.label, overflow: TextOverflow.ellipsis),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (v) => setState(() => _gender = v),
-                  validator: (v) => v == null ? 'Gender is required' : null,
-                  decoration: decoration(
-                    label: 'Gender',
-                    icon: Icons.wc_outlined,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            sectionCard(
-              key: _itemsSectionKey,
-              icon: Icons.view_list_outlined,
-              title: 'Items',
-              subtitle:
-                  'Add one or more variants (size, colour, pieces, selling price).',
-              expanded: _itemsExpanded,
-              onToggle: () => setState(() => _itemsExpanded = !_itemsExpanded),
-              children: [
-                if (_editingIndex != null) ...[
-                  Material(
-                    color: colorScheme.primary.withAlpha(14),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.tune_rounded,
-                            color: colorScheme.primary,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Editing item ${(_editingIndex ?? 0) + 1}',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w800,
-                              ),
+                              ],
                             ),
-                          ),
-                          TextButton(
-                            onPressed: _cancelEdit,
-                            child: const Text('Cancel edit'),
                           ),
                         ],
-                      ),
-                    ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
-                ],
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    const gap = 12.0;
-                    const gridHeight = 52.0;
-                    final width = constraints.maxWidth;
-                    final isTwoCol = width >= 320;
-                    final fieldWidth = isTwoCol ? ((width - gap) / 2) : width;
+                  FormField<String>(
+                    initialValue: _itemType,
+                    validator: (v) {
+                      final raw = (v ?? _itemType ?? '').trim();
+                      if (raw.isEmpty) return 'Item type is required';
+                      return null;
+                    },
+                    builder: (field) {
+                      final selected = _itemType;
+                      final isEmpty =
+                          selected == null || selected.trim().isEmpty;
 
-                    Widget fieldLabel(String text) {
-                      return Text(
-                        text,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      );
-                    }
-
-                    Widget gridField({
-                      required String label,
-                      required Widget child,
-                    }) {
-                      return SizedBox(
-                        width: fieldWidth,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            fieldLabel(label),
-                            const SizedBox(height: 6),
-                            child,
-                          ],
-                        ),
-                      );
-                    }
-
-                    Widget piecesStepper() {
-                      return SizedBox(
-                        height: gridHeight,
-                        child: DecoratedBox(
-                          decoration: ShapeDecoration(
-                            color: colorScheme.surfaceContainerHighest,
-                            shape: RoundedRectangleBorder(
+                      return MenuAnchor(
+                        controller: _itemTypeMenuController,
+                        style: MenuStyle(
+                          backgroundColor: WidgetStatePropertyAll(
+                            colorScheme.surfaceContainerHighest,
+                          ),
+                          shape: WidgetStatePropertyAll(
+                            RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
-                              side: BorderSide(
-                                color: colorScheme.outlineVariant,
-                              ),
                             ),
-                          ),
-                          child: Row(
-                            children: [
-                              const SizedBox(width: 2),
-                              IconButton(
-                                tooltip: 'Decrease',
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 40,
-                                  height: 40,
-                                ),
-                                onPressed: () {
-                                  final current =
-                                      int.tryParse(
-                                        _draftRow.qtyController.text.trim(),
-                                      ) ??
-                                      0;
-                                  if (current <= 1) return;
-                                  _draftRow.qtyController.text = (current - 1)
-                                      .toString();
-                                  setState(() {});
-                                },
-                                icon: const Icon(Icons.remove_rounded),
-                              ),
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _draftRow.qtyController,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                  ],
-                                  textAlign: TextAlign.center,
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                    hintText: '1',
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Increase',
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 40,
-                                  height: 40,
-                                ),
-                                onPressed: () {
-                                  final current =
-                                      int.tryParse(
-                                        _draftRow.qtyController.text.trim(),
-                                      ) ??
-                                      0;
-                                  final next = (current <= 0 ? 0 : current) + 1;
-                                  _draftRow.qtyController.text = next
-                                      .toString();
-                                  setState(() {});
-                                },
-                                icon: const Icon(Icons.add_rounded),
-                              ),
-                              const SizedBox(width: 2),
-                            ],
                           ),
                         ),
-                      );
-                    }
-
-                    Widget menuDropdown({
-                      required String label,
-                      required IconData icon,
-                      required String hint,
-                      required String addHint,
-                      required TextEditingController addController,
-                      required Future<void> Function() onAdd,
-                      required List<String> options,
-                      required String? value,
-                      required ValueChanged<String> onSelected,
-                      required MenuController menuController,
-                      required ValueGetter<String?> selectionGetter,
-                      required String searchQuery,
-                      required ValueChanged<String> onSearchChanged,
-                    }) {
-                      return gridField(
-                        label: label,
-                        child: MenuAnchor(
-                          controller: menuController,
-                          style: MenuStyle(
-                            backgroundColor: WidgetStatePropertyAll(
-                              colorScheme.surfaceContainerHighest,
-                            ),
-                            shape: WidgetStatePropertyAll(
-                              RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          ),
-                          builder: (context, controller, child) {
-                            final isEmpty =
-                                value == null || value.trim().isEmpty;
-
-                            return SizedBox(
-                              height: gridHeight,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(14),
-                                onTap: () {
-                                  FocusManager.instance.primaryFocus?.unfocus();
-                                  menuController.isOpen
-                                      ? menuController.close()
-                                      : menuController.open();
-                                },
-                                child: InputDecorator(
-                                  decoration:
-                                      gridDecoration(
-                                        icon: icon,
-                                        hint: hint,
-                                      ).copyWith(
-                                        isDense: true,
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 12,
-                                            ),
-                                        suffixIcon: const Icon(
-                                          Icons.expand_more_rounded,
-                                        ),
+                        builder: (context, controller, child) {
+                          return SizedBox(
+                            height: 56,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () {
+                                FocusManager.instance.primaryFocus?.unfocus();
+                                _itemTypeMenuController.isOpen
+                                    ? _itemTypeMenuController.close()
+                                    : _itemTypeMenuController.open();
+                              },
+                              child: InputDecorator(
+                                isEmpty: isEmpty,
+                                decoration:
+                                    decoration(
+                                      label: 'Item type',
+                                      icon: Icons.checkroom_outlined,
+                                    ).copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.expand_more_rounded,
                                       ),
-                                  isEmpty: isEmpty,
-                                  child: Text(
-                                    isEmpty ? hint : value,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      fontWeight: isEmpty
-                                          ? FontWeight.w600
-                                          : FontWeight.w700,
-                                      color: isEmpty
-                                          ? colorScheme.onSurfaceVariant
-                                          : null,
+                                      floatingLabelBehavior:
+                                          FloatingLabelBehavior.always,
+                                      errorText: field.errorText,
                                     ),
+                                child: Text(
+                                  isEmpty ? 'Select item type' : selected,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    fontWeight: isEmpty
+                                        ? FontWeight.w600
+                                        : FontWeight.w700,
+                                    color: isEmpty
+                                        ? colorScheme.onSurfaceVariant
+                                        : null,
                                   ),
                                 ),
                               ),
-                            );
-                          },
-                          menuChildren: [
-                            SizedBox(
-                              width: fieldWidth,
-                              height: 320,
-                              child: Column(
-                                children: [
-                                  Padding(
+                            ),
+                          );
+                        },
+                        menuChildren: [
+                          SizedBox(
+                            width: MediaQuery.of(context).size.width - 64,
+                            height: 320,
+                            child: Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    8,
+                                    8,
+                                    8,
+                                    4,
+                                  ),
+                                  child: TextField(
+                                    autofocus: false,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      prefixIcon: const Icon(
+                                        Icons.search_rounded,
+                                      ),
+                                      hintText: 'Search Item type',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onChanged: (q) {
+                                      setState(() => _itemTypeSearchQuery = q);
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Expanded(
+                                  child: ListView(
                                     padding: const EdgeInsets.fromLTRB(
                                       8,
-                                      8,
-                                      8,
                                       4,
+                                      8,
+                                      8,
                                     ),
-                                    child: TextField(
-                                      autofocus: false,
-                                      decoration: InputDecoration(
-                                        isDense: true,
-                                        prefixIcon: const Icon(
-                                          Icons.search_rounded,
-                                        ),
-                                        hintText: 'Search $label',
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                      ),
-                                      onChanged: onSearchChanged,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Expanded(
-                                    child: ListView(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        8,
-                                        4,
-                                        8,
-                                        8,
-                                      ),
-                                      children: [
-                                        ...options
+                                    children:
+                                        _itemTypes
                                             .where((o) {
-                                              final q = searchQuery
+                                              if (o.toLowerCase() == 'other') {
+                                                return false;
+                                              }
+                                              final q = _itemTypeSearchQuery
                                                   .trim()
                                                   .toLowerCase();
                                               if (q.isEmpty) return true;
@@ -1664,9 +1364,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                                 q,
                                               );
                                             })
-                                            .map((o) {
-                                              final isSelected =
-                                                  (value ?? '') == o;
+                                            .map<Widget>((o) {
+                                              final isSelected = selected == o;
                                               return MenuItemButton(
                                                 leadingIcon: isSelected
                                                     ? const Icon(
@@ -1677,8 +1376,12 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                                         height: 24,
                                                       ),
                                                 onPressed: () {
-                                                  onSelected(o);
-                                                  menuController.close();
+                                                  setState(() {
+                                                    _itemType = o;
+                                                  });
+                                                  field.didChange(o);
+                                                  _itemTypeMenuController
+                                                      .close();
                                                 },
                                                 child: Text(
                                                   o,
@@ -1687,110 +1390,271 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                                 ),
                                               );
                                             })
-                                            .toList(growable: false),
-                                        const SizedBox(height: 8),
-                                        Divider(
-                                          height: 1,
-                                          color: colorScheme.outlineVariant,
-                                        ),
-                                        const SizedBox(height: 6),
-                                        dottedAddField(
-                                          controller: addController,
-                                          hint: addHint,
-                                          onAdd: () async {
-                                            final before = value;
-                                            await onAdd();
-                                            if (!mounted) return;
-                                            final after = selectionGetter();
-                                            final changed =
-                                                (after != null &&
-                                                after.trim().isNotEmpty &&
-                                                after != before);
-                                            if (changed) {
-                                              menuController.close();
-                                            }
-                                          },
-                                        ),
-                                      ],
-                                    ),
+                                            .toList(growable: true)
+                                          ..addAll([
+                                            const SizedBox(height: 8),
+                                            Divider(
+                                              height: 1,
+                                              color: colorScheme.outlineVariant,
+                                            ),
+                                            const SizedBox(height: 6),
+                                            dottedAddField(
+                                              controller: _itemTypeController,
+                                              hint: 'Add item type',
+                                              onAdd: () {
+                                                final ok =
+                                                    _setCustomItemTypeFromField();
+                                                if (!ok) return;
+                                                field.didChange(_itemType);
+                                                _itemTypeMenuController.close();
+                                              },
+                                            ),
+                                          ]),
                                   ),
-                                ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<StockEntryItemGender>(
+                    initialValue: safeGender,
+                    isExpanded: true,
+                    icon: const Icon(Icons.expand_more_rounded),
+                    items: StockEntryItemGender.values
+                        .map(
+                          (g) => DropdownMenuItem<StockEntryItemGender>(
+                            value: g,
+                            child: Text(
+                              g.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (v) => setState(() => _gender = v),
+                    validator: (v) => v == null ? 'Gender is required' : null,
+                    decoration: decoration(
+                      label: 'Gender',
+                      icon: Icons.wc_outlined,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              sectionCard(
+                key: _itemsSectionKey,
+                icon: Icons.view_list_outlined,
+                title: 'Items',
+                subtitle:
+                    'Add one or more variants (size, colour, pieces, selling price).',
+                expanded: _itemsExpanded,
+                onToggle: () =>
+                    setState(() => _itemsExpanded = !_itemsExpanded),
+                children: [
+                  if (_editingIndex != null) ...[
+                    Material(
+                      color: colorScheme.primary.withAlpha(14),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.tune_rounded,
+                              color: colorScheme.primary,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Editing item ${(_editingIndex ?? 0) + 1}',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
+                            ),
+                            TextButton(
+                              onPressed: _cancelEdit,
+                              child: const Text('Cancel edit'),
                             ),
                           ],
                         ),
-                      );
-                    }
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      const gap = 12.0;
+                      const gridHeight = 52.0;
+                      final width = constraints.maxWidth;
+                      final isTwoCol = width >= 320;
+                      final fieldWidth = isTwoCol ? ((width - gap) / 2) : width;
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Wrap(
-                          spacing: gap,
-                          runSpacing: 10,
-                          children: [
-                            menuDropdown(
-                              label: 'Size',
-                              icon: Icons.straighten_outlined,
-                              hint: 'Size',
-                              addHint: 'Add new size',
-                              addController: _draftRow.sizeController,
-                              onAdd: _addNewSizeFromField,
-                              options: [...customSizes, ..._sizeOptionsDefault],
-                              value: _draftRow.safeSizeSelection(_sizeOptions),
-                              menuController: _sizeMenuController,
-                              selectionGetter: () => _draftRow.sizeSelection,
-                              searchQuery: _sizeSearchQuery,
-                              onSearchChanged: (q) {
-                                setState(() => _sizeSearchQuery = q);
-                              },
-                              onSelected: (v) {
-                                setState(() {
-                                  _draftRow.sizeSelection = v;
-                                });
-                              },
-                            ),
-                            menuDropdown(
-                              label: 'Colour',
-                              icon: Icons.palette_outlined,
-                              hint: 'Colour',
-                              addHint: 'Add new colour',
-                              addController: _draftRow.colourController,
-                              onAdd: _addNewColourFromField,
-                              options: [
-                                ...customColours,
-                                ..._colourOptionsDefault,
-                              ],
-                              value: _draftRow.safeColourSelection(
-                                _colourOptions,
+                      Widget fieldLabel(String text) {
+                        return Text(
+                          text,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        );
+                      }
+
+                      Widget gridField({
+                        required String label,
+                        required Widget child,
+                      }) {
+                        return SizedBox(
+                          width: fieldWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              fieldLabel(label),
+                              const SizedBox(height: 6),
+                              child,
+                            ],
+                          ),
+                        );
+                      }
+
+                      Widget piecesStepper() {
+                        return SizedBox(
+                          height: gridHeight,
+                          child: DecoratedBox(
+                            decoration: ShapeDecoration(
+                              color: colorScheme.surfaceContainerHighest,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                side: BorderSide(
+                                  color: colorScheme.outlineVariant,
+                                ),
                               ),
-                              menuController: _colourMenuController,
-                              selectionGetter: () => _draftRow.colourSelection,
-                              searchQuery: _colourSearchQuery,
-                              onSearchChanged: (q) {
-                                setState(() => _colourSearchQuery = q);
-                              },
-                              onSelected: (v) {
-                                setState(() {
-                                  _draftRow.colourSelection = v;
-                                });
-                              },
                             ),
-                            gridField(label: 'Pieces', child: piecesStepper()),
-                            gridField(
-                              label: 'Sell Price',
-                              child: SizedBox(
-                                height: gridHeight,
-                                child: Builder(
-                                  builder: (context) {
-                                    final showSellOverlay =
-                                        _draftRow.qty > 1 &&
-                                        _sellUnitPrice != null;
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 2),
+                                IconButton(
+                                  tooltip: 'Decrease',
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 40,
+                                    height: 40,
+                                  ),
+                                  onPressed: () {
+                                    final current =
+                                        int.tryParse(
+                                          _draftRow.qtyController.text.trim(),
+                                        ) ??
+                                        0;
+                                    if (current <= 1) return;
+                                    _draftRow.qtyController.text = (current - 1)
+                                        .toString();
+                                    setState(() {});
+                                  },
+                                  icon: const Icon(Icons.remove_rounded),
+                                ),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _draftRow.qtyController,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    textAlign: TextAlign.center,
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      hintText: '1',
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Increase',
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 40,
+                                    height: 40,
+                                  ),
+                                  onPressed: () {
+                                    final current =
+                                        int.tryParse(
+                                          _draftRow.qtyController.text.trim(),
+                                        ) ??
+                                        0;
+                                    final next =
+                                        (current <= 0 ? 0 : current) + 1;
+                                    _draftRow.qtyController.text = next
+                                        .toString();
+                                    setState(() {});
+                                  },
+                                  icon: const Icon(Icons.add_rounded),
+                                ),
+                                const SizedBox(width: 2),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
 
-                                    final baseDecoration =
+                      Widget menuDropdown({
+                        required String label,
+                        required IconData icon,
+                        required String hint,
+                        required String addHint,
+                        required TextEditingController addController,
+                        required Future<void> Function() onAdd,
+                        required List<String> options,
+                        required String? value,
+                        required ValueChanged<String> onSelected,
+                        required MenuController menuController,
+                        required ValueGetter<String?> selectionGetter,
+                        required String searchQuery,
+                        required ValueChanged<String> onSearchChanged,
+                      }) {
+                        return gridField(
+                          label: label,
+                          child: MenuAnchor(
+                            controller: menuController,
+                            style: MenuStyle(
+                              backgroundColor: WidgetStatePropertyAll(
+                                colorScheme.surfaceContainerHighest,
+                              ),
+                              shape: WidgetStatePropertyAll(
+                                RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                            builder: (context, controller, child) {
+                              final isEmpty =
+                                  value == null || value.trim().isEmpty;
+
+                              return SizedBox(
+                                height: gridHeight,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(14),
+                                  onTap: () {
+                                    FocusManager.instance.primaryFocus
+                                        ?.unfocus();
+                                    menuController.isOpen
+                                        ? menuController.close()
+                                        : menuController.open();
+                                  },
+                                  child: InputDecorator(
+                                    decoration:
                                         gridDecoration(
-                                          icon: Icons.currency_rupee_rounded,
-                                          hint: '0',
+                                          icon: icon,
+                                          hint: hint,
                                         ).copyWith(
                                           isDense: true,
                                           contentPadding:
@@ -1798,256 +1662,473 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                                 horizontal: 12,
                                                 vertical: 12,
                                               ),
-                                        );
-
-                                    return Stack(
-                                      children: [
-                                        Positioned.fill(
-                                          child: TextFormField(
-                                            controller:
-                                                _draftRow.sellController,
-                                            focusNode: _sellFocusNode,
-                                            keyboardType:
-                                                const TextInputType.numberWithOptions(
-                                                  decimal: true,
-                                                ),
-                                            decoration: showSellOverlay
-                                                ? baseDecoration.copyWith(
-                                                    contentPadding:
-                                                        const EdgeInsets.fromLTRB(
-                                                          12,
-                                                          8,
-                                                          64,
-                                                          14,
-                                                        ),
-                                                  )
-                                                : baseDecoration,
+                                          suffixIcon: const Icon(
+                                            Icons.expand_more_rounded,
                                           ),
                                         ),
-                                        if (showSellOverlay)
-                                          Positioned(
-                                            right: 12,
-                                            bottom: 6,
-                                            child: IgnorePointer(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.end,
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Text(
-                                                    '1× ${_formatPriceValue(_sellUnitPrice!)}',
-                                                    style: theme
-                                                        .textTheme
-                                                        .labelSmall
-                                                        ?.copyWith(
-                                                          color: colorScheme
-                                                              .onSurfaceVariant,
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                          height: 1.0,
-                                                        ),
-                                                  ),
-                                                  Text(
-                                                    'Total ${_formatPriceValue(_currentSellTotal())}',
-                                                    style: theme
-                                                        .textTheme
-                                                        .labelSmall
-                                                        ?.copyWith(
-                                                          color: colorScheme
-                                                              .onSurfaceVariant,
-                                                          fontWeight:
-                                                              FontWeight.w800,
-                                                          height: 1.0,
-                                                        ),
-                                                  ),
-                                                ],
-                                              ),
+                                    isEmpty: isEmpty,
+                                    child: Text(
+                                      isEmpty ? hint : value,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodyLarge
+                                          ?.copyWith(
+                                            fontWeight: isEmpty
+                                                ? FontWeight.w600
+                                                : FontWeight.w700,
+                                            color: isEmpty
+                                                ? colorScheme.onSurfaceVariant
+                                                : null,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            menuChildren: [
+                              SizedBox(
+                                width: fieldWidth,
+                                height: 320,
+                                child: Column(
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        8,
+                                        8,
+                                        8,
+                                        4,
+                                      ),
+                                      child: TextField(
+                                        autofocus: false,
+                                        decoration: InputDecoration(
+                                          isDense: true,
+                                          prefixIcon: const Icon(
+                                            Icons.search_rounded,
+                                          ),
+                                          hintText: 'Search $label',
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
                                             ),
                                           ),
-                                      ],
-                                    );
-                                  },
+                                        ),
+                                        onChanged: onSearchChanged,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Expanded(
+                                      child: ListView(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          8,
+                                          4,
+                                          8,
+                                          8,
+                                        ),
+                                        children: [
+                                          ...options
+                                              .where((o) {
+                                                final q = searchQuery
+                                                    .trim()
+                                                    .toLowerCase();
+                                                if (q.isEmpty) return true;
+                                                return o.toLowerCase().contains(
+                                                  q,
+                                                );
+                                              })
+                                              .map((o) {
+                                                final isSelected =
+                                                    (value ?? '') == o;
+                                                return MenuItemButton(
+                                                  leadingIcon: isSelected
+                                                      ? const Icon(
+                                                          Icons.check_rounded,
+                                                        )
+                                                      : const SizedBox(
+                                                          width: 24,
+                                                          height: 24,
+                                                        ),
+                                                  onPressed: () {
+                                                    onSelected(o);
+                                                    menuController.close();
+                                                  },
+                                                  child: Text(
+                                                    o,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                );
+                                              })
+                                              .toList(growable: false),
+                                          const SizedBox(height: 8),
+                                          Divider(
+                                            height: 1,
+                                            color: colorScheme.outlineVariant,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          dottedAddField(
+                                            controller: addController,
+                                            hint: addHint,
+                                            onAdd: () async {
+                                              final before = value;
+                                              await onAdd();
+                                              if (!mounted) return;
+                                              final after = selectionGetter();
+                                              final changed =
+                                                  (after != null &&
+                                                  after.trim().isNotEmpty &&
+                                                  after != before);
+                                              if (changed) {
+                                                menuController.close();
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Wrap(
+                            spacing: gap,
+                            runSpacing: 10,
+                            children: [
+                              menuDropdown(
+                                label: 'Size',
+                                icon: Icons.straighten_outlined,
+                                hint: 'Size',
+                                addHint: 'Add new size',
+                                addController: _draftRow.sizeController,
+                                onAdd: _addNewSizeFromField,
+                                options: [
+                                  ...customSizes,
+                                  ..._sizeOptionsDefault,
+                                ],
+                                value: _draftRow.safeSizeSelection(
+                                  _sizeOptions,
+                                ),
+                                menuController: _sizeMenuController,
+                                selectionGetter: () => _draftRow.sizeSelection,
+                                searchQuery: _sizeSearchQuery,
+                                onSearchChanged: (q) {
+                                  setState(() => _sizeSearchQuery = q);
+                                },
+                                onSelected: (v) {
+                                  setState(() {
+                                    _draftRow.sizeSelection = v;
+                                  });
+                                },
+                              ),
+                              menuDropdown(
+                                label: 'Colour',
+                                icon: Icons.palette_outlined,
+                                hint: 'Colour',
+                                addHint: 'Add new colour',
+                                addController: _draftRow.colourController,
+                                onAdd: _addNewColourFromField,
+                                options: [
+                                  ...customColours,
+                                  ..._colourOptionsDefault,
+                                ],
+                                value: _draftRow.safeColourSelection(
+                                  _colourOptions,
+                                ),
+                                menuController: _colourMenuController,
+                                selectionGetter: () =>
+                                    _draftRow.colourSelection,
+                                searchQuery: _colourSearchQuery,
+                                onSearchChanged: (q) {
+                                  setState(() => _colourSearchQuery = q);
+                                },
+                                onSelected: (v) {
+                                  setState(() {
+                                    _draftRow.colourSelection = v;
+                                  });
+                                },
+                              ),
+                              gridField(
+                                label: 'Pieces',
+                                child: piecesStepper(),
+                              ),
+                              gridField(
+                                label: 'Sell Price',
+                                child: SizedBox(
+                                  height: gridHeight,
+                                  child: Builder(
+                                    builder: (context) {
+                                      final showSellOverlay =
+                                          _draftRow.qty > 1 &&
+                                          _sellUnitPrice != null;
+
+                                      final baseDecoration =
+                                          gridDecoration(
+                                            icon: Icons.currency_rupee_rounded,
+                                            hint: '0',
+                                          ).copyWith(
+                                            isDense: true,
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 12,
+                                                ),
+                                          );
+
+                                      return Stack(
+                                        children: [
+                                          Positioned.fill(
+                                            child: TextFormField(
+                                              controller:
+                                                  _draftRow.sellController,
+                                              focusNode: _sellFocusNode,
+                                              keyboardType:
+                                                  const TextInputType.numberWithOptions(
+                                                    decimal: true,
+                                                  ),
+                                              decoration: showSellOverlay
+                                                  ? baseDecoration.copyWith(
+                                                      contentPadding:
+                                                          const EdgeInsets.fromLTRB(
+                                                            12,
+                                                            8,
+                                                            64,
+                                                            14,
+                                                          ),
+                                                    )
+                                                  : baseDecoration,
+                                            ),
+                                          ),
+                                          if (showSellOverlay)
+                                            Positioned(
+                                              right: 12,
+                                              bottom: 6,
+                                              child: IgnorePointer(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.end,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      '1× ${_formatPriceValue(_sellUnitPrice!)}',
+                                                      style: theme
+                                                          .textTheme
+                                                          .labelSmall
+                                                          ?.copyWith(
+                                                            color: colorScheme
+                                                                .onSurfaceVariant,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            height: 1.0,
+                                                          ),
+                                                    ),
+                                                    Text(
+                                                      'Total ${_formatPriceValue(_currentSellTotal())}',
+                                                      style: theme
+                                                          .textTheme
+                                                          .labelSmall
+                                                          ?.copyWith(
+                                                            color: colorScheme
+                                                                .onSurfaceVariant,
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                            height: 1.0,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                await _addItemToTable();
+                              },
+                              icon: Icon(
+                                _editingIndex == null
+                                    ? Icons.add_rounded
+                                    : Icons.check_rounded,
+                              ),
+                              label: Text(
+                                _editingIndex == null
+                                    ? 'Add Item'
+                                    : 'Update Item',
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  if (_entries.isEmpty)
+                    Material(
+                      color: colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 16,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.playlist_add_outlined,
+                              color: colorScheme.primary.withAlpha(140),
+                              size: 28,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'No items added yet',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              await _addItemToTable();
-                            },
-                            icon: Icon(
-                              _editingIndex == null
-                                  ? Icons.add_rounded
-                                  : Icons.check_rounded,
-                            ),
-                            label: Text(
-                              _editingIndex == null
-                                  ? 'Add Item'
-                                  : 'Update Item',
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                if (_entries.isEmpty)
-                  Material(
-                    color: colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(16),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 16,
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.playlist_add_outlined,
-                            color: colorScheme.primary.withAlpha(140),
-                            size: 28,
+                    )
+                  else
+                    ...List<Widget>.generate(_entries.length, (i) {
+                      final e = _entries[i];
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: i == _entries.length - 1 ? 0 : 8,
+                        ),
+                        child: Card(
+                          margin: EdgeInsets.zero,
+                          elevation: 0,
+                          color: colorScheme.surfaceContainerHighest,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(color: colorScheme.outlineVariant),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'No items added yet',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => _startEditEntry(i),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${e.size} • ${e.colour}',
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Pieces: ${e.qty} • Price: ₹${(e.sellUnit * e.qty).toStringAsFixed(0)}',
+                                          style: theme.textTheme.labelMedium
+                                              ?.copyWith(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Delete',
+                                    onPressed: () => _removeEntryAt(i),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: 44,
+                                      height: 44,
+                                    ),
+                                    icon: const Icon(Icons.delete_outline),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  ...List<Widget>.generate(_entries.length, (i) {
-                    final e = _entries[i];
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        bottom: i == _entries.length - 1 ? 0 : 8,
-                      ),
-                      child: Card(
-                        margin: EdgeInsets.zero,
-                        elevation: 0,
-                        color: colorScheme.surfaceContainerHighest,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: BorderSide(color: colorScheme.outlineVariant),
                         ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () => _startEditEntry(i),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${e.size} • ${e.colour}',
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Pieces: ${e.qty} • Price: ₹${(e.sellUnit * e.qty).toStringAsFixed(0)}',
-                                        style: theme.textTheme.labelMedium
-                                            ?.copyWith(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: 'Delete',
-                                  onPressed: () => _removeEntryAt(i),
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 44,
-                                    height: 44,
-                                  ),
-                                  icon: const Icon(Icons.delete_outline),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-              ],
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            boxShadow: [
-              BoxShadow(
-                color: colorScheme.shadow.withOpacity(0.08),
-                blurRadius: 16,
-                offset: const Offset(0, -6),
+                      );
+                    }),
+                ],
               ),
             ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Row(
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _isGeneratingBarcode ? null : _submit,
-                    style: FilledButton.styleFrom(
-                      shape: const StadiumBorder(),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    icon: widget.enableBarcodeGeneration
-                        ? (_isGeneratingBarcode
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.qr_code_2_rounded))
-                        : const Icon(Icons.checklist_rounded),
-                    label: Text(
-                      widget.enableBarcodeGeneration
-                          ? (_isGeneratingBarcode
-                                ? 'Generating…'
-                                : 'Generate Barcode')
-                          : 'Add Items',
-                    ),
-                  ),
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withOpacity(0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, -6),
                 ),
               ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _isGeneratingBarcode ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        shape: const StadiumBorder(),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      icon: widget.enableBarcodeGeneration
+                          ? (_isGeneratingBarcode
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.qr_code_2_rounded))
+                          : const Icon(Icons.checklist_rounded),
+                      label: Text(
+                        widget.enableBarcodeGeneration
+                            ? (_isGeneratingBarcode
+                                  ? 'Generating…'
+                                  : 'Generate Barcode')
+                            : 'Add Items',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

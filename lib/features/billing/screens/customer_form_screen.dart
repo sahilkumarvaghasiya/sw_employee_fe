@@ -51,6 +51,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     autoStart: false,
   );
 
+  Timer? _phoneLookupDebounce;
+  int _phoneLookupRequestId = 0;
+  String? _lastAutoFilledPhone;
+  String? _lastAutoFilledName;
+
   String? _lastBarcode;
   DateTime? _lastBarcodeAt;
   bool _handlingBarcode = false;
@@ -58,7 +63,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   final BillingService _billingService = BillingService();
 
   @override
+  void initState() {
+    super.initState();
+    _phoneController.addListener(_onPhoneChanged);
+  }
+
+  @override
   void dispose() {
+    _phoneLookupDebounce?.cancel();
+    _phoneController.removeListener(_onPhoneChanged);
     _nameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
@@ -77,6 +90,77 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
+  String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
+
+  void _onPhoneChanged() {
+    final phone = _digitsOnly(_phoneController.text);
+
+    if (phone.isEmpty) {
+      _phoneLookupDebounce?.cancel();
+      _lastAutoFilledPhone = null;
+      _lastAutoFilledName = null;
+      return;
+    }
+
+    if (_lastAutoFilledPhone != null && _lastAutoFilledPhone != phone) {
+      if (_nameController.text.trim() == _lastAutoFilledName) {
+        _nameController.clear();
+      }
+      _lastAutoFilledName = null;
+    }
+
+    if (phone.length < 8) return;
+
+    _phoneLookupDebounce?.cancel();
+    _phoneLookupDebounce = Timer(
+      const Duration(milliseconds: 450),
+      () => unawaited(_lookupCustomerByPhone(phone)),
+    );
+  }
+
+  Future<void> _lookupCustomerByPhone(String phone) async {
+    final normalized = _digitsOnly(phone);
+    if (normalized.length < 8) return;
+
+    final requestId = ++_phoneLookupRequestId;
+
+    try {
+      final customer = await _billingService.fetchCustomerByPhone(normalized);
+      if (!mounted || requestId != _phoneLookupRequestId || customer == null) {
+        return;
+      }
+
+      final currentPhone = _digitsOnly(_phoneController.text);
+      if (currentPhone != normalized) return;
+
+      final fetchedName = customer.name.trim();
+      if (fetchedName.isNotEmpty) {
+        final shouldAutofillName =
+            _nameController.text.trim().isEmpty ||
+            _nameController.text.trim() == _lastAutoFilledName ||
+            _lastAutoFilledPhone != normalized;
+        if (shouldAutofillName) {
+          _nameController.text = fetchedName;
+          _nameController.selection = TextSelection.collapsed(
+            offset: fetchedName.length,
+          );
+          _lastAutoFilledName = fetchedName;
+          _lastAutoFilledPhone = normalized;
+        }
+      }
+
+      final fetchedAddress = customer.address?.trim() ?? '';
+      if (fetchedAddress.isNotEmpty && _addressController.text.trim().isEmpty) {
+        _addressController.text = fetchedAddress;
+        _addressController.selection = TextSelection.collapsed(
+          offset: fetchedAddress.length,
+        );
+      }
+    } catch (_) {
+      // Ignore lookup failures while the user is typing.
+    }
+  }
+
   Future<void> _handleBarcode(String barcode) async {
     if (_handlingBarcode) return;
     _handlingBarcode = true;
@@ -87,7 +171,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
       if (products.isEmpty) {
         _showSnack('No product found for barcode $barcode');
-        await _addUnknownProduct();
         return;
       }
 
@@ -98,18 +181,33 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         return;
       }
 
+      final shouldRestartScanner = _scanMode;
+      if (shouldRestartScanner) {
+        await _stopScanner();
+      }
+
       final selected = await _pickProductFromMatches(
         barcode: barcode,
         products: products,
       );
-      if (!mounted || selected == null) return;
+      if (!mounted) return;
+
+      if (selected == null) {
+        if (shouldRestartScanner && mounted) {
+          await _startScanner();
+        }
+        return;
+      }
 
       context.read<BillingProvider>().addOrIncrementProduct(selected);
       _showSnack('${selected.name} added');
+
+      if (shouldRestartScanner && mounted) {
+        await _startScanner();
+      }
     } catch (e) {
       if (!mounted) return;
-      _showSnack('Barcode lookup failed. You can add the product manually.');
-      await _addUnknownProduct();
+      _showSnack('Barcode lookup failed. Please try again.');
     } finally {
       await Future<void>.delayed(const Duration(milliseconds: 400));
       _handlingBarcode = false;
@@ -122,74 +220,164 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   }) {
     return showModalBottomSheet<BillingProduct>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       builder: (context) {
         final theme = Theme.of(context);
         final colorScheme = theme.colorScheme;
+        final searchController = TextEditingController();
+        BillingProduct? selectedProduct;
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
+        String subtitleFor(BillingProduct product) {
+          final size = product.size?.trim() ?? '';
+          if (size.isEmpty) return 'Price ${_money(product.unitPrice)}';
+          return 'Size $size • Price ${_money(product.unitPrice)}';
+        }
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final query = searchController.text.trim().toLowerCase();
+            final filteredProducts = products
+                .where((product) {
+                  if (query.isEmpty) return true;
+                  return product.name.toLowerCase().contains(query) ||
+                      (product.size?.toLowerCase().contains(query) ?? false);
+                })
+                .toList(growable: false);
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  16 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(
-                      Icons.inventory_2_outlined,
-                      color: colorScheme.primary,
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Select product',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Close',
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Select product',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
+                    const SizedBox(height: 4),
+                    Text(
+                      'Barcode: $barcode',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: searchController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: 'Search product or size',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHighest,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: filteredProducts.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final p = filteredProducts[index];
+                          final isSelected = selectedProduct?.id == p.id;
+                          return Card(
+                            elevation: 0,
+                            color: isSelected
+                                ? colorScheme.primary.withOpacity(0.10)
+                                : colorScheme.surfaceContainerHigh,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(
+                                color: isSelected
+                                    ? colorScheme.primary
+                                    : colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                p.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(subtitleFor(p)),
+                              leading: Icon(
+                                isSelected
+                                    ? Icons.check_circle_rounded
+                                    : Icons.inventory_2_outlined,
+                                color: isSelected
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
+                              ),
+                              trailing: isSelected
+                                  ? Icon(
+                                      Icons.done_rounded,
+                                      color: colorScheme.primary,
+                                    )
+                                  : const Icon(Icons.chevron_right_rounded),
+                              onTap: () {
+                                setState(() {
+                                  selectedProduct = p;
+                                });
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: selectedProduct == null
+                            ? null
+                            : () => Navigator.of(context).pop(selectedProduct),
+                        icon: const Icon(Icons.done_rounded),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text('Done'),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Barcode: $barcode',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Flexible(
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: products.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final p = products[index];
-                      return Card(
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: colorScheme.outlineVariant),
-                        ),
-                        child: ListTile(
-                          title: Text(
-                            p.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text('Price ${_money(p.unitPrice)}'),
-                          trailing: const Icon(Icons.chevron_right_rounded),
-                          onTap: () => Navigator.of(context).pop(p),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -319,24 +507,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
     provider.setManualFinalAmount(parsed);
     return true;
-  }
-
-  Future<void> _addUnknownProduct() async {
-    final result = await showModalBottomSheet<BillingManualProductResult>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => const BillingManualProductSheet(),
-    );
-
-    if (!mounted) return;
-    if (result == null) return;
-
-    final item = context.read<BillingProvider>().addManualProduct(
-      name: result.name,
-      unitPrice: result.price,
-    );
-    _showSnack('${item.productName} added');
   }
 
   Future<void> _confirmCashAndGenerateBill() async {
@@ -524,15 +694,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                       final done = await _confirmPaymentDone(
                                         methodLabel: title,
                                       );
-                                      if (!done || !this.context.mounted) {
+                                      if (!done || !context.mounted) {
                                         return;
                                       }
                                       provider.setPaymentMethod(method);
                                       provider.setMarkPaid(true);
                                       Navigator.of(context).pop();
-                                      Navigator.of(this.context).push(
-                                        BillPreviewScreen.route(this.context),
-                                      );
+                                      Navigator.of(
+                                        context,
+                                      ).push(BillPreviewScreen.route(context));
                                     }
                                   : null,
                               icon: const Icon(Icons.check_circle_outline),
@@ -661,7 +831,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                   onTap: () {
                     Navigator.of(context).pop();
                     showDialog<void>(
-                      context: this.context,
+                      context: context,
                       builder: (context) => AlertDialog(
                         title: const Text('Coming soon'),
                         content: const Text(
@@ -704,6 +874,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   Future<void> _start() async {
     final form = _formKey.currentState;
     if (form == null) return;
+
+    if (_digitsOnly(_phoneController.text).isNotEmpty) {
+      await _lookupCustomerByPhone(_phoneController.text);
+    }
 
     if (!form.validate()) {
       _showSnack('Please fix highlighted fields.');
@@ -1115,17 +1289,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                                         : 'Start scanning',
                                                   ),
                                                 ),
-                                                const SizedBox(height: 6),
-                                                TextButton(
-                                                  onPressed: () {
-                                                    unawaited(
-                                                      _addUnknownProduct(),
-                                                    );
-                                                  },
-                                                  child: const Text(
-                                                    'Add product manually',
-                                                  ),
-                                                ),
                                               ],
                                             ),
                                           ),
@@ -1221,13 +1384,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             itemBuilder: (context, index) {
                               final item = provider.items[index];
                               return ProductItemWidget(
+                                key: ValueKey(item.id),
                                 item: item,
-                                onPriceChanged: (v) {
+                                onPriceChanged: (double? v) {
                                   context
                                       .read<BillingProvider>()
                                       .updateItemPrice(item.id, v);
                                 },
-                                onDiscountChanged: (v) {
+                                onDiscountChanged: (double? v) {
                                   context
                                       .read<BillingProvider>()
                                       .updateItemDiscountPercent(item.id, v);
@@ -1355,121 +1519,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               ),
                             ),
                             const SizedBox(height: 12),
-                            RawAutocomplete<BillingCustomer>(
-                              textEditingController: _nameController,
-                              focusNode: _nameFocusNode,
-                              displayStringForOption: (c) => c.name,
-                              optionsBuilder: (textEditingValue) {
-                                final q = textEditingValue.text;
-                                if (q.trim().isEmpty) {
-                                  return const Iterable<
-                                    BillingCustomer
-                                  >.empty();
-                                }
-                                return billingProvider.searchCustomers(q);
-                              },
-                              onSelected: (customer) {
-                                _nameController.text = customer.name;
-                                _nameController.selection =
-                                    TextSelection.collapsed(
-                                      offset: customer.name.length,
-                                    );
-                                _phoneController.text = customer.phone;
-                                _phoneController.selection =
-                                    TextSelection.collapsed(
-                                      offset: customer.phone.length,
-                                    );
-                                _addressController.text =
-                                    customer.address ?? '';
-                                _addressController.selection =
-                                    TextSelection.collapsed(
-                                      offset: _addressController.text.length,
-                                    );
-
-                                FocusScope.of(
-                                  context,
-                                ).requestFocus(_phoneFocusNode);
-                              },
-                              fieldViewBuilder:
-                                  (
-                                    context,
-                                    textEditingController,
-                                    focusNode,
-                                    onFieldSubmitted,
-                                  ) {
-                                    return TextFormField(
-                                      controller: textEditingController,
-                                      focusNode: focusNode,
-                                      textInputAction: TextInputAction.next,
-                                      decoration: fieldDecoration(
-                                        label: 'Customer name',
-                                        icon: Icons.person_outline,
-                                        helper:
-                                            'Start typing to search existing customers.',
-                                      ),
-                                      validator: (v) => _validateRequired(
-                                        v,
-                                        label: 'Customer name',
-                                      ),
-                                      onFieldSubmitted: (_) {
-                                        onFieldSubmitted();
-                                        FocusScope.of(
-                                          context,
-                                        ).requestFocus(_phoneFocusNode);
-                                      },
-                                    );
-                                  },
-                              optionsViewBuilder:
-                                  (context, onSelected, options) {
-                                    return Align(
-                                      alignment: Alignment.topLeft,
-                                      child: Material(
-                                        elevation: 6,
-                                        borderRadius: BorderRadius.circular(16),
-                                        clipBehavior: Clip.antiAlias,
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 560,
-                                            maxHeight: 260,
-                                          ),
-                                          child: ListView.separated(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 6,
-                                            ),
-                                            shrinkWrap: true,
-                                            itemCount: options.length,
-                                            separatorBuilder: (_, _) =>
-                                                const Divider(height: 1),
-                                            itemBuilder: (context, index) {
-                                              final c = options.elementAt(
-                                                index,
-                                              );
-                                              return ListTile(
-                                                leading: const Icon(
-                                                  Icons.person_outline,
-                                                ),
-                                                title: Text(
-                                                  c.name,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                                subtitle: Text(
-                                                  c.phone,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                                onTap: () => onSelected(c),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                            ),
-                            const SizedBox(height: 12),
                             TextFormField(
                               controller: _phoneController,
                               focusNode: _phoneFocusNode,
@@ -1478,10 +1527,25 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               decoration: fieldDecoration(
                                 label: 'Phone number',
                                 icon: Icons.phone_outlined,
-                                helper:
-                                    'Used for bill history / WhatsApp invoice (later).',
                               ),
                               validator: _validatePhone,
+                              onFieldSubmitted: (_) {
+                                FocusScope.of(
+                                  context,
+                                ).requestFocus(_nameFocusNode);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _nameController,
+                              focusNode: _nameFocusNode,
+                              textInputAction: TextInputAction.next,
+                              decoration: fieldDecoration(
+                                label: 'Customer name',
+                                icon: Icons.person_outline,
+                              ),
+                              validator: (v) =>
+                                  _validateRequired(v, label: 'Customer name'),
                               onFieldSubmitted: (_) {
                                 FocusScope.of(
                                   context,
@@ -1563,7 +1627,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                     ),
                                   ),
                                   title: const Text('Enter customer'),
-                                  subtitle: const Text('Name and phone number'),
+                                  subtitle: const Text(
+                                    'Phone number, name and address',
+                                  ),
                                 ),
                                 ListTile(
                                   dense: true,

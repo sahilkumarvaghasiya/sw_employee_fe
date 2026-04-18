@@ -20,12 +20,14 @@ class BillingProduct {
     required this.name,
     required this.unitPrice,
     this.barcode,
+    this.size,
   });
 
   final String id;
   final String name;
   final double unitPrice;
   final String? barcode;
+  final String? size;
 }
 
 @immutable
@@ -34,15 +36,19 @@ class BillingLineItem {
     required this.id,
     required this.productName,
     required this.quantity,
+    required this.originalUnitPrice,
     required this.unitPrice,
     required this.discountPercent,
+    this.size,
   });
 
   final String id;
   final String productName;
   final int quantity;
+  final double originalUnitPrice;
   final double unitPrice;
   final double discountPercent;
+  final String? size;
 
   double get lineSubtotal => unitPrice * quantity;
 
@@ -56,15 +62,19 @@ class BillingLineItem {
     String? id,
     String? productName,
     int? quantity,
+    double? originalUnitPrice,
     double? unitPrice,
     double? discountPercent,
+    String? size,
   }) {
     return BillingLineItem(
       id: id ?? this.id,
       productName: productName ?? this.productName,
       quantity: quantity ?? this.quantity,
+      originalUnitPrice: originalUnitPrice ?? this.originalUnitPrice,
       unitPrice: unitPrice ?? this.unitPrice,
       discountPercent: discountPercent ?? this.discountPercent,
+      size: size ?? this.size,
     );
   }
 }

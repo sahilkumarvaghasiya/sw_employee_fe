@@ -114,8 +114,10 @@ class BillingProvider extends ChangeNotifier {
         id: product.id,
         productName: product.name,
         quantity: 1,
+        originalUnitPrice: product.unitPrice,
         unitPrice: product.unitPrice,
         discountPercent: 0,
+        size: product.size,
       ),
     );
     _manualFinalAmount = null;
@@ -134,6 +136,7 @@ class BillingProvider extends ChangeNotifier {
         id: id,
         productName: name,
         quantity: 1,
+        originalUnitPrice: unitPrice,
         unitPrice: unitPrice,
         discountPercent: 0,
       ),
@@ -143,19 +146,21 @@ class BillingProvider extends ChangeNotifier {
     return _items.first;
   }
 
-  void updateItemPrice(String id, double unitPrice) {
+  void updateItemPrice(String id, double? unitPrice) {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
-    _items[index] = _items[index].copyWith(unitPrice: unitPrice);
+    _items[index] = _items[index].copyWith(
+      unitPrice: unitPrice ?? _items[index].originalUnitPrice,
+    );
     _manualFinalAmount = null;
     notifyListeners();
   }
 
-  void updateItemDiscountPercent(String id, double percent) {
+  void updateItemDiscountPercent(String id, double? percent) {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
     _items[index] = _items[index].copyWith(
-      discountPercent: percent.clamp(0, 100),
+      discountPercent: percent == null ? 0 : percent.clamp(0, 100),
     );
     _manualFinalAmount = null;
     notifyListeners();
