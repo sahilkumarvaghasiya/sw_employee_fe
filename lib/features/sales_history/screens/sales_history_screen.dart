@@ -5,6 +5,20 @@ import '../../billing/models/billing_models.dart';
 import '../models/sales_bill.dart';
 import '../providers/sales_history_provider.dart';
 
+abstract class _DateRangeDialogResult {
+  const _DateRangeDialogResult();
+}
+
+class _DateRangeApplied extends _DateRangeDialogResult {
+  const _DateRangeApplied(this.range);
+
+  final DateTimeRange range;
+}
+
+class _DateRangeCleared extends _DateRangeDialogResult {
+  const _DateRangeCleared();
+}
+
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
 
@@ -44,7 +58,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   }
 
   String _dateLabel(BuildContext context, DateTimeRange? range) {
-    if (range == null) return 'Any date';
+    if (range == null) return 'Select date range';
     return '${_ddMMyyyy(range.start)} – ${_ddMMyyyy(range.end)}';
   }
 
@@ -81,23 +95,121 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
 
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
+    final firstDate = DateTime(now.year - 2, 1, 1);
+    final lastDate = DateTime(now.year, now.month, now.day);
 
-    final today = DateTime(now.year, now.month, now.day);
-    DateTimeRange? initialRange = _dateRange;
-    if (initialRange != null && initialRange.end.isAfter(today)) {
-      initialRange = DateTimeRange(start: initialRange.start, end: today);
+    DateTime? start = _dateRange?.start;
+    DateTime? end = _dateRange?.end;
+
+    DateTime clamp(DateTime d) {
+      if (d.isBefore(firstDate)) return firstDate;
+      if (d.isAfter(lastDate)) return lastDate;
+      return d;
     }
 
-    final picked = await showDateRangePicker(
+    if (start != null) start = clamp(start);
+    if (end != null) end = clamp(end);
+
+    if (start == null || end == null) {
+      start = clamp(now.subtract(const Duration(days: 7)));
+      end = clamp(now);
+    }
+
+    if (end.isBefore(start)) {
+      end = start;
+    }
+
+    final picked = await showDialog<_DateRangeDialogResult?>(
       context: context,
-      firstDate: DateTime(now.year - 2),
-      lastDate: today,
-      initialDateRange: initialRange,
+      builder: (dialogContext) {
+        String fmt(DateTime d) => _ddMMyyyy(d);
+
+        Future<void> pickStart() async {
+          final next = await showDatePicker(
+            context: dialogContext,
+            initialDate: start ?? lastDate,
+            firstDate: firstDate,
+            lastDate: lastDate,
+          );
+          if (next == null) return;
+          start = clamp(next);
+          if (end != null && end!.isBefore(start!)) {
+            end = start;
+          }
+          (dialogContext as Element).markNeedsBuild();
+        }
+
+        Future<void> pickEnd() async {
+          final next = await showDatePicker(
+            context: dialogContext,
+            initialDate: end ?? start ?? lastDate,
+            firstDate: firstDate,
+            lastDate: lastDate,
+          );
+          if (next == null) return;
+          end = clamp(next);
+          if (start != null && end!.isBefore(start!)) {
+            start = end;
+          }
+          (dialogContext as Element).markNeedsBuild();
+        }
+
+        return AlertDialog(
+          title: const Text('Date'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.calendar_today_outlined),
+                title: const Text('Start date'),
+                subtitle: Text(fmt(start!)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: pickStart,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event_outlined),
+                title: const Text('End date'),
+                subtitle: Text(fmt(end!)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: pickEnd,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(null),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(const _DateRangeCleared()),
+              child: const Text('Clear'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(
+                  _DateRangeApplied(DateTimeRange(start: start!, end: end!)),
+                );
+              },
+              child: const Text('Apply'),
+            ),
+          ],
+        );
+      },
     );
 
-    if (!mounted) return;
-    if (picked == null) return;
-    setState(() => _dateRange = picked);
+    if (!mounted || picked == null) return;
+
+    if (picked is _DateRangeCleared) {
+      setState(() => _dateRange = null);
+      return;
+    }
+
+    if (picked is _DateRangeApplied) {
+      setState(() => _dateRange = picked.range);
+    }
   }
 
   void _clearFilters() {
@@ -334,6 +446,11 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                   onPressed: hasAnyFilter ? _clearFilters : null,
                   icon: const Icon(Icons.filter_alt_off_outlined),
                 ),
+                IconButton(
+                  tooltip: 'Filters',
+                  onPressed: _openFiltersSheet,
+                  icon: const Icon(Icons.tune),
+                ),
               ],
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(1),
@@ -346,35 +463,21 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                child: Row(
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
                   children: [
-                    Expanded(
-                      child: Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          ActionChip(
-                            avatar: const Icon(Icons.date_range_outlined),
-                            label: Text(_dateLabel(context, _dateRange)),
-                            onPressed: _pickDateRange,
-                          ),
-                          if (_maxTotalController.text.trim().isNotEmpty)
-                            ActionChip(
-                              avatar: const Icon(Icons.currency_rupee_outlined),
-                              label: Text(
-                                '≤ ₹${_maxTotalController.text.trim()}',
-                              ),
-                              onPressed: _openFiltersSheet,
-                            ),
-                        ],
+                    ActionChip(
+                      avatar: const Icon(Icons.date_range_outlined),
+                      label: Text(_dateLabel(context, _dateRange)),
+                      onPressed: _pickDateRange,
+                    ),
+                    if (_maxTotalController.text.trim().isNotEmpty)
+                      ActionChip(
+                        avatar: const Icon(Icons.currency_rupee_outlined),
+                        label: Text('≤ ₹${_maxTotalController.text.trim()}'),
+                        onPressed: _openFiltersSheet,
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    FilledButton.tonalIcon(
-                      onPressed: _openFiltersSheet,
-                      icon: const Icon(Icons.tune),
-                      label: const Text('Filters'),
-                    ),
                   ],
                 ),
               ),

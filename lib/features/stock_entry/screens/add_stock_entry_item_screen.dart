@@ -906,6 +906,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       required TextEditingController controller,
       required String hint,
       required VoidCallback onAdd,
+      ValueChanged<String>? onChanged,
     }) {
       return SizedBox(
         height: 52,
@@ -922,6 +923,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
             child: TextField(
               controller: controller,
               textInputAction: TextInputAction.done,
+              onChanged: onChanged,
               onSubmitted: (_) => onAdd(),
               decoration: InputDecoration(
                 isDense: true,
@@ -1128,7 +1130,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       ? 'Select or search brand'
                                       : selected == _customOption
                                       ? _brandController.text.trim()
-                                      : selected!,
+                                      : selected,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodyLarge?.copyWith(
                                     fontWeight: isEmpty
@@ -1228,6 +1230,16 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       dottedAddField(
                                         controller: _brandController,
                                         hint: 'Add brand',
+                                        onChanged: (raw) {
+                                          setState(() {
+                                            final text = raw.trim();
+                                            if (text.isEmpty) {
+                                              _brandSelection = null;
+                                              return;
+                                            }
+                                            _brandSelection = _customOption;
+                                          });
+                                        },
                                         onAdd: () {
                                           final ok = _setCustomBrandFromField();
                                           if (!ok) return;
@@ -1401,6 +1413,15 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                             dottedAddField(
                                               controller: _itemTypeController,
                                               hint: 'Add item type',
+                                              onChanged: (raw) {
+                                                setState(() {
+                                                  final text = raw.trim();
+                                                  _itemType = text.isEmpty
+                                                      ? null
+                                                      : text;
+                                                });
+                                                field.didChange(_itemType);
+                                              },
                                               onAdd: () {
                                                 final ok =
                                                     _setCustomItemTypeFromField();
@@ -1612,6 +1633,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         required String hint,
                         required String addHint,
                         required TextEditingController addController,
+                        required ValueChanged<String> onAddChanged,
                         required Future<void> Function() onAdd,
                         required List<String> options,
                         required String? value,
@@ -1756,8 +1778,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                                         TextOverflow.ellipsis,
                                                   ),
                                                 );
-                                              })
-                                              .toList(growable: false),
+                                              }),
                                           const SizedBox(height: 8),
                                           Divider(
                                             height: 1,
@@ -1767,6 +1788,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                           dottedAddField(
                                             controller: addController,
                                             hint: addHint,
+                                            onChanged: onAddChanged,
                                             onAdd: () async {
                                               final before = value;
                                               await onAdd();
@@ -1805,14 +1827,20 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 hint: 'Size',
                                 addHint: 'Add new size',
                                 addController: _draftRow.sizeController,
+                                onAddChanged: (raw) {
+                                  setState(() {
+                                    final text = raw.trim();
+                                    _draftRow.sizeSelection = text.isEmpty
+                                        ? null
+                                        : text;
+                                  });
+                                },
                                 onAdd: _addNewSizeFromField,
                                 options: [
                                   ...customSizes,
                                   ..._sizeOptionsDefault,
                                 ],
-                                value: _draftRow.safeSizeSelection(
-                                  _sizeOptions,
-                                ),
+                                value: _draftRow.resolvedSize,
                                 menuController: _sizeMenuController,
                                 selectionGetter: () => _draftRow.sizeSelection,
                                 searchQuery: _sizeSearchQuery,
@@ -1831,14 +1859,20 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 hint: 'Colour',
                                 addHint: 'Add new colour',
                                 addController: _draftRow.colourController,
+                                onAddChanged: (raw) {
+                                  setState(() {
+                                    final text = raw.trim();
+                                    _draftRow.colourSelection = text.isEmpty
+                                        ? null
+                                        : text;
+                                  });
+                                },
                                 onAdd: _addNewColourFromField,
                                 options: [
                                   ...customColours,
                                   ..._colourOptionsDefault,
                                 ],
-                                value: _draftRow.safeColourSelection(
-                                  _colourOptions,
-                                ),
+                                value: _draftRow.resolvedColour,
                                 menuController: _colourMenuController,
                                 selectionGetter: () =>
                                     _draftRow.colourSelection,

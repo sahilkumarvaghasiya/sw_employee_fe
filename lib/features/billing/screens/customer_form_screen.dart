@@ -230,6 +230,35 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         final colorScheme = theme.colorScheme;
         final searchController = TextEditingController();
         final selectedProductIds = <String>{};
+        List<BillingProduct>? backendSearchProducts;
+        bool isSearching = false;
+        int searchRequestId = 0;
+
+        Future<void> runBackendSearch(String query) async {
+          final q = query.trim();
+          if (q.isEmpty) {
+            setState(() {
+              backendSearchProducts = null;
+              isSearching = false;
+            });
+            return;
+          }
+
+          final int requestId = ++searchRequestId;
+          setState(() => isSearching = true);
+
+          final results = await _billingService.searchProductsForBarcode(
+            barcode: barcode,
+            query: q,
+          );
+
+          if (!context.mounted || requestId != searchRequestId) return;
+
+          setState(() {
+            backendSearchProducts = results;
+            isSearching = false;
+          });
+        }
 
         String subtitleFor(BillingProduct product) {
           final size = product.size?.trim() ?? '';
@@ -246,11 +275,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             final query = searchController.text.trim().toLowerCase();
-            final filteredProducts = products
+            final sourceProducts = backendSearchProducts ?? products;
+            final filteredProducts = sourceProducts
                 .where((product) {
                   if (query.isEmpty) return true;
                   return product.name.toLowerCase().contains(query) ||
-                      (product.size?.toLowerCase().contains(query) ?? false);
+                      (product.size?.toLowerCase().contains(query) ?? false) ||
+                      (product.companyName?.toLowerCase().contains(query) ??
+                          false);
                 })
                 .toList(growable: false);
 
@@ -299,7 +331,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: searchController,
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (value) {
+                        setState(() {});
+                        unawaited(runBackendSearch(value));
+                      },
                       decoration: InputDecoration(
                         isDense: true,
                         hintText: 'Search product or size',
@@ -312,6 +347,25 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                         ),
                       ),
                     ),
+                    if (isSearching) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Searching products...',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     ConstrainedBox(
                       constraints: BoxConstraints(
@@ -443,77 +497,122 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     final controller = TextEditingController(
       text: provider.finalAmount.toStringAsFixed(2),
     );
+    final previewItems = provider.items.take(3).toList();
+    final remainingCount = provider.items.length - previewItems.length;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (dialogContext) {
-        final theme = Theme.of(dialogContext);
-        return AlertDialog(
-          title: const Text('Review bill total'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Items: ${provider.items.length}'),
-              const SizedBox(height: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 120),
-                child: Card(
-                  elevation: 0,
-                  margin: EdgeInsets.zero,
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: provider.items.length,
-                    itemBuilder: (context, index) {
-                      final item = provider.items[index];
-                      return ListTile(
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                        title: Text(
-                          item.productName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: Text('x${item.quantity}'),
-                      );
-                    },
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final colorScheme = theme.colorScheme;
+
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Review bill total',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text('Items: ${provider.items.length}'),
+                  const SizedBox(height: 8),
+                  Card(
+                    elevation: 0,
+                    margin: EdgeInsets.zero,
+                    color: colorScheme.surfaceContainerHigh,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final item in previewItems)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item.productName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text('x${item.quantity}'),
+                                ],
+                              ),
+                            ),
+                          if (remainingCount > 0) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '+$remainingCount more item(s)',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Subtotal: ${_money(provider.subtotal)}'),
+                  const SizedBox(height: 6),
+                  Text('Discount: ${_money(provider.totalDiscount)}'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Final bill amount',
+                      prefixText: '₹',
+                      helperText: 'Editable for this bill only',
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'You can adjust total before payment selection.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () =>
+                              Navigator.of(sheetContext).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => Navigator.of(sheetContext).pop(true),
+                          child: const Text('Confirm'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              Text('Subtotal: ${_money(provider.subtotal)}'),
-              const SizedBox(height: 6),
-              Text('Discount: ${_money(provider.totalDiscount)}'),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Final bill amount',
-                  prefixText: '₹',
-                  helperText: 'Editable for this bill only',
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'You can adjust total before payment selection.',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Confirm'),
-            ),
-          ],
         );
       },
     );
@@ -741,12 +840,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                                       qr.imageUrl,
                                                       width: double.infinity,
                                                       fit: BoxFit.cover,
-                                                      errorBuilder:
-                                                          (
-                                                            _,
-                                                            __,
-                                                            ___,
-                                                          ) => Container(
+                                                      errorBuilder: (_, _, _) =>
+                                                          Container(
                                                             color: colorScheme
                                                                 .surface,
                                                             child: Icon(
@@ -816,7 +911,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                                   height: 180,
                                                   width: double.infinity,
                                                   fit: BoxFit.contain,
-                                                  errorBuilder: (_, __, ___) =>
+                                                  errorBuilder: (_, _, _) =>
                                                       Container(
                                                         height: 180,
                                                         color:
@@ -987,6 +1082,21 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         );
       },
     );
+  }
+
+  Future<void> _onPaymentTap() async {
+    try {
+      final provider = context.read<BillingProvider>();
+      if (provider.items.isEmpty) {
+        _showSnack('Add at least one product before payment.');
+        return;
+      }
+
+      await _showPaymentOptions();
+    } catch (_) {
+      if (!mounted) return;
+      _showSnack('Could not open payment. Please try again.');
+    }
   }
 
   String? _validateRequired(String? value, {required String label}) {
@@ -1900,9 +2010,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                         ),
                         const SizedBox(width: 10),
                         FilledButton.icon(
-                          onPressed: provider.items.isEmpty
-                              ? null
-                              : _showPaymentOptions,
+                          onPressed: _onPaymentTap,
                           icon: const Icon(Icons.payments_outlined),
                           label: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 14),

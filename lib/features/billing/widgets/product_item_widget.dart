@@ -330,12 +330,6 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
         spacing: 8,
         runSpacing: 6,
         children: [
-          if (priceOverridden)
-            _Chip(
-              icon: Icons.sell_outlined,
-              label:
-                  'Price ${_money(widget.item.unitPrice)} (-${_money(widget.item.originalUnitPrice - widget.item.unitPrice)})',
-            ),
           if (discountApplied)
             _Chip(
               icon: Icons.percent_rounded,
@@ -381,13 +375,41 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            widget.item.productName,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
+                          SizedBox(
+                            width: double.infinity,
+                            child: Stack(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 30),
+                                  child: Text(
+                                    widget.item.productName,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 0,
+                                  right: 0,
+                                  child: TextButton(
+                                    onPressed: widget.onRemove,
+                                    style: TextButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 0,
+                                      ),
+                                      minimumSize: const Size(0, 24),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text('Cancel'),
+                                  ),
+                                ),
+                              ],
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                           if (sizeText.isNotEmpty) ...[
                             const SizedBox(height: 6),
@@ -399,41 +421,32 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          tooltip: 'Remove item',
-                          onPressed: widget.onRemove,
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(
-                            width: 32,
-                            height: 32,
-                          ),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          _money(widget.item.lineTotal),
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        if (hasOffer) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            _money(widget.item.lineSubtotal),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              decoration: TextDecoration.lineThrough,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.topRight,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        _money(widget.item.lineTotal),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if (hasOffer) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          _money(widget.item.lineSubtotal),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -453,18 +466,6 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                 if (_showOfferEditor) ...[
                   const SizedBox(height: 12),
                   editorRow(),
-                  if (_mode == _EditMode.price &&
-                      widget.item.unitPrice !=
-                          widget.item.originalUnitPrice) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Original ${_money(widget.item.originalUnitPrice)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
                   if (_mode == _EditMode.discount &&
                       widget.item.discountPercent == 0) ...[
                     const SizedBox(height: 6),

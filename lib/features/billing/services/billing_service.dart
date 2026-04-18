@@ -23,6 +23,8 @@ class BillingService {
   // Flip this to true once the backend endpoint is available.
   static const bool whatsAppApiIntegrated = false;
   static const String _barcodeLookupPath = '/sales/barcode-lookup/';
+  static const String _barcodeLookupSearchPath =
+      '/sales/barcode-lookup/search/';
   static const String _customerLookupPath = '/sales/customer-lookup/';
   static const String _qrConfigsPath = '/sales/payment-configs/qr/';
 
@@ -35,6 +37,11 @@ class BillingService {
         : base;
     final normalizedPath = path.startsWith('/') ? path : '/$path';
     return Uri.parse('$normalizedBase$normalizedPath');
+  }
+
+  static Uri _urlWithQuery(String path, Map<String, String> queryParameters) {
+    final uri = _url(path);
+    return uri.replace(queryParameters: queryParameters);
   }
 
   Future<void> sendWhatsAppInvoice({
@@ -133,6 +140,44 @@ class BillingService {
       isMultiple: isMultiple,
       products: products,
     );
+  }
+
+  Future<List<BillingProduct>?> searchProductsForBarcode({
+    required String barcode,
+    required String query,
+  }) async {
+    final normalizedBarcode = barcode.trim();
+    final normalizedQuery = query.trim();
+
+    if (normalizedBarcode.isEmpty || normalizedQuery.isEmpty) {
+      return const <BillingProduct>[];
+    }
+
+    final uri = _urlWithQuery(_barcodeLookupSearchPath, {
+      'barcode': normalizedBarcode,
+      'q': normalizedQuery,
+    });
+
+    try {
+      final response = await _apiService.get(uri.toString());
+      if (response.statusCode == 404) {
+        // Search endpoint not available yet.
+        return null;
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+
+      final decoded = jsonDecode(response.body);
+      final records = _extractProductRecords(decoded);
+      return records
+          .map(_productFromMap)
+          .whereType<BillingProduct>()
+          .toList(growable: false);
+    } catch (_) {
+      // Backend search is optional for now.
+      return null;
+    }
   }
 
   Future<List<BillingProduct>> fetchProductsByBarcode(String barcode) async {

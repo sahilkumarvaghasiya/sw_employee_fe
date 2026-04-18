@@ -243,7 +243,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'QR (dummy) • ${provider.selectedPaytmQr!.id}',
+                        'QR • ${provider.selectedPaytmQr!.id}',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -312,7 +312,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'QR (dummy) • ${provider.selectedUpiQr!.id}',
+                        'QR • ${provider.selectedUpiQr!.id}',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
+import 'package:flutter/scheduler.dart';
 
 import '../models/stock_entry.dart';
 import '../models/stock_entry_draft_item.dart';
@@ -92,12 +93,38 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     final totalParsed = double.tryParse(totalRaw);
     final total = totalParsed ?? 0.0;
 
-    setState(() {
-      _totalStockValue = total;
-      _paidAmount = paid;
-      _remainingAmount = _totalStockValue - _paidAmount;
-      if (_remainingAmount < 0) _remainingAmount = 0;
-    });
+    void apply() {
+      if (!mounted) return;
+
+      var nextRemaining = total - paid;
+      if (nextRemaining < 0) nextRemaining = 0;
+
+      const epsilon = 0.0001;
+      final unchanged =
+          (_totalStockValue - total).abs() < epsilon &&
+          (_paidAmount - paid).abs() < epsilon &&
+          (_remainingAmount - nextRemaining).abs() < epsilon;
+      if (unchanged) return;
+
+      setState(() {
+        _totalStockValue = total;
+        _paidAmount = paid;
+        _remainingAmount = nextRemaining;
+      });
+    }
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final isInBuildScope =
+        phase == SchedulerPhase.transientCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks ||
+        phase == SchedulerPhase.persistentCallbacks;
+
+    if (isInBuildScope) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => apply());
+      return;
+    }
+
+    apply();
   }
 
   Future<void> _scanBarcode() async {
@@ -159,8 +186,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     setState(() {
       _items.insert(0, item);
-      _syncTotalsFromControllers();
     });
+    _syncTotalsFromControllers();
 
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
