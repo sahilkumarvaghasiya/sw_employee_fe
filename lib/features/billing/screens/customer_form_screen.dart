@@ -701,7 +701,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     return null;
   }
 
-  void _start() {
+  Future<void> _start() async {
     final form = _formKey.currentState;
     if (form == null) return;
 
@@ -728,6 +728,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       _startingScanner = false;
       _showHowBillingWorks = false;
     });
+
+    await _startScanner();
   }
 
   Future<void> _startScanner() async {
