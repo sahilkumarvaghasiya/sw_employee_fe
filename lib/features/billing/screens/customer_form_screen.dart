@@ -92,35 +92,51 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
   String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
 
-  void _onPhoneChanged() {
-    final phone = _digitsOnly(_phoneController.text);
+  String? _normalizeIndianPhone(String value) {
+    var digits = _digitsOnly(value);
+    if (digits.isEmpty) return null;
 
-    if (phone.isEmpty) {
+    if (digits.length == 12 && digits.startsWith('91')) {
+      digits = digits.substring(2);
+    } else if (digits.length == 11 && digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+
+    if (digits.length != 10) return null;
+    return digits;
+  }
+
+  void _onPhoneChanged() {
+    final rawDigits = _digitsOnly(_phoneController.text);
+    final normalizedPhone = _normalizeIndianPhone(_phoneController.text);
+    final identity = normalizedPhone ?? rawDigits;
+
+    if (rawDigits.isEmpty) {
       _phoneLookupDebounce?.cancel();
       _lastAutoFilledPhone = null;
       _lastAutoFilledName = null;
       return;
     }
 
-    if (_lastAutoFilledPhone != null && _lastAutoFilledPhone != phone) {
+    if (_lastAutoFilledPhone != null && _lastAutoFilledPhone != identity) {
       if (_nameController.text.trim() == _lastAutoFilledName) {
         _nameController.clear();
       }
       _lastAutoFilledName = null;
     }
 
-    if (phone.length < 8) return;
+    if (normalizedPhone == null) return;
 
     _phoneLookupDebounce?.cancel();
     _phoneLookupDebounce = Timer(
       const Duration(milliseconds: 450),
-      () => unawaited(_lookupCustomerByPhone(phone)),
+      () => unawaited(_lookupCustomerByPhone(normalizedPhone)),
     );
   }
 
   Future<void> _lookupCustomerByPhone(String phone) async {
-    final normalized = _digitsOnly(phone);
-    if (normalized.length < 8) return;
+    final normalized = _normalizeIndianPhone(phone);
+    if (normalized == null) return;
 
     final requestId = ++_phoneLookupRequestId;
 
@@ -130,7 +146,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         return;
       }
 
-      final currentPhone = _digitsOnly(_phoneController.text);
+      final currentPhone = _normalizeIndianPhone(_phoneController.text);
       if (currentPhone != normalized) return;
 
       final fetchedName = customer.name.trim();
@@ -1109,8 +1125,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     final v = value?.trim() ?? '';
     if (v.isEmpty) return 'Phone number is required';
 
-    final digitsOnly = v.replaceAll(RegExp(r'\D'), '');
-    if (digitsOnly.length < 8) return 'Enter a valid phone number';
+    final normalized = _normalizeIndianPhone(v);
+    if (normalized == null) {
+      return 'Enter a valid 10-digit Indian phone number';
+    }
 
     return null;
   }
@@ -1128,9 +1146,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       return;
     }
 
+    final normalizedPhone = _normalizeIndianPhone(_phoneController.text);
+    if (normalizedPhone == null) {
+      _showSnack('Enter a valid 10-digit Indian phone number.');
+      return;
+    }
+
     final customer = BillingCustomer(
       name: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
+      phone: normalizedPhone,
       address: _addressController.text.trim().isEmpty
           ? null
           : _addressController.text.trim(),
@@ -1771,6 +1795,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               decoration: fieldDecoration(
                                 label: 'Phone number',
                                 icon: Icons.phone_outlined,
+                                helper:
+                                    'Indian format: 10 digits (optional +91 or 0 prefix)',
                               ),
                               validator: _validatePhone,
                               onFieldSubmitted: (_) {
