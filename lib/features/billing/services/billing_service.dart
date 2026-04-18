@@ -6,6 +6,16 @@ import '../../../core/config/api_config.dart';
 import '../../auth/services/api_service.dart';
 import '../models/billing_models.dart';
 
+class BillingBarcodeLookupResult {
+  const BillingBarcodeLookupResult({
+    required this.isMultiple,
+    required this.products,
+  });
+
+  final bool isMultiple;
+  final List<BillingProduct> products;
+}
+
 class BillingService {
   BillingService({ApiService? apiService})
     : _apiService = apiService ?? ApiService();
@@ -14,6 +24,7 @@ class BillingService {
   static const bool whatsAppApiIntegrated = false;
   static const String _barcodeLookupPath = '/sales/barcode-lookup/';
   static const String _customerLookupPath = '/sales/customer-lookup/';
+  static const String _qrConfigsPath = '/sales/payment-configs/qr/';
 
   final ApiService _apiService;
 
@@ -93,9 +104,11 @@ class BillingService {
     return 'Failed to send invoice (${response.statusCode})';
   }
 
-  Future<List<BillingProduct>> fetchProductsByBarcode(String barcode) async {
+  Future<BillingBarcodeLookupResult> fetchBarcodeLookup(String barcode) async {
     final normalized = barcode.trim();
-    if (normalized.isEmpty) return const [];
+    if (normalized.isEmpty) {
+      return const BillingBarcodeLookupResult(isMultiple: false, products: []);
+    }
 
     final uri = _url('$_barcodeLookupPath${Uri.encodeComponent(normalized)}/');
 
@@ -108,12 +121,23 @@ class BillingService {
     }
 
     final decoded = jsonDecode(response.body);
+    final isMultiple = _extractIsMultiple(decoded);
     final records = _extractProductRecords(decoded);
 
-    return records
+    final products = records
         .map(_productFromMap)
         .whereType<BillingProduct>()
         .toList(growable: false);
+
+    return BillingBarcodeLookupResult(
+      isMultiple: isMultiple,
+      products: products,
+    );
+  }
+
+  Future<List<BillingProduct>> fetchProductsByBarcode(String barcode) async {
+    final result = await fetchBarcodeLookup(barcode);
+    return result.products;
   }
 
   Future<BillingCustomer?> fetchCustomerByPhone(String phone) async {
@@ -141,6 +165,24 @@ class BillingService {
     }
 
     return null;
+  }
+
+  Future<List<BillingQrConfig>> fetchQrPaymentConfigs() async {
+    final response = await _apiService.get(_url(_qrConfigsPath).toString());
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = _errorMessageFromResponse(response);
+      throw http.ClientException(
+        message.isEmpty ? 'Failed to fetch QR payment configs' : message,
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    final records = _extractQrConfigRecords(decoded);
+
+    return records
+        .map(_qrConfigFromMap)
+        .whereType<BillingQrConfig>()
+        .toList(growable: false);
   }
 
   List<Map<String, dynamic>> _extractProductRecords(dynamic decoded) {
@@ -190,7 +232,11 @@ class BillingService {
     final nameValue = map['name'] ?? map['product_name'] ?? map['title'];
     final companyValue = map['company_name'] ?? map['companyName'];
     final priceValue =
-        map['unit_price'] ?? map['sell_price'] ?? map['price'] ?? map['mrp'];
+        map['final_price'] ??
+        map['unit_price'] ??
+        map['sell_price'] ??
+        map['price'] ??
+        map['mrp'];
     final barcodeValue = map['barcode'] ?? map['barcode_number'] ?? map['ean'];
     final sizeValue =
         map['size'] ?? map['product_size'] ?? map['variant_size'] ?? map['sz'];
@@ -224,6 +270,17 @@ class BillingService {
           : companyValue?.toString().trim(),
       availableQuantity: availableQuantity,
     );
+  }
+
+  bool _extractIsMultiple(dynamic decoded) {
+    if (decoded is! Map) return false;
+    final map = Map<String, dynamic>.from(decoded);
+    final value = map['is_multiple'];
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final raw = value?.toString().trim().toLowerCase();
+    if (raw == null || raw.isEmpty) return false;
+    return raw == 'true' || raw == '1' || raw == 'yes';
   }
 
   List<Map<String, dynamic>> _extractCustomerRecords(dynamic decoded) {
@@ -271,5 +328,41 @@ class BillingService {
       phone: phone,
       address: address == null || address.isEmpty ? null : address,
     );
+  }
+
+  List<Map<String, dynamic>> _extractQrConfigRecords(dynamic decoded) {
+    if (decoded is List) {
+      return decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    }
+
+    if (decoded is! Map) return const [];
+
+    final map = Map<String, dynamic>.from(decoded);
+    final dynamic listValue = map['results'] ?? map['data'] ?? map['items'];
+    if (listValue is List) {
+      return listValue
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    }
+
+    return [map];
+  }
+
+  BillingQrConfig? _qrConfigFromMap(Map<String, dynamic> map) {
+    final id = (map['id'] ?? '').toString().trim();
+    final name = (map['name'] ?? map['label'] ?? '').toString().trim();
+    final imageUrl = (map['image_url'] ?? map['imageUrl'] ?? '')
+        .toString()
+        .trim();
+
+    if (id.isEmpty || name.isEmpty || imageUrl.isEmpty) {
+      return null;
+    }
+
+    return BillingQrConfig(id: id, name: name, imageUrl: imageUrl);
   }
 }

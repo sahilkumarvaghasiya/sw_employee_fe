@@ -123,6 +123,7 @@ class BillPreviewScreen extends StatelessWidget {
   String _methodLabel(BillingPaymentMethod? method) {
     return switch (method) {
       BillingPaymentMethod.cash => 'Cash',
+      BillingPaymentMethod.qr => 'QR Barcode',
       BillingPaymentMethod.upi => 'UPI',
       BillingPaymentMethod.paytm => 'Paytm',
       BillingPaymentMethod.card => 'Card',

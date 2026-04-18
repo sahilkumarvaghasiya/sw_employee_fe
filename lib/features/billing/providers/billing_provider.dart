@@ -19,6 +19,7 @@ class BillingProvider extends ChangeNotifier {
   bool _markPaid = false;
   double _paidAmount = 0;
   double? _manualFinalAmount;
+  BillingQrConfig? _selectedQrConfig;
   PaytmQrCode? _selectedPaytmQr;
   UpiQrCode? _selectedUpiQr;
 
@@ -31,6 +32,7 @@ class BillingProvider extends ChangeNotifier {
   bool get markPaid => _markPaid;
   double get paidAmount => _paidAmount;
   double? get manualFinalAmount => _manualFinalAmount;
+  BillingQrConfig? get selectedQrConfig => _selectedQrConfig;
   PaytmQrCode? get selectedPaytmQr => _selectedPaytmQr;
   UpiQrCode? get selectedUpiQr => _selectedUpiQr;
 
@@ -87,6 +89,7 @@ class BillingProvider extends ChangeNotifier {
   void clearAll() {
     _customer = null;
     _paymentMethod = null;
+    _selectedQrConfig = null;
     _selectedPaytmQr = null;
     _selectedUpiQr = null;
     _markPaid = false;
@@ -204,9 +207,15 @@ class BillingProvider extends ChangeNotifier {
   void setPaymentMethod(BillingPaymentMethod? method) {
     _paymentMethod = method;
 
+    if (_paymentMethod != BillingPaymentMethod.qr) _selectedQrConfig = null;
     if (_paymentMethod != BillingPaymentMethod.paytm) _selectedPaytmQr = null;
     if (_paymentMethod != BillingPaymentMethod.upi) _selectedUpiQr = null;
 
+    notifyListeners();
+  }
+
+  void selectQrConfig(BillingQrConfig? qr) {
+    _selectedQrConfig = qr;
     notifyListeners();
   }
 

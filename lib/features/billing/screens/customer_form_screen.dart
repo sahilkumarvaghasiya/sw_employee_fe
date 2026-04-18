@@ -166,7 +166,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _handlingBarcode = true;
 
     try {
-      final products = await _billingService.fetchProductsByBarcode(barcode);
+      final lookup = await _billingService.fetchBarcodeLookup(barcode);
+      final products = lookup.products;
       if (!mounted) return;
 
       if (products.isEmpty) {
@@ -174,7 +175,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         return;
       }
 
-      if (products.length == 1) {
+      if (!lookup.isMultiple) {
         final selected = products.first;
         context.read<BillingProvider>().addOrIncrementProduct(selected);
         _showSnack('${selected.name} added');
@@ -525,10 +526,20 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     Navigator.of(context).push(BillPreviewScreen.route(context));
   }
 
-  Future<void> _showQrPaymentSheet({
-    required BillingPaymentMethod method,
-  }) async {
+  Future<void> _confirmCardAndGenerateBill() async {
+    final confirmed = await _confirmPaymentDone(methodLabel: 'Card');
+    if (!mounted || !confirmed) return;
+
     final provider = context.read<BillingProvider>();
+    provider.setPaymentMethod(BillingPaymentMethod.card);
+    provider.setMarkPaid(true);
+    Navigator.of(context).push(BillPreviewScreen.route(context));
+  }
+
+  Future<void> _showQrPaymentSheet() async {
+    final provider = context.read<BillingProvider>();
+    late final Future<List<BillingQrConfig>> qrConfigsFuture;
+    qrConfigsFuture = _billingService.fetchQrPaymentConfigs();
 
     await showModalBottomSheet<void>(
       context: context,
@@ -547,175 +558,218 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   child: Consumer<BillingProvider>(
                     builder: (context, p, _) {
-                      final title = method == BillingPaymentMethod.paytm
-                          ? 'Paytm'
-                          : 'UPI';
-                      final selectedLabel = method == BillingPaymentMethod.paytm
-                          ? p.selectedPaytmQr?.label
-                          : p.selectedUpiQr?.label;
+                      final selectedQr = p.selectedQrConfig;
+                      final canContinue = selectedQr != null;
 
-                      final canContinue = method == BillingPaymentMethod.paytm
-                          ? p.selectedPaytmQr != null
-                          : p.selectedUpiQr != null;
+                      return FutureBuilder<List<BillingQrConfig>>(
+                        future: qrConfigsFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 28),
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
 
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.qr_code_2_rounded,
-                                color: colorScheme.primary,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  '$title payment',
+                          if (snapshot.hasError) {
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Could not load QR codes',
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
-                              ),
-                              IconButton(
-                                tooltip: 'Close',
-                                onPressed: () => Navigator.of(context).pop(),
-                                icon: const Icon(Icons.close_rounded),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            'Select a QR and show it to the customer.',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          if (selectedLabel != null)
-                            Card(
-                              elevation: 0,
-                              color: colorScheme.surfaceContainerHigh,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  16,
-                                  16,
-                                  16,
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Please try again.',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      selectedLabel,
-                                      style: theme.textTheme.titleSmall
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                    unawaited(_showQrPaymentSheet());
+                                  },
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: const Text('Retry'),
+                                ),
+                              ],
+                            );
+                          }
+
+                          final qrConfigs =
+                              snapshot.data ?? const <BillingQrConfig>[];
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.qr_code_2_rounded,
+                                    color: colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'QR barcode payment',
+                                      style: theme.textTheme.titleMedium
                                           ?.copyWith(
                                             fontWeight: FontWeight.w900,
                                           ),
                                     ),
-                                    const SizedBox(height: 10),
-                                    Container(
-                                      height: 180,
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: colorScheme.surface,
-                                        borderRadius: BorderRadius.circular(18),
-                                        border: Border.all(
-                                          color: colorScheme.outlineVariant,
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Icon(
-                                          Icons.qr_code_2_rounded,
-                                          size: 120,
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      'Show this QR to customer to scan and pay.',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Close',
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
+                                    icon: const Icon(Icons.close_rounded),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                'Select a QR from dashboard and show it to customer.',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
                                 ),
                               ),
-                            ),
-
-                          const SizedBox(height: 12),
-                          Text(
-                            'Choose QR',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              if (method == BillingPaymentMethod.paytm)
-                                ...p.paytmQrs.map(
-                                  (qr) => ChoiceChip(
-                                    label: Text(qr.label),
-                                    selected: p.selectedPaytmQr?.id == qr.id,
-                                    onSelected: (_) {
-                                      p.setPaymentMethod(
-                                        BillingPaymentMethod.paytm,
-                                      );
-                                      p.selectPaytmQr(qr);
-                                    },
+                              const SizedBox(height: 12),
+                              if (qrConfigs.isEmpty)
+                                Card(
+                                  elevation: 0,
+                                  color: colorScheme.surfaceContainerHigh,
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(14),
+                                    child: Text('No QR barcode available.'),
                                   ),
                                 )
                               else
-                                ...p.upiQrs.map(
-                                  (qr) => ChoiceChip(
-                                    label: Text(qr.label),
-                                    selected: p.selectedUpiQr?.id == qr.id,
-                                    onSelected: (_) {
-                                      p.setPaymentMethod(
-                                        BillingPaymentMethod.upi,
-                                      );
-                                      p.selectUpiQr(qr);
-                                    },
-                                  ),
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: qrConfigs
+                                      .map((qr) {
+                                        final isSelected =
+                                            selectedQr?.id == qr.id;
+                                        return InkWell(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          onTap: () {
+                                            p.setPaymentMethod(
+                                              BillingPaymentMethod.qr,
+                                            );
+                                            p.selectQrConfig(qr);
+                                          },
+                                          child: Container(
+                                            width: 84,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? colorScheme.primary
+                                                        .withOpacity(0.10)
+                                                  : colorScheme
+                                                        .surfaceContainerHigh,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              border: Border.all(
+                                                color: isSelected
+                                                    ? colorScheme.primary
+                                                    : colorScheme
+                                                          .outlineVariant,
+                                              ),
+                                            ),
+                                            child: Column(
+                                              children: [
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  child: Image.network(
+                                                    qr.imageUrl,
+                                                    width: 52,
+                                                    height: 52,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (
+                                                          _,
+                                                          __,
+                                                          ___,
+                                                        ) => Container(
+                                                          width: 52,
+                                                          height: 52,
+                                                          color: colorScheme
+                                                              .surface,
+                                                          child: Icon(
+                                                            Icons
+                                                                .qr_code_2_rounded,
+                                                            color: colorScheme
+                                                                .onSurfaceVariant,
+                                                          ),
+                                                        ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  qr.name,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  textAlign: TextAlign.center,
+                                                  style: theme
+                                                      .textTheme
+                                                      .labelSmall
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      })
+                                      .toList(growable: false),
                                 ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: FilledButton.icon(
+                                  onPressed: canContinue
+                                      ? () async {
+                                          final done =
+                                              await _confirmPaymentDone(
+                                                methodLabel: 'QR Barcode',
+                                              );
+                                          if (!done || !context.mounted) {
+                                            return;
+                                          }
+                                          provider.setPaymentMethod(
+                                            BillingPaymentMethod.qr,
+                                          );
+                                          provider.setMarkPaid(true);
+                                          Navigator.of(context).pop();
+                                          Navigator.of(context).push(
+                                            BillPreviewScreen.route(context),
+                                          );
+                                        }
+                                      : null,
+                                  icon: const Icon(Icons.check_circle_outline),
+                                  label: const Text('Payment received'),
+                                ),
+                              ),
                             ],
-                          ),
-
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: FilledButton.icon(
-                              onPressed: canContinue
-                                  ? () async {
-                                      final done = await _confirmPaymentDone(
-                                        methodLabel: title,
-                                      );
-                                      if (!done || !context.mounted) {
-                                        return;
-                                      }
-                                      provider.setPaymentMethod(method);
-                                      provider.setMarkPaid(true);
-                                      Navigator.of(context).pop();
-                                      Navigator.of(
-                                        context,
-                                      ).push(BillPreviewScreen.route(context));
-                                    }
-                                  : null,
-                              icon: const Icon(Icons.check_circle_outline),
-                              label: const Text('Payment received'),
-                            ),
-                          ),
-                        ],
+                          );
+                        },
                       );
                     },
                   ),
@@ -812,45 +866,20 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                 ),
                 option(
                   icon: Icons.qr_code_2_rounded,
-                  title: 'Paytm',
-                  subtitle: 'Show QR to customer',
+                  title: 'QR barcode',
+                  subtitle: 'Select QR and show to customer',
                   onTap: () async {
                     Navigator.of(context).pop();
-                    await _showQrPaymentSheet(
-                      method: BillingPaymentMethod.paytm,
-                    );
-                  },
-                ),
-                option(
-                  icon: Icons.qr_code_scanner_outlined,
-                  title: 'UPI',
-                  subtitle: 'Show UPI QR to customer',
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    await _showQrPaymentSheet(method: BillingPaymentMethod.upi);
+                    await _showQrPaymentSheet();
                   },
                 ),
                 option(
                   icon: Icons.credit_card_outlined,
                   title: 'Card (Credit/Debit)',
-                  subtitle: 'Coming soon',
-                  onTap: () {
+                  subtitle: 'Confirm card payment received',
+                  onTap: () async {
                     Navigator.of(context).pop();
-                    showDialog<void>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Coming soon'),
-                        content: const Text(
-                          'Card payments will be available in a future update.',
-                        ),
-                        actions: [
-                          FilledButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('OK'),
-                          ),
-                        ],
-                      ),
-                    );
+                    await _confirmCardAndGenerateBill();
                   },
                 ),
               ],
@@ -1673,7 +1702,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                     ),
                                   ),
                                   title: const Text('Take payment'),
-                                  subtitle: const Text('UPI / Cash / Card'),
+                                  subtitle: const Text('QR / Cash / Card'),
                                 ),
                               ],
                             ),

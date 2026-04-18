@@ -83,7 +83,20 @@ class BillingLineItem {
   }
 }
 
-enum BillingPaymentMethod { cash, paytm, upi, card }
+enum BillingPaymentMethod { cash, card, qr, paytm, upi }
+
+@immutable
+class BillingQrConfig {
+  const BillingQrConfig({
+    required this.id,
+    required this.name,
+    required this.imageUrl,
+  });
+
+  final String id;
+  final String name;
+  final String imageUrl;
+}
 
 @immutable
 class PaytmQrCode {
