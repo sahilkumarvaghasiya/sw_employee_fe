@@ -650,16 +650,38 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                   ),
                                 )
                               else
-                                Wrap(
-                                  spacing: 10,
-                                  runSpacing: 10,
-                                  children: qrConfigs
-                                      .map((qr) {
+                                Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text(
+                                      'Choose barcode',
+                                      style: theme.textTheme.labelLarge
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    GridView.builder(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      itemCount: qrConfigs.length,
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 4,
+                                            mainAxisSpacing: 10,
+                                            crossAxisSpacing: 10,
+                                            childAspectRatio: 1,
+                                          ),
+                                      itemBuilder: (context, index) {
+                                        final qr = qrConfigs[index];
                                         final isSelected =
                                             selectedQr?.id == qr.id;
                                         return InkWell(
                                           borderRadius: BorderRadius.circular(
-                                            14,
+                                            16,
                                           ),
                                           onTap: () {
                                             p.setPaymentMethod(
@@ -667,60 +689,61 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                             );
                                             p.selectQrConfig(qr);
                                           },
-                                          child: Container(
-                                            width: 84,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 8,
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 140,
                                             ),
+                                            padding: const EdgeInsets.all(8),
                                             decoration: BoxDecoration(
                                               color: isSelected
                                                   ? colorScheme.primary
-                                                        .withOpacity(0.10)
+                                                        .withOpacity(0.12)
                                                   : colorScheme
                                                         .surfaceContainerHigh,
                                               borderRadius:
-                                                  BorderRadius.circular(14),
+                                                  BorderRadius.circular(16),
                                               border: Border.all(
                                                 color: isSelected
                                                     ? colorScheme.primary
                                                     : colorScheme
                                                           .outlineVariant,
+                                                width: isSelected ? 1.5 : 1,
                                               ),
                                             ),
                                             child: Column(
                                               children: [
-                                                ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                  child: Image.network(
-                                                    qr.imageUrl,
-                                                    width: 52,
-                                                    height: 52,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder:
-                                                        (
-                                                          _,
-                                                          __,
-                                                          ___,
-                                                        ) => Container(
-                                                          width: 52,
-                                                          height: 52,
-                                                          color: colorScheme
-                                                              .surface,
-                                                          child: Icon(
-                                                            Icons
-                                                                .qr_code_2_rounded,
-                                                            color: colorScheme
-                                                                .onSurfaceVariant,
-                                                          ),
+                                                Expanded(
+                                                  child: ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
                                                         ),
+                                                    child: Image.network(
+                                                      qr.imageUrl,
+                                                      width: double.infinity,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder:
+                                                          (
+                                                            _,
+                                                            __,
+                                                            ___,
+                                                          ) => Container(
+                                                            color: colorScheme
+                                                                .surface,
+                                                            child: Icon(
+                                                              Icons
+                                                                  .qr_code_2_rounded,
+                                                              color: colorScheme
+                                                                  .onSurfaceVariant,
+                                                            ),
+                                                          ),
+                                                    ),
                                                   ),
                                                 ),
                                                 const SizedBox(height: 6),
                                                 Text(
                                                   qr.name,
-                                                  maxLines: 2,
+                                                  maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
                                                   textAlign: TextAlign.center,
@@ -736,8 +759,65 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                             ),
                                           ),
                                         );
-                                      })
-                                      .toList(growable: false),
+                                      },
+                                    ),
+                                    if (selectedQr != null) ...[
+                                      const SizedBox(height: 12),
+                                      Card(
+                                        elevation: 0,
+                                        color: colorScheme.surfaceContainerHigh,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            18,
+                                          ),
+                                          side: BorderSide(
+                                            color: colorScheme.outlineVariant,
+                                          ),
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(12),
+                                          child: Column(
+                                            children: [
+                                              Text(
+                                                selectedQr.name,
+                                                style: theme
+                                                    .textTheme
+                                                    .titleSmall
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                child: Image.network(
+                                                  selectedQr.imageUrl,
+                                                  height: 180,
+                                                  width: double.infinity,
+                                                  fit: BoxFit.contain,
+                                                  errorBuilder: (_, __, ___) =>
+                                                      Container(
+                                                        height: 180,
+                                                        color:
+                                                            colorScheme.surface,
+                                                        child: Icon(
+                                                          Icons
+                                                              .qr_code_2_rounded,
+                                                          size: 92,
+                                                          color: colorScheme
+                                                              .onSurfaceVariant,
+                                                        ),
+                                                      ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               const SizedBox(height: 14),
                               SizedBox(
