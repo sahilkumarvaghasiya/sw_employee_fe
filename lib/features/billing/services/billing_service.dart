@@ -12,8 +12,8 @@ class BillingService {
 
   // Flip this to true once the backend endpoint is available.
   static const bool whatsAppApiIntegrated = false;
-  static const String _barcodeLookupPath = '/api/sales/barcode-lookup/';
-  static const String _customerLookupPath = '/api/sales/customer-lookup/';
+  static const String _barcodeLookupPath = '/sales/barcode-lookup/';
+  static const String _customerLookupPath = '/sales/customer-lookup/';
 
   final ApiService _apiService;
 
