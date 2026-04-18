@@ -71,7 +71,8 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
 
     if (force || !_priceFocusNode.hasFocus) {
       final priceText = priceOverridden
-          ? widget.item.unitPrice.toStringAsFixed(2)
+          ? (widget.item.originalUnitPrice - widget.item.unitPrice)
+                .toStringAsFixed(2)
           : '';
       if (_priceController.text != priceText) {
         _priceController.text = priceText;
@@ -120,13 +121,19 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
     }
 
     final parsed = double.tryParse(trimmed);
-    if (parsed == null || parsed < 0) {
+    if (parsed == null || parsed <= 0) {
       setState(() => _priceError = 'Invalid entry');
       return;
     }
 
+    final original = widget.item.originalUnitPrice;
+    if (parsed >= original) {
+      setState(() => _priceError = 'Must be less than ${_money(original)}');
+      return;
+    }
+
     setState(() => _priceError = null);
-    widget.onPriceChanged(parsed);
+    widget.onPriceChanged(original - parsed);
   }
 
   void _handleDiscountChanged(String value) {
@@ -292,7 +299,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
               decoration:
                   fieldDecoration(
                     label: _mode == _EditMode.price
-                        ? 'Enter price'
+                        ? 'Enter reduction'
                         : 'Enter discount',
                   ).copyWith(
                     errorText: _mode == _EditMode.price
@@ -326,7 +333,8 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
           if (priceOverridden)
             _Chip(
               icon: Icons.sell_outlined,
-              label: 'Price ${_money(widget.item.unitPrice)}',
+              label:
+                  'Price ${_money(widget.item.unitPrice)} (-${_money(widget.item.originalUnitPrice - widget.item.unitPrice)})',
             ),
           if (discountApplied)
             _Chip(
@@ -391,7 +399,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -401,11 +409,12 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                           visualDensity: VisualDensity.compact,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints.tightFor(
-                            width: 36,
-                            height: 36,
+                            width: 32,
+                            height: 32,
                           ),
                           icon: const Icon(Icons.close_rounded),
                         ),
+                        const SizedBox(height: 10),
                         Text(
                           _money(widget.item.lineTotal),
                           style: theme.textTheme.titleSmall?.copyWith(

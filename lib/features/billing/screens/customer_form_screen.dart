@@ -200,8 +200,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         return;
       }
 
-      context.read<BillingProvider>().addOrIncrementProduct(selected);
-      _showSnack('${selected.name} added');
+      for (final product in selected) {
+        context.read<BillingProvider>().addOrIncrementProduct(product);
+      }
+      _showSnack('${selected.length} product(s) added');
 
       if (shouldRestartScanner && mounted) {
         await _startScanner();
@@ -215,11 +217,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     }
   }
 
-  Future<BillingProduct?> _pickProductFromMatches({
+  Future<List<BillingProduct>?> _pickProductFromMatches({
     required String barcode,
     required List<BillingProduct> products,
   }) {
-    return showModalBottomSheet<BillingProduct>(
+    return showModalBottomSheet<List<BillingProduct>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -227,7 +229,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         final theme = Theme.of(context);
         final colorScheme = theme.colorScheme;
         final searchController = TextEditingController();
-        BillingProduct? selectedProduct;
+        final selectedProductIds = <String>{};
 
         String subtitleFor(BillingProduct product) {
           final size = product.size?.trim() ?? '';
@@ -321,7 +323,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final p = filteredProducts[index];
-                          final isSelected = selectedProduct?.id == p.id;
+                          final isSelected = selectedProductIds.contains(p.id);
                           return Card(
                             elevation: 0,
                             color: isSelected
@@ -355,10 +357,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                       Icons.done_rounded,
                                       color: colorScheme.primary,
                                     )
-                                  : const Icon(Icons.chevron_right_rounded),
+                                  : const Icon(Icons.add_rounded),
                               onTap: () {
                                 setState(() {
-                                  selectedProduct = p;
+                                  if (selectedProductIds.contains(p.id)) {
+                                    selectedProductIds.remove(p.id);
+                                  } else {
+                                    selectedProductIds.add(p.id);
+                                  }
                                 });
                               },
                             ),
@@ -370,13 +376,26 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: selectedProduct == null
+                        onPressed: selectedProductIds.isEmpty
                             ? null
-                            : () => Navigator.of(context).pop(selectedProduct),
+                            : () {
+                                final selectedProducts = products
+                                    .where(
+                                      (product) => selectedProductIds.contains(
+                                        product.id,
+                                      ),
+                                    )
+                                    .toList(growable: false);
+                                Navigator.of(context).pop(selectedProducts);
+                              },
                         icon: const Icon(Icons.done_rounded),
-                        label: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Text('Done'),
+                        label: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            selectedProductIds.isEmpty
+                                ? 'Done'
+                                : 'Add ${selectedProductIds.length} selected',
+                          ),
                         ),
                       ),
                     ),
