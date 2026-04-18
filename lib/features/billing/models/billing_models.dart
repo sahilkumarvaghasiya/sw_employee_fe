@@ -21,6 +21,8 @@ class BillingProduct {
     required this.unitPrice,
     this.barcode,
     this.size,
+    this.companyName,
+    this.availableQuantity,
   });
 
   final String id;
@@ -28,6 +30,8 @@ class BillingProduct {
   final double unitPrice;
   final String? barcode;
   final String? size;
+  final String? companyName;
+  final int? availableQuantity;
 }
 
 @immutable

@@ -230,8 +230,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
         String subtitleFor(BillingProduct product) {
           final size = product.size?.trim() ?? '';
-          if (size.isEmpty) return 'Price ${_money(product.unitPrice)}';
-          return 'Size $size • Price ${_money(product.unitPrice)}';
+          final company = product.companyName?.trim() ?? '';
+          final quantity = product.availableQuantity;
+          final parts = <String>[];
+          if (company.isNotEmpty) parts.add(company);
+          if (size.isNotEmpty) parts.add('Size $size');
+          parts.add('Price ${_money(product.unitPrice)}');
+          if (quantity != null) parts.add('Qty $quantity');
+          return parts.join(' • ');
         }
 
         return StatefulBuilder(

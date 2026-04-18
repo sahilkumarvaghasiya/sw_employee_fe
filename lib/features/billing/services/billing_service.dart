@@ -12,8 +12,8 @@ class BillingService {
 
   // Flip this to true once the backend endpoint is available.
   static const bool whatsAppApiIntegrated = false;
-  static const String _barcodeLookupPath = '/billing/products/by-barcode/';
-  static const String _customerLookupPath = '/billing/customers/by-phone/';
+  static const String _barcodeLookupPath = '/api/sales/barcode-lookup/';
+  static const String _customerLookupPath = '/api/sales/customer-lookup/';
 
   final ApiService _apiService;
 
@@ -97,9 +97,7 @@ class BillingService {
     final normalized = barcode.trim();
     if (normalized.isEmpty) return const [];
 
-    final uri = _url(
-      '$_barcodeLookupPath?barcode=${Uri.encodeQueryComponent(normalized)}',
-    );
+    final uri = _url('$_barcodeLookupPath${Uri.encodeComponent(normalized)}/');
 
     final response = await _apiService.get(uri.toString());
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -122,9 +120,7 @@ class BillingService {
     final normalized = phone.trim();
     if (normalized.isEmpty) return null;
 
-    final uri = _url(
-      '$_customerLookupPath?phone=${Uri.encodeQueryComponent(normalized)}',
-    );
+    final uri = _url('$_customerLookupPath${Uri.encodeComponent(normalized)}/');
 
     final response = await _apiService.get(uri.toString());
     if (response.statusCode == 404) return null;
@@ -158,8 +154,26 @@ class BillingService {
     if (decoded is! Map) return const [];
 
     final map = Map<String, dynamic>.from(decoded);
-    final dynamic listValue =
-        map['products'] ?? map['results'] ?? map['data'] ?? map['items'];
+    final productNode = map['product'];
+    if (productNode is Map) {
+      return [Map<String, dynamic>.from(productNode)];
+    }
+
+    final dynamic productsNode = map['products'];
+    if (productsNode is Map) {
+      final nested = Map<String, dynamic>.from(productsNode);
+      final dynamic nestedResults =
+          nested['results'] ?? nested['data'] ?? nested['items'];
+      if (nestedResults is List) {
+        return nestedResults
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList(growable: false);
+      }
+      return [nested];
+    }
+
+    final dynamic listValue = map['results'] ?? map['data'] ?? map['items'];
 
     if (listValue is List) {
       return listValue
@@ -168,17 +182,13 @@ class BillingService {
           .toList(growable: false);
     }
 
-    final productNode = map['product'];
-    if (productNode is Map) {
-      return [Map<String, dynamic>.from(productNode)];
-    }
-
-    return const [];
+    return [map];
   }
 
   BillingProduct? _productFromMap(Map<String, dynamic> map) {
     final idValue = map['id'] ?? map['product_id'] ?? map['sku'] ?? map['code'];
     final nameValue = map['name'] ?? map['product_name'] ?? map['title'];
+    final companyValue = map['company_name'] ?? map['companyName'];
     final priceValue =
         map['unit_price'] ?? map['sell_price'] ?? map['price'] ?? map['mrp'];
     final barcodeValue = map['barcode'] ?? map['barcode_number'] ?? map['ean'];
@@ -196,6 +206,10 @@ class BillingService {
     }
 
     final barcode = barcodeValue?.toString().trim();
+    final quantityValue = map['quantity'] ?? map['available_quantity'];
+    final availableQuantity = quantityValue is num
+        ? quantityValue.toInt()
+        : int.tryParse('${quantityValue ?? ''}');
 
     return BillingProduct(
       id: id,
@@ -205,6 +219,10 @@ class BillingService {
       size: sizeValue?.toString().trim().isEmpty == true
           ? null
           : sizeValue?.toString().trim(),
+      companyName: companyValue?.toString().trim().isEmpty == true
+          ? null
+          : companyValue?.toString().trim(),
+      availableQuantity: availableQuantity,
     );
   }
 
