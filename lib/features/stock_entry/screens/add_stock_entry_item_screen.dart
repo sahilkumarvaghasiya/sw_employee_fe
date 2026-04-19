@@ -87,6 +87,13 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   String _itemTypeSearchQuery = '';
   bool _showItemFieldErrors = false;
 
+  final StockEntryService _stockEntryService = StockEntryService();
+
+  final _PagedOptionsState _brandPaged = _PagedOptionsState();
+  final _PagedOptionsState _itemTypePaged = _PagedOptionsState();
+  final _PagedOptionsState _sizePaged = _PagedOptionsState();
+  final _PagedOptionsState _colourPaged = _PagedOptionsState();
+
   void _ensureVisible(GlobalKey key) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = key.currentContext;
@@ -98,6 +105,154 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         alignment: 0.05,
       );
     });
+  }
+
+  List<String> _mergeUniqueOptions(List<String> first, List<String> second) {
+    final seen = <String>{};
+    final out = <String>[];
+
+    void add(String raw) {
+      final value = raw.trim();
+      if (value.isEmpty) return;
+      final key = value.toLowerCase();
+      if (seen.add(key)) out.add(value);
+    }
+
+    for (final item in first) {
+      add(item);
+    }
+    for (final item in second) {
+      add(item);
+    }
+
+    return out;
+  }
+
+  void _attachOptionScrollListeners() {
+    _brandPaged.scrollController.addListener(() {
+      if (!_brandPaged.scrollController.hasClients) return;
+      final position = _brandPaged.scrollController.position;
+      if (position.pixels >= position.maxScrollExtent - 64) {
+        _loadBrandOptions();
+      }
+    });
+
+    _itemTypePaged.scrollController.addListener(() {
+      if (!_itemTypePaged.scrollController.hasClients) return;
+      final position = _itemTypePaged.scrollController.position;
+      if (position.pixels >= position.maxScrollExtent - 64) {
+        _loadItemTypeOptions();
+      }
+    });
+
+    _sizePaged.scrollController.addListener(() {
+      if (!_sizePaged.scrollController.hasClients) return;
+      final position = _sizePaged.scrollController.position;
+      if (position.pixels >= position.maxScrollExtent - 64) {
+        _loadSizeOptions();
+      }
+    });
+
+    _colourPaged.scrollController.addListener(() {
+      if (!_colourPaged.scrollController.hasClients) return;
+      final position = _colourPaged.scrollController.position;
+      if (position.pixels >= position.maxScrollExtent - 64) {
+        _loadColourOptions();
+      }
+    });
+  }
+
+  Future<void> _loadPagedOptions({
+    required String option,
+    required _PagedOptionsState state,
+    bool reset = false,
+  }) async {
+    if (state.isLoading) return;
+    if (!reset && !state.hasMore) return;
+
+    final int page = reset ? 1 : state.nextPage;
+    if (mounted) {
+      setState(() {
+        state.isLoading = true;
+        if (reset) {
+          state.hasMore = true;
+          state.nextPage = 1;
+          state.values = const <String>[];
+        }
+      });
+    }
+
+    try {
+      final result = await _stockEntryService.fetchStockOptionPage(
+        option: option,
+        page: page,
+        pageSize: 30,
+        search: state.searchQuery,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        state.values = _mergeUniqueOptions(state.values, result.items);
+        state.hasMore = result.hasMore;
+        state.nextPage = page + 1;
+        state.isInitialized = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        state.hasMore = false;
+        state.isInitialized = true;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        state.isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadBrandOptions({bool reset = false}) {
+    return _loadPagedOptions(option: 'brand', state: _brandPaged, reset: reset);
+  }
+
+  Future<void> _loadItemTypeOptions({bool reset = false}) {
+    return _loadPagedOptions(
+      option: 'item_type',
+      state: _itemTypePaged,
+      reset: reset,
+    );
+  }
+
+  Future<void> _loadSizeOptions({bool reset = false}) {
+    return _loadPagedOptions(option: 'size', state: _sizePaged, reset: reset);
+  }
+
+  Future<void> _loadColourOptions({bool reset = false}) {
+    return _loadPagedOptions(
+      option: 'colour',
+      state: _colourPaged,
+      reset: reset,
+    );
+  }
+
+  void _ensureBrandOptionsLoaded() {
+    if (_brandPaged.isInitialized) return;
+    _loadBrandOptions(reset: true);
+  }
+
+  void _ensureItemTypeOptionsLoaded() {
+    if (_itemTypePaged.isInitialized) return;
+    _loadItemTypeOptions(reset: true);
+  }
+
+  void _ensureSizeOptionsLoaded() {
+    if (_sizePaged.isInitialized) return;
+    _loadSizeOptions(reset: true);
+  }
+
+  void _ensureColourOptionsLoaded() {
+    if (_colourPaged.isInitialized) return;
+    _loadColourOptions(reset: true);
   }
 
   static const String _customOption = '__custom__';
@@ -184,6 +339,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     _draftRow.sellController.addListener(_onSellTextChanged);
     _draftRow.qtyController.addListener(_onQtyChanged);
     _sellFocusNode.addListener(_onSellFocusChanged);
+    _attachOptionScrollListeners();
   }
 
   void _prefillFromDrafts(List<StockEntryDraftItem> drafts) {
@@ -238,6 +394,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     _draftRow.qtyController.removeListener(_onQtyChanged);
     _sellFocusNode.removeListener(_onSellFocusChanged);
     _sellFocusNode.dispose();
+    _brandPaged.scrollController.dispose();
+    _itemTypePaged.scrollController.dispose();
+    _sizePaged.scrollController.dispose();
+    _colourPaged.scrollController.dispose();
     _draftRow.dispose();
     super.dispose();
   }
@@ -1111,6 +1271,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                               borderRadius: BorderRadius.circular(14),
                               onTap: () {
                                 FocusManager.instance.primaryFocus?.unfocus();
+                                _ensureBrandOptionsLoaded();
                                 _brandMenuController.isOpen
                                     ? _brandMenuController.close()
                                     : _brandMenuController.open();
@@ -1175,13 +1336,18 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       ),
                                     ),
                                     onChanged: (q) {
-                                      setState(() => _brandSearchQuery = q);
+                                      setState(() {
+                                        _brandSearchQuery = q;
+                                        _brandPaged.searchQuery = q;
+                                      });
+                                      _loadBrandOptions(reset: true);
                                     },
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Expanded(
                                   child: ListView(
+                                    controller: _brandPaged.scrollController,
                                     padding: const EdgeInsets.fromLTRB(
                                       8,
                                       4,
@@ -1189,7 +1355,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       8,
                                     ),
                                     children: [
-                                      ..._brandOptions
+                                      ..._mergeUniqueOptions(
+                                            _brandPaged.values,
+                                            _brandOptions,
+                                          )
                                           .where((o) {
                                             if (o.toLowerCase() == 'other') {
                                               return false;
@@ -1225,6 +1394,21 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                               ),
                                             );
                                           }),
+                                      if (_brandPaged.isLoading)
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 10,
+                                          ),
+                                          child: Center(
+                                            child: SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       const SizedBox(height: 8),
                                       Divider(
                                         height: 1,
@@ -1293,6 +1477,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                               borderRadius: BorderRadius.circular(14),
                               onTap: () {
                                 FocusManager.instance.primaryFocus?.unfocus();
+                                _ensureItemTypeOptionsLoaded();
                                 _itemTypeMenuController.isOpen
                                     ? _itemTypeMenuController.close()
                                     : _itemTypeMenuController.open();
@@ -1353,13 +1538,18 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       ),
                                     ),
                                     onChanged: (q) {
-                                      setState(() => _itemTypeSearchQuery = q);
+                                      setState(() {
+                                        _itemTypeSearchQuery = q;
+                                        _itemTypePaged.searchQuery = q;
+                                      });
+                                      _loadItemTypeOptions(reset: true);
                                     },
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Expanded(
                                   child: ListView(
+                                    controller: _itemTypePaged.scrollController,
                                     padding: const EdgeInsets.fromLTRB(
                                       8,
                                       4,
@@ -1367,7 +1557,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       8,
                                     ),
                                     children:
-                                        _itemTypes
+                                        _mergeUniqueOptions(
+                                              _itemTypePaged.values,
+                                              _itemTypes,
+                                            )
                                             .where((o) {
                                               if (o.toLowerCase() == 'other') {
                                                 return false;
@@ -1408,6 +1601,22 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                             })
                                             .toList(growable: true)
                                           ..addAll([
+                                            if (_itemTypePaged.isLoading)
+                                              const Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                  vertical: 10,
+                                                ),
+                                                child: Center(
+                                                  child: SizedBox(
+                                                    width: 18,
+                                                    height: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
                                             const SizedBox(height: 8),
                                             Divider(
                                               height: 1,
@@ -1723,9 +1932,12 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         required String? value,
                         required ValueChanged<String> onSelected,
                         required MenuController menuController,
+                        VoidCallback? onMenuTap,
                         required ValueGetter<String?> selectionGetter,
                         required String searchQuery,
                         required ValueChanged<String> onSearchChanged,
+                        required ScrollController scrollController,
+                        required bool isLoadingOptions,
                         String? errorText,
                       }) {
                         return gridField(
@@ -1754,6 +1966,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                   onTap: () {
                                     FocusManager.instance.primaryFocus
                                         ?.unfocus();
+                                    onMenuTap?.call();
                                     menuController.isOpen
                                         ? menuController.close()
                                         : menuController.open();
@@ -1825,6 +2038,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                     const SizedBox(height: 4),
                                     Expanded(
                                       child: ListView(
+                                        controller: scrollController,
                                         padding: const EdgeInsets.fromLTRB(
                                           8,
                                           4,
@@ -1865,6 +2079,22 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                                   ),
                                                 );
                                               }),
+                                          if (isLoadingOptions)
+                                            const Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                vertical: 10,
+                                              ),
+                                              child: Center(
+                                                child: SizedBox(
+                                                  width: 18,
+                                                  height: 18,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                ),
+                                              ),
+                                            ),
                                           const SizedBox(height: 8),
                                           Divider(
                                             height: 1,
@@ -1944,17 +2174,24 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                   });
                                 },
                                 onAdd: _addNewSizeFromField,
-                                options: [
-                                  ...customSizes,
-                                  ..._sizeOptionsDefault,
-                                ],
+                                options: _mergeUniqueOptions(
+                                  _sizePaged.values,
+                                  [...customSizes, ..._sizeOptionsDefault],
+                                ),
                                 value: _draftRow.resolvedSize,
                                 menuController: _sizeMenuController,
+                                onMenuTap: _ensureSizeOptionsLoaded,
                                 selectionGetter: () => _draftRow.sizeSelection,
                                 searchQuery: _sizeSearchQuery,
                                 onSearchChanged: (q) {
-                                  setState(() => _sizeSearchQuery = q);
+                                  setState(() {
+                                    _sizeSearchQuery = q;
+                                    _sizePaged.searchQuery = q;
+                                  });
+                                  _loadSizeOptions(reset: true);
                                 },
+                                scrollController: _sizePaged.scrollController,
+                                isLoadingOptions: _sizePaged.isLoading,
                                 errorText: sizeError,
                                 onSelected: (v) {
                                   setState(() {
@@ -1977,18 +2214,25 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                   });
                                 },
                                 onAdd: _addNewColourFromField,
-                                options: [
-                                  ...customColours,
-                                  ..._colourOptionsDefault,
-                                ],
+                                options: _mergeUniqueOptions(
+                                  _colourPaged.values,
+                                  [...customColours, ..._colourOptionsDefault],
+                                ),
                                 value: _draftRow.resolvedColour,
                                 menuController: _colourMenuController,
+                                onMenuTap: _ensureColourOptionsLoaded,
                                 selectionGetter: () =>
                                     _draftRow.colourSelection,
                                 searchQuery: _colourSearchQuery,
                                 onSearchChanged: (q) {
-                                  setState(() => _colourSearchQuery = q);
+                                  setState(() {
+                                    _colourSearchQuery = q;
+                                    _colourPaged.searchQuery = q;
+                                  });
+                                  _loadColourOptions(reset: true);
                                 },
+                                scrollController: _colourPaged.scrollController,
+                                isLoadingOptions: _colourPaged.isLoading,
                                 errorText: colourError,
                                 onSelected: (v) {
                                   setState(() {
@@ -2288,6 +2532,16 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       ),
     );
   }
+}
+
+class _PagedOptionsState {
+  final ScrollController scrollController = ScrollController();
+  List<String> values = const <String>[];
+  String searchQuery = '';
+  int nextPage = 1;
+  bool hasMore = true;
+  bool isLoading = false;
+  bool isInitialized = false;
 }
 
 class _VariantDraftRow {

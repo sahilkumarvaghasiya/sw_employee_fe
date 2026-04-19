@@ -15,6 +15,13 @@ class GeneratedBarcode {
   final String barcodeUrl;
 }
 
+class StockOptionPage {
+  const StockOptionPage({required this.items, required this.hasMore});
+
+  final List<String> items;
+  final bool hasMore;
+}
+
 class StockEntryService {
   StockEntryService({ApiService? apiService})
     : _apiService = apiService ?? ApiService();
@@ -45,6 +52,9 @@ class StockEntryService {
     final safeId = Uri.encodeComponent(vendorId);
     return '/vendors/stock/$safeId/history/list/';
   }
+
+  // Paginated options endpoint for add-item dropdowns.
+  static const String stockEntryOptionsPath = '/vendors/stock/options/';
 
   static String _ddMMyyyyDash(DateTime d) {
     final dd = d.day.toString().padLeft(2, '0');
@@ -217,6 +227,111 @@ class StockEntryService {
     final uri = Uri.parse('$normalizedBase$normalizedPath');
     if (queryParameters == null || queryParameters.isEmpty) return uri;
     return uri.replace(queryParameters: queryParameters);
+  }
+
+  List<String> _extractOptionStrings(Object? raw) {
+    if (raw is! List) return const <String>[];
+
+    final out = <String>[];
+    final seen = <String>{};
+
+    void addValue(Object? value) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isEmpty) return;
+      final key = text.toLowerCase();
+      if (seen.add(key)) out.add(text);
+    }
+
+    for (final entry in raw) {
+      if (entry is String || entry is num) {
+        addValue(entry);
+        continue;
+      }
+      if (entry is Map<String, dynamic>) {
+        addValue(
+          entry['name'] ??
+              entry['label'] ??
+              entry['value'] ??
+              entry['title'] ??
+              entry['item_type'] ??
+              entry['product_type'] ??
+              entry['company_name'] ??
+              entry['size'] ??
+              entry['colour'] ??
+              entry['color'],
+        );
+      }
+    }
+
+    return out;
+  }
+
+  Future<StockOptionPage> fetchStockOptionPage({
+    required String option,
+    required int page,
+    int pageSize = 30,
+    String? search,
+  }) async {
+    final query = (search ?? '').trim();
+    final qp = <String, String>{
+      'option': option,
+      'page': page.toString(),
+      'page_size': pageSize.toString(),
+    };
+    if (query.isNotEmpty) {
+      qp['search'] = query;
+      qp['query'] = query;
+    }
+
+    final response = await _apiService.get(
+      _url(stockEntryOptionsPath, queryParameters: qp).toString(),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw http.ClientException(
+        'Failed to load $option options (${response.statusCode})',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    List<String> list = const <String>[];
+    bool hasMore = false;
+
+    if (decoded is List) {
+      list = _extractOptionStrings(decoded);
+      hasMore = list.length >= pageSize;
+    } else if (decoded is Map<String, dynamic>) {
+      final topLevel =
+          decoded['results'] ??
+          decoded['data'] ??
+          decoded['items'] ??
+          decoded['options'];
+
+      if (topLevel is List) {
+        list = _extractOptionStrings(topLevel);
+      } else if (topLevel is Map<String, dynamic>) {
+        final nested =
+            topLevel['results'] ??
+            topLevel['data'] ??
+            topLevel['items'] ??
+            topLevel['options'];
+        list = _extractOptionStrings(nested);
+      }
+
+      final next = decoded['next'];
+      if (next != null) {
+        hasMore = true;
+      } else {
+        final totalPages = int.tryParse('${decoded['total_pages'] ?? ''}');
+        if (totalPages != null && totalPages > 0) {
+          hasMore = page < totalPages;
+        } else {
+          hasMore = list.length >= pageSize;
+        }
+      }
+    }
+
+    return StockOptionPage(items: list, hasMore: hasMore);
   }
 
   Future<GeneratedBarcode> generateBarcode({
