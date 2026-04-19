@@ -177,6 +177,11 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
             ),
             FilledButton(
               onPressed: () {
+                if (start == null && end == null) {
+                  Navigator.of(dialogContext).pop(const _DateRangeCleared());
+                  return;
+                }
+
                 if (start == null || end == null) {
                   Navigator.of(dialogContext).pop(null);
                   return;

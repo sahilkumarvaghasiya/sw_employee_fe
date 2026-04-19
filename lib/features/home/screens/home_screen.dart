@@ -17,12 +17,6 @@ import '../../sales_history/screens/sales_history_screen.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  void _showSnack(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -290,10 +284,7 @@ class HomeScreen extends StatelessWidget {
                       billNo: bill.billNo,
                       amount: bill.amount,
                       method: bill.method,
-                      onTap: () => _showSnack(
-                        context,
-                        'Bill #${bill.billNo} (coming soon)',
-                      ),
+                      onTap: null,
                     ),
                   );
                 },

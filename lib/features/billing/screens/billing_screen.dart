@@ -165,7 +165,9 @@ class _BillingScreenState extends State<BillingScreen> {
     _showSnack('Updated ${item.productName}');
   }
 
-  Future<void> _confirmCashAndGenerateBill() async {
+  Future<void> _confirmCashAndGenerateBill({
+    bool closePaymentOptionsOnSuccess = false,
+  }) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -187,6 +189,10 @@ class _BillingScreenState extends State<BillingScreen> {
     );
 
     if (!mounted || confirmed != true) return;
+
+    if (closePaymentOptionsOnSuccess && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
 
     final provider = context.read<BillingProvider>();
     provider.setPaymentMethod(BillingPaymentMethod.cash);
@@ -474,8 +480,9 @@ class _BillingScreenState extends State<BillingScreen> {
                   title: 'Cash',
                   subtitle: 'Confirm cash received',
                   onTap: () async {
-                    Navigator.of(context).pop();
-                    await _confirmCashAndGenerateBill();
+                    await _confirmCashAndGenerateBill(
+                      closePaymentOptionsOnSuccess: true,
+                    );
                   },
                 ),
                 option(
@@ -483,7 +490,6 @@ class _BillingScreenState extends State<BillingScreen> {
                   title: 'Paytm',
                   subtitle: 'Show QR to customer',
                   onTap: () async {
-                    Navigator.of(context).pop();
                     await _showQrPaymentSheet(
                       method: BillingPaymentMethod.paytm,
                     );
@@ -494,7 +500,6 @@ class _BillingScreenState extends State<BillingScreen> {
                   title: 'UPI',
                   subtitle: 'Show UPI QR to customer',
                   onTap: () async {
-                    Navigator.of(context).pop();
                     await _showQrPaymentSheet(method: BillingPaymentMethod.upi);
                   },
                 ),
@@ -503,7 +508,6 @@ class _BillingScreenState extends State<BillingScreen> {
                   title: 'Card (Credit/Debit)',
                   subtitle: 'Coming soon',
                   onTap: () {
-                    Navigator.of(context).pop();
                     showDialog<void>(
                       context: this.context,
                       builder: (context) => AlertDialog(

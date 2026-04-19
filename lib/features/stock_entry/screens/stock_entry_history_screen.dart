@@ -445,12 +445,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
     if (start != null) start = clamp(start);
     if (end != null) end = clamp(end);
 
-    if (start == null || end == null) {
-      start = clamp(now.subtract(const Duration(days: 7)));
-      end = clamp(now);
-    }
-
-    if (end.isBefore(start)) {
+    if (start != null && end != null && end.isBefore(start)) {
       end = start;
     }
 

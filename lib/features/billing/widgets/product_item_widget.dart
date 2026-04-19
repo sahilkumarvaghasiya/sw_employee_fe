@@ -185,11 +185,10 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
     final showPreviousAmount =
         hasOffer && previousAmount > widget.item.lineTotal + 0.0001;
 
-    InputDecoration fieldDecoration({required String label, String? suffix}) {
+    InputDecoration fieldDecoration({String? prefixText}) {
       return InputDecoration(
         isDense: true,
-        hintText: label,
-        suffixText: suffix,
+        prefixText: prefixText,
         filled: true,
         fillColor: colorScheme.surface,
         border: OutlineInputBorder(
@@ -204,10 +203,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: colorScheme.primary, width: 1.1),
         ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 10,
-          vertical: 11,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
       );
     }
 
@@ -252,16 +248,16 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<_EditMode>(
               value: _mode,
               isDense: true,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               items: const [
                 DropdownMenuItem(value: _EditMode.price, child: Text('Price')),
                 DropdownMenuItem(
@@ -279,33 +275,11 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
       );
     }
 
-    Widget symbolBox() {
-      return Container(
-        width: 42,
-        height: 48,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colorScheme.outlineVariant),
-        ),
-        child: Text(
-          _mode == _EditMode.price ? '₹' : '%',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w900,
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
-
     Widget editorRow() {
       return Row(
         children: [
-          modeSelector(),
-          const SizedBox(width: 8),
-          symbolBox(),
-          const SizedBox(width: 8),
+          SizedBox(width: 84, child: modeSelector()),
+          const SizedBox(width: 6),
           Expanded(
             child: TextField(
               controller: _mode == _EditMode.price
@@ -319,9 +293,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
               ),
               decoration:
                   fieldDecoration(
-                    label: _mode == _EditMode.price
-                        ? 'Enter reduction'
-                        : 'Enter discount',
+                    prefixText: _mode == _EditMode.price ? '₹' : '%',
                   ).copyWith(
                     errorText: _mode == _EditMode.price
                         ? _priceError
@@ -339,7 +311,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
     Widget offerSummary() {
       if (!hasOffer) {
         return Text(
-          'Tap to edit price or discount',
+          'Tap to edit',
           style: theme.textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w600,
@@ -488,19 +460,8 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                 ),
               ),
               if (_showOfferEditor) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 editorRow(),
-                if (_mode == _EditMode.discount &&
-                    widget.item.discountPercent == 0) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Leave empty for no discount',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
               ],
             ],
           ),

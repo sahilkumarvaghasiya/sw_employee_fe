@@ -551,6 +551,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     final adjustmentController = TextEditingController();
     int offerMode = 0; // 0: none, 1: price, 2: discount
     bool offerExpanded = false;
+    String? offerValueError;
     final baseAmount = provider.calculatedFinalAmount;
 
     final confirmed = await showModalBottomSheet<bool>(
@@ -563,8 +564,55 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final entered =
-                double.tryParse(adjustmentController.text.trim()) ?? 0.0;
+            Widget segmentLabel(String text) {
+              return FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(text, maxLines: 1, softWrap: false),
+              );
+            }
+
+            final rawValue = adjustmentController.text.trim();
+            final parsedValue = double.tryParse(rawValue);
+            final entered = parsedValue ?? 0.0;
+
+            bool validateOfferValue() {
+              if (offerMode == 0) {
+                offerValueError = null;
+                return true;
+              }
+
+              if (rawValue.isEmpty) {
+                offerValueError = 'Required field';
+                return false;
+              }
+
+              if (parsedValue == null || parsedValue <= 0) {
+                offerValueError = 'Enter a valid value';
+                return false;
+              }
+
+              if (offerMode == 1 && parsedValue >= baseAmount) {
+                offerValueError = 'Must be less than total bill';
+                return false;
+              }
+
+              if (offerMode == 2 && parsedValue > 100) {
+                offerValueError = 'Discount must be up to 100%';
+                return false;
+              }
+
+              offerValueError = null;
+              return true;
+            }
+
+            void handleConfirm() {
+              bool isValid = true;
+              setModalState(() {
+                isValid = validateOfferValue();
+              });
+              if (!isValid) return;
+              Navigator.of(sheetContext).pop(true);
+            }
 
             double payable = baseAmount;
             if (offerMode == 1 && entered > 0) {
@@ -672,6 +720,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                 if (!offerExpanded) {
                                   offerMode = 0;
                                   adjustmentController.clear();
+                                  offerValueError = null;
                                 }
                               });
                             },
@@ -685,56 +734,78 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                       ),
                       if (offerExpanded) ...[
                         const SizedBox(height: 8),
-                        SegmentedButton<int>(
-                          segments: const [
-                            ButtonSegment<int>(value: 0, label: Text('None')),
-                            ButtonSegment<int>(value: 1, label: Text('Price')),
-                            ButtonSegment<int>(
-                              value: 2,
-                              label: Text('Discount'),
-                            ),
-                          ],
-                          selected: {offerMode},
-                          onSelectionChanged: (selection) {
-                            setModalState(() {
-                              offerMode = selection.first;
-                              adjustmentController.clear();
-                            });
-                          },
-                        ),
-                        if (offerMode != 0) ...[
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: colorScheme.outlineVariant,
-                              ),
-                            ),
-                            child: TextField(
-                              controller: adjustmentController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: SegmentedButton<int>(
+                                segments: [
+                                  ButtonSegment<int>(
+                                    value: 0,
+                                    label: segmentLabel('None'),
                                   ),
-                              onChanged: (_) => setModalState(() {}),
-                              decoration: InputDecoration(
-                                isDense: true,
-                                border: InputBorder.none,
-                                labelText: offerMode == 1
-                                    ? 'Enter reduction amount'
-                                    : 'Enter discount %',
-                                prefixText: offerMode == 1 ? '₹' : null,
-                                suffixText: offerMode == 2 ? '%' : null,
-                                helperText: offerMode == 1
-                                    ? 'Deducted from overall bill total'
-                                    : 'Applied on overall bill total',
-                                helperMaxLines: 2,
+                                  ButtonSegment<int>(
+                                    value: 1,
+                                    label: segmentLabel('Price'),
+                                  ),
+                                  ButtonSegment<int>(
+                                    value: 2,
+                                    label: segmentLabel('Discount'),
+                                  ),
+                                ],
+                                multiSelectionEnabled: false,
+                                emptySelectionAllowed: false,
+                                selected: {offerMode},
+                                showSelectedIcon: false,
+                                style: ButtonStyle(
+                                  padding: WidgetStateProperty.all(
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                onSelectionChanged: (selection) {
+                                  setModalState(() {
+                                    offerMode = selection.first;
+                                    adjustmentController.clear();
+                                    offerValueError = null;
+                                  });
+                                },
                               ),
                             ),
-                          ),
-                        ],
+                            if (offerMode != 0) ...[
+                              const SizedBox(width: 10),
+                              Expanded(
+                                flex: 3,
+                                child: TextField(
+                                  controller: adjustmentController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  onChanged: (_) {
+                                    setModalState(() {
+                                      validateOfferValue();
+                                    });
+                                  },
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    hintText: 'Value',
+                                    prefixText: offerMode == 1 ? '₹' : null,
+                                    suffixText: offerMode == 2 ? '%' : null,
+                                    errorText: offerValueError,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                         const SizedBox(height: 14),
                       ],
                       if (!offerExpanded) const SizedBox(height: 6),
@@ -783,28 +854,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 FilledButton(
-                                  onPressed: () {
-                                    if (offerMode != 0) {
-                                      if (entered <= 0) {
-                                        _showSnack('Enter a valid offer value');
-                                        return;
-                                      }
-                                      if (offerMode == 1 &&
-                                          entered >= baseAmount) {
-                                        _showSnack(
-                                          'Reduction must be less than total bill',
-                                        );
-                                        return;
-                                      }
-                                      if (offerMode == 2 && entered > 100) {
-                                        _showSnack(
-                                          'Discount must be up to 100%',
-                                        );
-                                        return;
-                                      }
-                                    }
-                                    Navigator.of(sheetContext).pop(true);
-                                  },
+                                  onPressed: handleConfirm,
                                   child: const Text('Confirm'),
                                 ),
                               ],
@@ -823,28 +873,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: FilledButton(
-                                  onPressed: () {
-                                    if (offerMode != 0) {
-                                      if (entered <= 0) {
-                                        _showSnack('Enter a valid offer value');
-                                        return;
-                                      }
-                                      if (offerMode == 1 &&
-                                          entered >= baseAmount) {
-                                        _showSnack(
-                                          'Reduction must be less than total bill',
-                                        );
-                                        return;
-                                      }
-                                      if (offerMode == 2 && entered > 100) {
-                                        _showSnack(
-                                          'Discount must be up to 100%',
-                                        );
-                                        return;
-                                      }
-                                    }
-                                    Navigator.of(sheetContext).pop(true);
-                                  },
+                                  onPressed: handleConfirm,
                                   child: const Text('Confirm'),
                                 ),
                               ),
@@ -893,9 +922,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     return true;
   }
 
-  Future<void> _confirmCashAndGenerateBill() async {
+  Future<void> _confirmCashAndGenerateBill({
+    bool closePaymentOptionsOnSuccess = false,
+  }) async {
     final confirmed = await _confirmPaymentDone(methodLabel: 'Cash');
     if (!mounted || !confirmed) return;
+
+    if (closePaymentOptionsOnSuccess && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
 
     final provider = context.read<BillingProvider>();
     provider.setPaymentMethod(BillingPaymentMethod.cash);
@@ -903,9 +938,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     Navigator.of(context).push(BillPreviewScreen.route(context));
   }
 
-  Future<void> _confirmCardAndGenerateBill() async {
+  Future<void> _confirmCardAndGenerateBill({
+    bool closePaymentOptionsOnSuccess = false,
+  }) async {
     final confirmed = await _confirmPaymentDone(methodLabel: 'Card');
     if (!mounted || !confirmed) return;
+
+    if (closePaymentOptionsOnSuccess && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
 
     final provider = context.read<BillingProvider>();
     provider.setPaymentMethod(BillingPaymentMethod.card);
@@ -1313,8 +1354,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                   title: 'Cash',
                   subtitle: 'Confirm cash received',
                   onTap: () async {
-                    Navigator.of(context).pop();
-                    await _confirmCashAndGenerateBill();
+                    await _confirmCashAndGenerateBill(
+                      closePaymentOptionsOnSuccess: true,
+                    );
                   },
                 ),
                 option(
@@ -1322,7 +1364,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                   title: 'QR barcode',
                   subtitle: 'Select QR and show to customer',
                   onTap: () async {
-                    Navigator.of(context).pop();
                     await _showQrPaymentSheet();
                   },
                 ),
@@ -1331,8 +1372,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                   title: 'Card (Credit/Debit)',
                   subtitle: 'Confirm card payment received',
                   onTap: () async {
-                    Navigator.of(context).pop();
-                    await _confirmCardAndGenerateBill();
+                    await _confirmCardAndGenerateBill(
+                      closePaymentOptionsOnSuccess: true,
+                    );
                   },
                 ),
               ],
