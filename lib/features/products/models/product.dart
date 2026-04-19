@@ -48,7 +48,7 @@ class Product {
     final price = _toDouble(rawPrice);
 
     // These are not currently returned by the list serializer, so keep safe defaults.
-    final barcode = (json['qr_code_number'] ?? json['barcode'] ?? id)
+    final barcode = (json['barcode_number'] ?? json['barcode'] ?? id)
         .toString();
     final quantityInStock = _toInt(
       json['quantity'] ?? json['quantityInStock'] ?? 0,

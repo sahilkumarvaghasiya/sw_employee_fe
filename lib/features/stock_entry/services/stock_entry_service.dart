@@ -249,7 +249,7 @@ class StockEntryService {
     final barcode =
         (decoded['barcode_number'] ??
                 decoded['barcode'] ??
-                decoded['qr_code_number'])
+                decoded['barcode_number'])
             ?.toString()
             .trim();
     final barcodeUrl = decoded['barcode_url']?.toString().trim();
