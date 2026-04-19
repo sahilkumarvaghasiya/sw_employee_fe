@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -106,15 +105,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
     if (digits.length != 10) return null;
     return digits;
-  }
-
-  void _seedDebugCartItem() {
-    if (!kDebugMode) return;
-
-    final provider = context.read<BillingProvider>();
-    if (provider.items.isNotEmpty) return;
-
-    provider.addManualProduct(name: 'Demo T-Shirt', unitPrice: 999.0);
   }
 
   void _clearAutoFilledCustomerDetails({required bool force}) {
@@ -1455,8 +1445,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       _startingScanner = false;
       _showHowBillingWorks = false;
     });
-
-    _seedDebugCartItem();
 
     await _startScanner();
   }
