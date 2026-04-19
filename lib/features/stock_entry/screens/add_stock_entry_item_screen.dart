@@ -79,11 +79,13 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   final MenuController _colourMenuController = MenuController();
   final MenuController _brandMenuController = MenuController();
   final MenuController _itemTypeMenuController = MenuController();
+  final MenuController _genderMenuController = MenuController();
 
   String _sizeSearchQuery = '';
   String _colourSearchQuery = '';
   String _brandSearchQuery = '';
   String _itemTypeSearchQuery = '';
+  bool _showItemFieldErrors = false;
 
   void _ensureVisible(GlobalKey key) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -415,29 +417,28 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   Future<bool> _addItemToTable() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
+    setState(() {
+      _showItemFieldErrors = true;
+    });
+
     final size = _draftRow.resolvedSize.trim();
     final colour = _draftRow.resolvedColour.trim();
     final qty = _draftRow.qty;
     final sell = _sellUnitPrice;
 
     if (size.isEmpty) {
-      _showSnack('Select a size.');
       return false;
     }
     if (colour.isEmpty) {
-      _showSnack('Select a colour.');
       return false;
     }
     if (qty <= 0) {
-      _showSnack('Enter pieces (qty).');
       return false;
     }
     if (sell == null) {
-      _showSnack('Enter selling price.');
       return false;
     }
     if (sell < 0) {
-      _showSnack('Selling cannot be negative.');
       return false;
     }
 
@@ -459,6 +460,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _draftRow.reset();
       _sellUnitPrice = 0;
       _setSellText('0');
+      _showItemFieldErrors = false;
     });
 
     return true;
@@ -521,6 +523,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     final entry = _entries[index];
 
     setState(() {
+      _showItemFieldErrors = false;
       _editingIndex = index;
 
       final sizeExists = _sizeOptions.any(
@@ -563,6 +566,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
   void _cancelEdit() {
     setState(() {
+      _showItemFieldErrors = false;
       _editingIndex = null;
       _draftRow.reset();
     });
@@ -1441,27 +1445,100 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<StockEntryItemGender>(
+                  FormField<StockEntryItemGender>(
                     initialValue: safeGender,
-                    isExpanded: true,
-                    icon: const Icon(Icons.expand_more_rounded),
-                    items: StockEntryItemGender.values
-                        .map(
-                          (g) => DropdownMenuItem<StockEntryItemGender>(
-                            value: g,
-                            child: Text(
-                              g.label,
-                              overflow: TextOverflow.ellipsis,
+                    validator: (v) => v == null ? 'Gender is required' : null,
+                    builder: (field) {
+                      final selected = _gender;
+                      final isEmpty = selected == null;
+
+                      return MenuAnchor(
+                        controller: _genderMenuController,
+                        style: MenuStyle(
+                          backgroundColor: WidgetStatePropertyAll(
+                            colorScheme.surfaceContainerHighest,
+                          ),
+                          shape: WidgetStatePropertyAll(
+                            RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (v) => setState(() => _gender = v),
-                    validator: (v) => v == null ? 'Gender is required' : null,
-                    decoration: decoration(
-                      label: 'Gender',
-                      icon: Icons.wc_outlined,
-                    ),
+                        ),
+                        builder: (context, controller, child) {
+                          return SizedBox(
+                            height: 56,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () {
+                                FocusManager.instance.primaryFocus?.unfocus();
+                                _genderMenuController.isOpen
+                                    ? _genderMenuController.close()
+                                    : _genderMenuController.open();
+                              },
+                              child: InputDecorator(
+                                isEmpty: isEmpty,
+                                decoration:
+                                    decoration(
+                                      label: 'Gender',
+                                      icon: Icons.wc_outlined,
+                                    ).copyWith(
+                                      suffixIcon: const Icon(
+                                        Icons.expand_more_rounded,
+                                      ),
+                                      floatingLabelBehavior:
+                                          FloatingLabelBehavior.always,
+                                      errorText: field.errorText,
+                                    ),
+                                child: Text(
+                                  isEmpty ? 'Select gender' : selected.label,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    fontWeight: isEmpty
+                                        ? FontWeight.w600
+                                        : FontWeight.w700,
+                                    color: isEmpty
+                                        ? colorScheme.onSurfaceVariant
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                        menuChildren: [
+                          SizedBox(
+                            width: MediaQuery.of(context).size.width - 64,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: StockEntryItemGender.values
+                                  .map((g) {
+                                    final isSelected = selected == g;
+                                    return MenuItemButton(
+                                      leadingIcon: isSelected
+                                          ? const Icon(Icons.check_rounded)
+                                          : const SizedBox(
+                                              width: 24,
+                                              height: 24,
+                                            ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _gender = g;
+                                        });
+                                        field.didChange(g);
+                                        _genderMenuController.close();
+                                      },
+                                      child: Text(
+                                        g.label,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  })
+                                  .toList(growable: false),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -1502,10 +1579,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 ),
                               ),
                             ),
-                            TextButton(
-                              onPressed: _cancelEdit,
-                              child: const Text('Cancel edit'),
-                            ),
                           ],
                         ),
                       ),
@@ -1533,6 +1606,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                       Widget gridField({
                         required String label,
                         required Widget child,
+                        String? errorText,
                       }) {
                         return SizedBox(
                           width: fieldWidth,
@@ -1540,8 +1614,18 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               fieldLabel(label),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                               child,
+                              if (errorText != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  errorText,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.error,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         );
@@ -1642,9 +1726,11 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         required ValueGetter<String?> selectionGetter,
                         required String searchQuery,
                         required ValueChanged<String> onSearchChanged,
+                        String? errorText,
                       }) {
                         return gridField(
                           label: label,
+                          errorText: errorText,
                           child: MenuAnchor(
                             controller: menuController,
                             style: MenuStyle(
@@ -1814,12 +1900,34 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         );
                       }
 
+                      final sizeError =
+                          _showItemFieldErrors &&
+                              _draftRow.resolvedSize.trim().isEmpty
+                          ? 'Required field'
+                          : null;
+                      final colourError =
+                          _showItemFieldErrors &&
+                              _draftRow.resolvedColour.trim().isEmpty
+                          ? 'Required field'
+                          : null;
+                      final qtyError =
+                          _showItemFieldErrors && _draftRow.qty <= 0
+                          ? 'Required field'
+                          : null;
+                      final sellError = (() {
+                        if (!_showItemFieldErrors) return null;
+                        final sell = _sellUnitPrice;
+                        if (sell == null) return 'Required field';
+                        if (sell < 0) return 'Cannot be negative';
+                        return null;
+                      })();
+
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Wrap(
                             spacing: gap,
-                            runSpacing: 10,
+                            runSpacing: 14,
                             children: [
                               menuDropdown(
                                 label: 'Size',
@@ -1847,6 +1955,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 onSearchChanged: (q) {
                                   setState(() => _sizeSearchQuery = q);
                                 },
+                                errorText: sizeError,
                                 onSelected: (v) {
                                   setState(() {
                                     _draftRow.sizeSelection = v;
@@ -1880,6 +1989,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 onSearchChanged: (q) {
                                   setState(() => _colourSearchQuery = q);
                                 },
+                                errorText: colourError,
                                 onSelected: (v) {
                                   setState(() {
                                     _draftRow.colourSelection = v;
@@ -1888,10 +1998,12 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                               ),
                               gridField(
                                 label: 'Pieces',
+                                errorText: qtyError,
                                 child: piecesStepper(),
                               ),
                               gridField(
                                 label: 'Sell Price',
+                                errorText: sellError,
                                 child: SizedBox(
                                   height: gridHeight,
                                   child: Builder(
@@ -1987,23 +2099,30 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                await _addItemToTable();
-                              },
-                              icon: Icon(
-                                _editingIndex == null
-                                    ? Icons.add_rounded
-                                    : Icons.check_rounded,
+                          Row(
+                            children: [
+                              if (_editingIndex != null)
+                                TextButton(
+                                  onPressed: _cancelEdit,
+                                  child: const Text('Cancel edit'),
+                                ),
+                              const Spacer(),
+                              OutlinedButton.icon(
+                                onPressed: () async {
+                                  await _addItemToTable();
+                                },
+                                icon: Icon(
+                                  _editingIndex == null
+                                      ? Icons.add_rounded
+                                      : Icons.check_rounded,
+                                ),
+                                label: Text(
+                                  _editingIndex == null
+                                      ? 'Add Item'
+                                      : 'Update Item',
+                                ),
                               ),
-                              label: Text(
-                                _editingIndex == null
-                                    ? 'Add Item'
-                                    : 'Update Item',
-                              ),
-                            ),
+                            ],
                           ),
                         ],
                       );

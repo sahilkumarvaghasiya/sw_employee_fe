@@ -71,7 +71,8 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
 
     if (force || !_priceFocusNode.hasFocus) {
       final priceText = priceOverridden
-          ? (widget.item.originalUnitPrice - widget.item.unitPrice)
+          ? ((widget.item.originalUnitPrice - widget.item.unitPrice) *
+                    widget.item.quantity)
                 .toStringAsFixed(2)
           : '';
       if (_priceController.text != priceText) {
@@ -105,6 +106,17 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
   void _setMode(_EditMode mode) {
+    final isPriceActive =
+        widget.item.unitPrice != widget.item.originalUnitPrice;
+    final isDiscountActive = widget.item.discountPercent > 0;
+
+    if (mode == _EditMode.discount && isPriceActive) {
+      widget.onPriceChanged(null);
+    }
+    if (mode == _EditMode.price && isDiscountActive) {
+      widget.onDiscountChanged(null);
+    }
+
     setState(() {
       _mode = mode;
       _priceError = null;
@@ -126,14 +138,18 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
       return;
     }
 
-    final original = widget.item.originalUnitPrice;
-    if (parsed >= original) {
-      setState(() => _priceError = 'Must be less than ${_money(original)}');
+    final qty = widget.item.quantity <= 0 ? 1 : widget.item.quantity;
+    final originalTotal = widget.item.originalUnitPrice * qty;
+    if (parsed >= originalTotal) {
+      setState(
+        () => _priceError = 'Must be less than ${_money(originalTotal)}',
+      );
       return;
     }
 
+    final nextUnitPrice = widget.item.originalUnitPrice - (parsed / qty);
     setState(() => _priceError = null);
-    widget.onPriceChanged(original - parsed);
+    widget.onPriceChanged(nextUnitPrice);
   }
 
   void _handleDiscountChanged(String value) {
@@ -163,6 +179,11 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
         widget.item.unitPrice != widget.item.originalUnitPrice;
     final discountApplied = widget.item.discountPercent > 0;
     final hasOffer = priceOverridden || discountApplied;
+    final previousAmount = priceOverridden
+        ? widget.item.originalUnitPrice * widget.item.quantity
+        : widget.item.lineSubtotal;
+    final showPreviousAmount =
+        hasOffer && previousAmount > widget.item.lineTotal + 0.0001;
 
     InputDecoration fieldDecoration({required String label, String? suffix}) {
       return InputDecoration(
@@ -326,17 +347,12 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
         );
       }
 
-      return Wrap(
-        spacing: 8,
-        runSpacing: 6,
-        children: [
-          if (discountApplied)
-            _Chip(
-              icon: Icons.percent_rounded,
-              label:
-                  'Discount ${widget.item.discountPercent.toStringAsFixed(0)}%',
-            ),
-        ],
+      return Text(
+        'Offer applied',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+        ),
       );
     }
 
@@ -347,139 +363,146 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
       clipBehavior: Clip.antiAlias,
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            setState(() => _showOfferEditor = !_showOfferEditor);
-          },
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: colorScheme.primary.withOpacity(0.12),
+                    child: Text(
+                      widget.item.quantity.toString(),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: Stack(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(right: 30),
+                                child: Text(
+                                  widget.item.productName,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: TextButton(
+                                  onPressed: widget.onRemove,
+                                  style: TextButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 0,
+                                    ),
+                                    minimumSize: const Size(0, 24),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text('Cancel'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (sizeText.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          _Chip(
+                            icon: Icons.straighten_rounded,
+                            label: sizeText,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.topRight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: colorScheme.primary.withOpacity(0.12),
-                      child: Text(
-                        widget.item.quantity.toString(),
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w900,
+                    Text(
+                      _money(widget.item.lineTotal),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (showPreviousAmount) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _money(previousAmount),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          decoration: TextDecoration.lineThrough,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: Stack(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 30),
-                                  child: Text(
-                                    widget.item.productName,
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 0,
-                                  right: 0,
-                                  child: TextButton(
-                                    onPressed: widget.onRemove,
-                                    style: TextButton.styleFrom(
-                                      visualDensity: VisualDensity.compact,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 0,
-                                      ),
-                                      minimumSize: const Size(0, 24),
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    child: const Text('Cancel'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (sizeText.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            _Chip(
-                              icon: Icons.straighten_rounded,
-                              label: sizeText,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.topRight,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+              ),
+              const SizedBox(height: 10),
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  setState(() => _showOfferEditor = !_showOfferEditor);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 2,
+                  ),
+                  child: Row(
                     children: [
-                      Text(
-                        _money(widget.item.lineTotal),
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      quantityStepper(),
+                      const SizedBox(width: 10),
+                      Expanded(child: offerSummary()),
+                      const SizedBox(width: 10),
+                      Icon(
+                        _showOfferEditor
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        color: colorScheme.onSurfaceVariant,
                       ),
-                      if (hasOffer) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          _money(widget.item.lineSubtotal),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            decoration: TextDecoration.lineThrough,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    quantityStepper(),
-                    const SizedBox(width: 10),
-                    Expanded(child: offerSummary()),
-                    const SizedBox(width: 10),
-                    Icon(
-                      _showOfferEditor
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
+              ),
+              if (_showOfferEditor) ...[
+                const SizedBox(height: 12),
+                editorRow(),
+                if (_mode == _EditMode.discount &&
+                    widget.item.discountPercent == 0) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Leave empty for no discount',
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ],
-                ),
-                if (_showOfferEditor) ...[
-                  const SizedBox(height: 12),
-                  editorRow(),
-                  if (_mode == _EditMode.discount &&
-                      widget.item.discountPercent == 0) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Leave empty for no discount',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                  ),
                 ],
               ],
-            ),
+            ],
           ),
         ),
       ),

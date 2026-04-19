@@ -693,6 +693,42 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<bool> _confirmDiscardOnBackIfNeeded() async {
+    if (_items.isEmpty) return true;
+
+    final shouldDiscard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard entries?'),
+        content: const Text(
+          'Going back will discard listed entries. Do you want to go back?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    return shouldDiscard == true;
+  }
+
+  Future<void> _handleBackPressed() async {
+    final canGoBack = await _confirmDiscardOnBackIfNeeded();
+    if (!canGoBack || !mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<bool> _onWillPop() async {
+    return _confirmDiscardOnBackIfNeeded();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -830,240 +866,246 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        elevation: 0,
-        scrolledUnderElevation: 2,
-        backgroundColor: colorScheme.surface.withOpacity(0.94),
-        title: Row(
-          children: [
-            Container(
-              height: 34,
-              width: 34,
-              decoration: BoxDecoration(
-                color: colorScheme.primary.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.inventory_2_outlined,
-                color: colorScheme.primary,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Stock Entry',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    '${widget.vendor.name} • ${widget.vendor.phone}${(widget.vendor.address == null || widget.vendor.address!.trim().isEmpty) ? '' : ' • ${widget.vendor.address}'}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton.filledTonal(
-            tooltip: 'Vendor history',
-            onPressed: () {
-              Navigator.of(
-                context,
-              ).push(StockEntryHistoryScreen.route(vendor: widget.vendor));
-            },
-            icon: const Icon(Icons.history_rounded),
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        appBar: AppBar(
+          elevation: 0,
+          scrolledUnderElevation: 2,
+          backgroundColor: colorScheme.surface.withOpacity(0.94),
+          leading: IconButton(
+            tooltip: 'Back',
+            onPressed: _handleBackPressed,
+            icon: const Icon(Icons.arrow_back_rounded),
           ),
-        ],
-      ),
-      body: ListView(
-        controller: _scrollController,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
-        children: [
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        height: 34,
-                        width: 34,
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.qr_code_scanner_rounded,
-                          color: colorScheme.primary,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Quick actions',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${_items.length} added',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Scan an existing barcode or generate a new one.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Material(
-                    color: colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(20),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        actionRow(
-                          icon: Icons.document_scanner_outlined,
-                          title: 'Scan barcode',
-                          subtitle: 'Use camera to scan an existing barcode',
-                          onTap: _scanBarcode,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(20),
-                          ),
-                        ),
-                        Divider(
-                          height: 1,
-                          color: colorScheme.outlineVariant.withAlpha(120),
-                        ),
-                        actionRow(
-                          icon: Icons.auto_fix_high_rounded,
-                          title: 'Generate barcode',
-                          subtitle: 'Create a new barcode with item details',
-                          onTap: _generateBarcode,
-                          borderRadius: const BorderRadius.vertical(
-                            bottom: Radius.circular(20),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          if (_items.isEmpty)
-            Card(
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      height: 54,
-                      width: 54,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Icon(
-                        Icons.qr_code_2_rounded,
-                        color: colorScheme.primary,
-                        size: 30,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'No items added yet',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Use Quick actions to scan or generate barcodes.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+          title: Row(
+            children: [
+              Container(
+                height: 34,
+                width: 34,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.inventory_2_outlined,
+                  color: colorScheme.primary,
+                  size: 20,
                 ),
               ),
-            )
-          else ...[
-            buildItemsList(),
-          ],
-
-          const SizedBox(height: 14),
-        ],
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-          child: Row(
-            children: [
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Total: ${_money(_totalStockValue)}',
+                      'Stock Entry',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     Text(
-                      'Due: ${_money(_remainingAmount)}',
+                      '${widget.vendor.name} • ${widget.vendor.phone}${(widget.vendor.address == null || widget.vendor.address!.trim().isEmpty) ? '' : ' • ${widget.vendor.address}'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: _remainingAmount <= 0
-                            ? colorScheme.tertiary
-                            : colorScheme.error,
-                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
-              FilledButton.icon(
-                onPressed: _items.isEmpty ? null : _confirmAndOpenPayment,
-                icon: const Icon(Icons.save),
-                label: const Text('Save'),
-              ),
             ],
+          ),
+          actions: [
+            IconButton.filledTonal(
+              tooltip: 'Vendor history',
+              onPressed: () {
+                Navigator.of(
+                  context,
+                ).push(StockEntryHistoryScreen.route(vendor: widget.vendor));
+              },
+              icon: const Icon(Icons.history_rounded),
+            ),
+          ],
+        ),
+        body: ListView(
+          controller: _scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+          children: [
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          height: 34,
+                          width: 34,
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.qr_code_scanner_rounded,
+                            color: colorScheme.primary,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Quick actions',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${_items.length} added',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Scan an existing barcode or generate a new one.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Material(
+                      color: colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(20),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          actionRow(
+                            icon: Icons.document_scanner_outlined,
+                            title: 'Scan barcode',
+                            subtitle: 'Use camera to scan an existing barcode',
+                            onTap: _scanBarcode,
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(20),
+                            ),
+                          ),
+                          Divider(
+                            height: 1,
+                            color: colorScheme.outlineVariant.withAlpha(120),
+                          ),
+                          actionRow(
+                            icon: Icons.auto_fix_high_rounded,
+                            title: 'Generate barcode',
+                            subtitle: 'Create a new barcode with item details',
+                            onTap: _generateBarcode,
+                            borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(20),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (_items.isEmpty)
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        height: 54,
+                        width: 54,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Icon(
+                          Icons.qr_code_2_rounded,
+                          color: colorScheme.primary,
+                          size: 30,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'No items added yet',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Use Quick actions to scan or generate barcodes.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+              buildItemsList(),
+            ],
+            const SizedBox(height: 14),
+          ],
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total: ${_money(_totalStockValue)}',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        'Due: ${_money(_remainingAmount)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: _remainingAmount <= 0
+                              ? colorScheme.tertiary
+                              : colorScheme.error,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: _items.isEmpty ? null : _confirmAndOpenPayment,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Save'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

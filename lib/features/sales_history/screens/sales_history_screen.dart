@@ -122,7 +122,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final picked = await showDialog<_DateRangeDialogResult?>(
       context: context,
       builder: (dialogContext) {
-        String fmt(DateTime d) => _ddMMyyyy(d);
+        String fmt(DateTime? d) => d == null ? 'Not set' : _ddMMyyyy(d);
 
         Future<void> pickStart() async {
           final next = await showDatePicker(
@@ -163,7 +163,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.calendar_today_outlined),
                 title: const Text('Start date'),
-                subtitle: Text(fmt(start!)),
+                subtitle: Text(fmt(start)),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: pickStart,
               ),
@@ -171,7 +171,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.event_outlined),
                 title: const Text('End date'),
-                subtitle: Text(fmt(end!)),
+                subtitle: Text(fmt(end)),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: pickEnd,
               ),
@@ -183,12 +183,19 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(const _DateRangeCleared()),
+              onPressed: () {
+                start = null;
+                end = null;
+                (dialogContext as Element).markNeedsBuild();
+              },
               child: const Text('Clear'),
             ),
             FilledButton(
               onPressed: () {
+                if (start == null || end == null) {
+                  Navigator.of(dialogContext).pop(const _DateRangeCleared());
+                  return;
+                }
                 Navigator.of(dialogContext).pop(
                   _DateRangeApplied(DateTimeRange(start: start!, end: end!)),
                 );
@@ -467,11 +474,11 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                   spacing: 10,
                   runSpacing: 10,
                   children: [
-                    ActionChip(
-                      avatar: const Icon(Icons.date_range_outlined),
-                      label: Text(_dateLabel(context, _dateRange)),
-                      onPressed: _pickDateRange,
-                    ),
+                    if (_dateRange != null)
+                      Chip(
+                        avatar: const Icon(Icons.date_range_outlined),
+                        label: Text(_dateLabel(context, _dateRange)),
+                      ),
                     if (_maxTotalController.text.trim().isNotEmpty)
                       ActionChip(
                         avatar: const Icon(Icons.currency_rupee_outlined),

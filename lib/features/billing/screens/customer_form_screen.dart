@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -55,6 +56,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   int _phoneLookupRequestId = 0;
   String? _lastAutoFilledPhone;
   String? _lastAutoFilledName;
+  String? _lastAutoFilledAddress;
 
   String? _lastBarcode;
   DateTime? _lastBarcodeAt;
@@ -106,6 +108,37 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     return digits;
   }
 
+  void _seedDebugCartItem() {
+    if (!kDebugMode) return;
+
+    final provider = context.read<BillingProvider>();
+    if (provider.items.isNotEmpty) return;
+
+    provider.addManualProduct(name: 'Demo T-Shirt', unitPrice: 999.0);
+  }
+
+  void _clearAutoFilledCustomerDetails({required bool force}) {
+    final shouldClearName =
+        force ||
+        (_lastAutoFilledName != null &&
+            _nameController.text.trim() == _lastAutoFilledName);
+    final shouldClearAddress =
+        force ||
+        (_lastAutoFilledAddress != null &&
+            _addressController.text.trim() == _lastAutoFilledAddress);
+
+    if (shouldClearName && _nameController.text.isNotEmpty) {
+      _nameController.clear();
+    }
+    if (shouldClearAddress && _addressController.text.isNotEmpty) {
+      _addressController.clear();
+    }
+
+    _lastAutoFilledPhone = null;
+    _lastAutoFilledName = null;
+    _lastAutoFilledAddress = null;
+  }
+
   void _onPhoneChanged() {
     final rawDigits = _digitsOnly(_phoneController.text);
     final normalizedPhone = _normalizeIndianPhone(_phoneController.text);
@@ -113,19 +146,19 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
     if (rawDigits.isEmpty) {
       _phoneLookupDebounce?.cancel();
-      _lastAutoFilledPhone = null;
-      _lastAutoFilledName = null;
+      _clearAutoFilledCustomerDetails(force: false);
       return;
     }
 
     if (_lastAutoFilledPhone != null && _lastAutoFilledPhone != identity) {
-      if (_nameController.text.trim() == _lastAutoFilledName) {
-        _nameController.clear();
-      }
-      _lastAutoFilledName = null;
+      _clearAutoFilledCustomerDetails(force: false);
     }
 
-    if (normalizedPhone == null) return;
+    if (normalizedPhone == null) {
+      _phoneLookupDebounce?.cancel();
+      _clearAutoFilledCustomerDetails(force: false);
+      return;
+    }
 
     _phoneLookupDebounce?.cancel();
     _phoneLookupDebounce = Timer(
@@ -143,6 +176,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     try {
       final customer = await _billingService.fetchCustomerByPhone(normalized);
       if (!mounted || requestId != _phoneLookupRequestId || customer == null) {
+        if (mounted &&
+            _normalizeIndianPhone(_phoneController.text) == normalized) {
+          _clearAutoFilledCustomerDetails(force: false);
+        }
         return;
       }
 
@@ -171,6 +208,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         _addressController.selection = TextSelection.collapsed(
           offset: fetchedAddress.length,
         );
+        _lastAutoFilledPhone = normalized;
+        _lastAutoFilledAddress = fetchedAddress;
       }
     } catch (_) {
       // Ignore lookup failures while the user is typing.
@@ -296,7 +335,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                 .where((product) {
                   if (query.isEmpty) return true;
                   return product.name.toLowerCase().contains(query) ||
-                      (product.size?.toLowerCase().contains(query) ?? false) ||
                       (product.companyName?.toLowerCase().contains(query) ??
                           false);
                 })
@@ -353,7 +391,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                       },
                       decoration: InputDecoration(
                         isDense: true,
-                        hintText: 'Search product or size',
+                        hintText: 'Filter by item type or brand name',
                         prefixIcon: const Icon(Icons.search_rounded),
                         filled: true,
                         fillColor: colorScheme.surfaceContainerHighest,
@@ -510,11 +548,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       return false;
     }
 
-    final controller = TextEditingController(
-      text: provider.finalAmount.toStringAsFixed(2),
-    );
-    final previewItems = provider.items.take(3).toList();
-    final remainingCount = provider.items.length - previewItems.length;
+    final adjustmentController = TextEditingController();
+    int offerMode = 0; // 0: none, 1: price, 2: discount
+    bool offerExpanded = false;
+    final baseAmount = provider.calculatedFinalAmount;
 
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
@@ -524,129 +561,335 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         final theme = Theme.of(sheetContext);
         final colorScheme = theme.colorScheme;
 
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              16 + MediaQuery.of(sheetContext).viewInsets.bottom,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Review bill total',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Items: ${provider.items.length}'),
-                  const SizedBox(height: 8),
-                  Card(
-                    elevation: 0,
-                    margin: EdgeInsets.zero,
-                    color: colorScheme.surfaceContainerHigh,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final entered =
+                double.tryParse(adjustmentController.text.trim()) ?? 0.0;
+
+            double payable = baseAmount;
+            if (offerMode == 1 && entered > 0) {
+              payable = (baseAmount - entered).clamp(0, double.infinity);
+            } else if (offerMode == 2 && entered > 0) {
+              final pct = entered.clamp(0, 100);
+              payable = (baseAmount * (1 - pct / 100)).clamp(
+                0,
+                double.infinity,
+              );
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Review bill total',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text('Items: ${provider.items.length}'),
+                      const SizedBox(height: 8),
+                      Card(
+                        elevation: 0,
+                        margin: EdgeInsets.zero,
+                        color: colorScheme.surfaceContainerHigh,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                          child: SizedBox(
+                            height: (provider.items.length * 44.0).clamp(
+                              120.0,
+                              240.0,
+                            ),
+                            child: Scrollbar(
+                              thumbVisibility: provider.items.length > 4,
+                              child: ListView.separated(
+                                primary: false,
+                                itemCount: provider.items.length,
+                                separatorBuilder: (_, _) => Divider(
+                                  height: 10,
+                                  color: colorScheme.outlineVariant,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final item = provider.items[index];
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.productName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text('x${item.quantity}'),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text('Subtotal: ${_money(provider.subtotal)}'),
+                      const SizedBox(height: 4),
+                      Text('Item discount: ${_money(provider.totalDiscount)}'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Bill total: ${_money(baseAmount)}',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
                         children: [
-                          for (final item in previewItems)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 2),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      item.productName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text('x${item.quantity}'),
-                                ],
+                          Expanded(
+                            child: Text(
+                              'Offer on total',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          if (remainingCount > 0) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              '+$remainingCount more item(s)',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                          ),
+                          IconButton(
+                            tooltip: offerExpanded
+                                ? 'Hide offer options'
+                                : 'Show offer options',
+                            onPressed: () {
+                              setModalState(() {
+                                offerExpanded = !offerExpanded;
+                                if (!offerExpanded) {
+                                  offerMode = 0;
+                                  adjustmentController.clear();
+                                }
+                              });
+                            },
+                            icon: Icon(
+                              offerExpanded
+                                  ? Icons.keyboard_arrow_up_rounded
+                                  : Icons.keyboard_arrow_down_rounded,
                             ),
-                          ],
+                          ),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Subtotal: ${_money(provider.subtotal)}'),
-                  const SizedBox(height: 6),
-                  Text('Discount: ${_money(provider.totalDiscount)}'),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Final bill amount',
-                      prefixText: '₹',
-                      helperText: 'Editable for this bill only',
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'You can adjust total before payment selection.',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () =>
-                              Navigator.of(sheetContext).pop(false),
-                          child: const Text('Cancel'),
+                      if (offerExpanded) ...[
+                        const SizedBox(height: 8),
+                        SegmentedButton<int>(
+                          segments: const [
+                            ButtonSegment<int>(value: 0, label: Text('None')),
+                            ButtonSegment<int>(value: 1, label: Text('Price')),
+                            ButtonSegment<int>(
+                              value: 2,
+                              label: Text('Discount'),
+                            ),
+                          ],
+                          selected: {offerMode},
+                          onSelectionChanged: (selection) {
+                            setModalState(() {
+                              offerMode = selection.first;
+                              adjustmentController.clear();
+                            });
+                          },
+                        ),
+                        if (offerMode != 0) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: TextField(
+                              controller: adjustmentController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              onChanged: (_) => setModalState(() {}),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                border: InputBorder.none,
+                                labelText: offerMode == 1
+                                    ? 'Enter reduction amount'
+                                    : 'Enter discount %',
+                                prefixText: offerMode == 1 ? '₹' : null,
+                                suffixText: offerMode == 2 ? '%' : null,
+                                helperText: offerMode == 1
+                                    ? 'Deducted from overall bill total'
+                                    : 'Applied on overall bill total',
+                                helperMaxLines: 2,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                      ],
+                      if (!offerExpanded) const SizedBox(height: 6),
+                      Card(
+                        margin: EdgeInsets.zero,
+                        color: colorScheme.primaryContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.receipt_long_rounded),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Payable total',
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                _money(payable),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: () => Navigator.of(sheetContext).pop(true),
-                          child: const Text('Confirm'),
-                        ),
+                      const SizedBox(height: 14),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final stacked = constraints.maxWidth < 340;
+                          if (stacked) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                OutlinedButton(
+                                  onPressed: () =>
+                                      Navigator.of(sheetContext).pop(false),
+                                  child: const Text('Cancel'),
+                                ),
+                                const SizedBox(height: 8),
+                                FilledButton(
+                                  onPressed: () {
+                                    if (offerMode != 0) {
+                                      if (entered <= 0) {
+                                        _showSnack('Enter a valid offer value');
+                                        return;
+                                      }
+                                      if (offerMode == 1 &&
+                                          entered >= baseAmount) {
+                                        _showSnack(
+                                          'Reduction must be less than total bill',
+                                        );
+                                        return;
+                                      }
+                                      if (offerMode == 2 && entered > 100) {
+                                        _showSnack(
+                                          'Discount must be up to 100%',
+                                        );
+                                        return;
+                                      }
+                                    }
+                                    Navigator.of(sheetContext).pop(true);
+                                  },
+                                  child: const Text('Confirm'),
+                                ),
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () =>
+                                      Navigator.of(sheetContext).pop(false),
+                                  child: const Text('Cancel'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed: () {
+                                    if (offerMode != 0) {
+                                      if (entered <= 0) {
+                                        _showSnack('Enter a valid offer value');
+                                        return;
+                                      }
+                                      if (offerMode == 1 &&
+                                          entered >= baseAmount) {
+                                        _showSnack(
+                                          'Reduction must be less than total bill',
+                                        );
+                                        return;
+                                      }
+                                      if (offerMode == 2 && entered > 100) {
+                                        _showSnack(
+                                          'Discount must be up to 100%',
+                                        );
+                                        return;
+                                      }
+                                    }
+                                    Navigator.of(sheetContext).pop(true);
+                                  },
+                                  child: const Text('Confirm'),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
 
     if (confirmed != true) {
-      controller.dispose();
+      Future<void>.delayed(const Duration(milliseconds: 350), () {
+        adjustmentController.dispose();
+      });
       return false;
     }
 
-    final parsed = double.tryParse(controller.text.trim());
-    controller.dispose();
+    final entered = double.tryParse(adjustmentController.text.trim()) ?? 0.0;
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      adjustmentController.dispose();
+    });
 
-    if (parsed == null || parsed <= 0) {
-      _showSnack('Enter a valid final bill amount');
-      return false;
+    if (offerMode == 0) {
+      provider.setManualFinalAmount(null);
+      return true;
     }
 
-    provider.setManualFinalAmount(parsed);
+    if (offerMode == 1) {
+      provider.setManualFinalAmount(
+        (baseAmount - entered).clamp(0, double.infinity),
+      );
+      return true;
+    }
+
+    final pct = entered.clamp(0, 100);
+    provider.setManualFinalAmount(
+      (baseAmount * (1 - pct / 100)).clamp(0, double.infinity),
+    );
     return true;
   }
 
@@ -1170,6 +1413,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       _startingScanner = false;
       _showHowBillingWorks = false;
     });
+
+    _seedDebugCartItem();
 
     await _startScanner();
   }

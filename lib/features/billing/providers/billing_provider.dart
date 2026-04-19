@@ -103,8 +103,14 @@ class BillingProvider extends ChangeNotifier {
     final existingIndex = _items.indexWhere((i) => i.id == product.id);
     if (existingIndex >= 0) {
       final existing = _items[existingIndex];
+      final nextQty = existing.quantity + 1;
+      final nextUnitPrice = _unitPriceKeepingTotalReduction(
+        item: existing,
+        nextQuantity: nextQty,
+      );
       _items[existingIndex] = existing.copyWith(
-        quantity: existing.quantity + 1,
+        quantity: nextQty,
+        unitPrice: nextUnitPrice,
       );
       _manualFinalAmount = null;
       notifyListeners();
@@ -152,8 +158,10 @@ class BillingProvider extends ChangeNotifier {
   void updateItemPrice(String id, double? unitPrice) {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
+    final item = _items[index];
     _items[index] = _items[index].copyWith(
-      unitPrice: unitPrice ?? _items[index].originalUnitPrice,
+      unitPrice: unitPrice ?? item.originalUnitPrice,
+      discountPercent: 0,
     );
     _manualFinalAmount = null;
     notifyListeners();
@@ -162,7 +170,9 @@ class BillingProvider extends ChangeNotifier {
   void updateItemDiscountPercent(String id, double? percent) {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
+    final item = _items[index];
     _items[index] = _items[index].copyWith(
+      unitPrice: item.originalUnitPrice,
       discountPercent: percent == null ? 0 : percent.clamp(0, 100),
     );
     _manualFinalAmount = null;
@@ -173,7 +183,12 @@ class BillingProvider extends ChangeNotifier {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
     final item = _items[index];
-    _items[index] = item.copyWith(quantity: item.quantity + 1);
+    final nextQty = item.quantity + 1;
+    final nextUnitPrice = _unitPriceKeepingTotalReduction(
+      item: item,
+      nextQuantity: nextQty,
+    );
+    _items[index] = item.copyWith(quantity: nextQty, unitPrice: nextUnitPrice);
     _manualFinalAmount = null;
     notifyListeners();
   }
@@ -183,9 +198,34 @@ class BillingProvider extends ChangeNotifier {
     if (index < 0) return;
     final item = _items[index];
     if (item.quantity <= 1) return;
-    _items[index] = item.copyWith(quantity: item.quantity - 1);
+    final nextQty = item.quantity - 1;
+    final nextUnitPrice = _unitPriceKeepingTotalReduction(
+      item: item,
+      nextQuantity: nextQty,
+    );
+    _items[index] = item.copyWith(quantity: nextQty, unitPrice: nextUnitPrice);
     _manualFinalAmount = null;
     notifyListeners();
+  }
+
+  double _unitPriceKeepingTotalReduction({
+    required BillingLineItem item,
+    required int nextQuantity,
+  }) {
+    // In price mode, keep the entered reduction fixed for the whole line
+    // when quantity changes. Do not alter discount mode behavior.
+    final priceOverridden = item.unitPrice != item.originalUnitPrice;
+    final discountApplied = item.discountPercent > 0;
+
+    if (!priceOverridden || discountApplied || nextQuantity <= 0) {
+      return item.unitPrice;
+    }
+
+    final totalReduction =
+        (item.originalUnitPrice - item.unitPrice) * item.quantity;
+    final nextUnitPrice =
+        item.originalUnitPrice - (totalReduction / nextQuantity);
+    return nextUnitPrice.clamp(0, item.originalUnitPrice).toDouble();
   }
 
   void removeItem(String id) {

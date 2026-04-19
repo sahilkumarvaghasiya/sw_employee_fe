@@ -160,22 +160,6 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: pickEnd,
               ),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: colorScheme.outlineVariant),
-                ),
-                child: Text(
-                  'Tip: You can cancel anytime using the buttons below.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
             ],
           ),
           actions: [
@@ -185,7 +169,9 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(dialogContext).pop(const _DateRangeCleared());
+                start = null;
+                end = null;
+                (dialogContext as Element).markNeedsBuild();
               },
               child: const Text('Clear'),
             ),
@@ -259,20 +245,6 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                 tooltip: 'Close',
                 onPressed: widget.onCloseRequested,
                 icon: const Icon(Icons.close_rounded),
-              ),
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    _genders.clear();
-                    _dateRange = null;
-                    _minPriceController.clear();
-                    _maxPriceController.clear();
-                  });
-
-                  // Reset means: remove all filters so the full list is visible.
-                  provider.resetFilters();
-                },
-                child: const Text('Reset'),
               ),
             ],
           ),
