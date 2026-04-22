@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -40,12 +42,34 @@ class SalesHistoryScreen extends StatefulWidget {
 
 class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   DateTimeRange? _dateRange;
+  final TextEditingController _searchController = TextEditingController();
   final TextEditingController _maxTotalController = TextEditingController();
+  Timer? _searchDebounce;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<SalesHistoryProvider>().refresh();
+    });
+  }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
     _maxTotalController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      context.read<SalesHistoryProvider>().updateSearchQuery(value);
+    });
   }
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
@@ -69,28 +93,11 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     return double.tryParse(normalized);
   }
 
-  List<SalesBill> _applyFilters(List<SalesBill> bills) {
-    final maxTotal = _parseMaxTotal();
-    final range = _dateRange;
-    if (range == null && maxTotal == null) return bills;
-
-    final start = range?.start;
-    final endExclusive = range == null
-        ? null
-        : DateTime(
-            range.end.year,
-            range.end.month,
-            range.end.day,
-          ).add(const Duration(days: 1));
-
-    return bills.where((b) {
-      if (start != null && b.createdAt.isBefore(start)) return false;
-      if (endExclusive != null && !b.createdAt.isBefore(endExclusive)) {
-        return false;
-      }
-      if (maxTotal != null && b.total > maxTotal) return false;
-      return true;
-    }).toList();
+  Future<void> _applyCurrentFilters() async {
+    await context.read<SalesHistoryProvider>().applyFilters(
+      dateRange: _dateRange,
+      maxTotal: _parseMaxTotal(),
+    );
   }
 
   Future<void> _pickDateRange() async {
@@ -206,19 +213,27 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
 
     if (picked is _DateRangeCleared) {
       setState(() => _dateRange = null);
+      await _applyCurrentFilters();
       return;
     }
 
     if (picked is _DateRangeApplied) {
       setState(() => _dateRange = picked.range);
+      await _applyCurrentFilters();
     }
   }
 
-  void _clearFilters() {
+  Future<void> _clearFilters() async {
     setState(() {
       _dateRange = null;
+      _searchController.clear();
       _maxTotalController.clear();
     });
+    await context.read<SalesHistoryProvider>().applyQueryFilters(
+      dateRange: null,
+      maxTotal: null,
+      searchQuery: '',
+    );
   }
 
   Future<void> _openFiltersSheet() async {
@@ -345,15 +360,18 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                     Row(
                       children: [
                         TextButton(
-                          onPressed: () {
-                            _clearFilters();
+                          onPressed: () async {
+                            await _clearFilters();
                             setModalState(() {});
                           },
                           child: const Text('Clear'),
                         ),
                         const Spacer(),
                         FilledButton(
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () async {
+                            await _applyCurrentFilters();
+                            if (context.mounted) Navigator.of(context).pop();
+                          },
                           child: const Text('Apply'),
                         ),
                       ],
@@ -402,10 +420,12 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final colorScheme = theme.colorScheme;
 
     final provider = context.watch<SalesHistoryProvider>();
-    final filtered = _applyFilters(provider.bills);
+  final bills = provider.bills;
 
-    final hasAnyFilter =
-        _dateRange != null || _maxTotalController.text.trim().isNotEmpty;
+  final hasAnyFilter =
+    _dateRange != null ||
+    _maxTotalController.text.trim().isNotEmpty ||
+    _searchController.text.trim().isNotEmpty;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -464,6 +484,29 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             ),
             SliverToBoxAdapter(
               child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _onSearchChanged,
+                  decoration: InputDecoration(
+                    hintText: 'Search customer…',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.trim().isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            onPressed: () {
+                              setState(_searchController.clear);
+                              _onSearchChanged('');
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                 child: Wrap(
                   spacing: 10,
@@ -484,7 +527,45 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 ),
               ),
             ),
-            if (provider.bills.isEmpty)
+            if (provider.isLoading && bills.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (provider.error != null && bills.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.error_outline_rounded,
+                          size: 64,
+                          color: colorScheme.error,
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          provider.error!,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: colorScheme.error,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton(
+                          onPressed: provider.refresh,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else if (bills.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
@@ -511,50 +592,14 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                   ),
                 ),
               )
-            else if (filtered.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.search_off_rounded,
-                          size: 64,
-                          color: colorScheme.onSurfaceVariant.withAlpha(180),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'No bills match your filters',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Try changing date range or max total.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            height: 1.3,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              )
             else
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 sliver: SliverList.separated(
-                  itemCount: filtered.length,
+                  itemCount: bills.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
-                    final bill = filtered[index];
+                    final bill = bills[index];
                     final loc = MaterialLocalizations.of(context);
                     final date = loc.formatShortDate(bill.createdAt);
                     final time = loc.formatTimeOfDay(
@@ -567,7 +612,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                       borderRadius: BorderRadius.circular(20),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
-                        onTap: () => _openBillDetails(bill),
+                        onTap: bill.items.isEmpty
+                            ? null
+                            : () => _openBillDetails(bill),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                           child: Row(
@@ -590,7 +637,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Bill #${bill.billNo}',
+                                      '${bill.billNo}',
                                       style: theme.textTheme.titleSmall
                                           ?.copyWith(
                                             fontWeight: FontWeight.w900,
@@ -609,7 +656,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '$date • $time • ${bill.itemsCount} items • ${_methodLabel(bill.paymentMethod)}',
+                                      '$date • $time • ${_methodLabel(bill.paymentMethod)}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: theme.textTheme.bodySmall
@@ -622,12 +669,13 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              Text(
-                                _money(bill.total),
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w900,
+                              if (bill.listAmount != null)
+                                Text(
+                                  _money(bill.listAmount!),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
-                              ),
                               const SizedBox(width: 4),
                               Icon(
                                 Icons.chevron_right_rounded,
@@ -683,7 +731,7 @@ class _BillDetailsSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Bill #${bill.billNo}',
+                        '${bill.billNo}',
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w900,
                         ),

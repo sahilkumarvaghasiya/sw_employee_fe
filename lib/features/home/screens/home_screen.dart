@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/providers/theme_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../providers/home_dashboard_provider.dart';
 import '../widgets/quick_action_card.dart';
 import '../widgets/recent_bill_tile.dart';
 import '../widgets/section_header.dart';
@@ -14,8 +15,45 @@ import '../../stock_alerts/screens/stock_alerts_screen.dart';
 import '../../stock_entry/screens/stock_entry_main_screen.dart';
 import '../../sales_history/screens/sales_history_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  Future<void> _refreshDashboard() {
+    return context.read<HomeDashboardProvider>().refresh();
+  }
+
+  Future<void> _openAndRefresh(Route<dynamic> route) async {
+    await Navigator.of(context).push(route);
+    if (!mounted) return;
+    await _refreshDashboard();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _refreshDashboard();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    _refreshDashboard();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,24 +63,19 @@ class HomeScreen extends StatelessWidget {
     final employeeName = context.watch<AuthProvider>().employeeName;
     final branchName = context.watch<AuthProvider>().branchName;
 
-    final recentBills = <_RecentBill>[
-      const _RecentBill(billNo: '10421', amount: 1299.00, method: 'UPI'),
-      const _RecentBill(billNo: '10420', amount: 249.50, method: 'Cash'),
-      const _RecentBill(billNo: '10419', amount: 799.00, method: 'Paytm'),
-      const _RecentBill(billNo: '10418', amount: 159.00, method: 'UPI'),
-      const _RecentBill(billNo: '10417', amount: 2199.00, method: 'Cash'),
-    ];
-
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context).push(CustomerFormScreen.route());
+        onPressed: () async {
+          await _openAndRefresh(CustomerFormScreen.route());
         },
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('Scan & Bill'),
       ),
-      body: CustomScrollView(
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: _refreshDashboard,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
           SliverAppBar(
             pinned: true,
             floating: false,
@@ -98,8 +131,8 @@ class HomeScreen extends StatelessWidget {
 
                   return IconButton(
                     tooltip: 'Stock alerts',
-                    onPressed: () {
-                      Navigator.of(context).push(StockAlertsScreen.route());
+                    onPressed: () async {
+                      await _openAndRefresh(StockAlertsScreen.route());
                     },
                     icon: Stack(
                       clipBehavior: Clip.none,
@@ -174,29 +207,29 @@ class HomeScreen extends StatelessWidget {
                   title: 'Start Billing',
                   icon: Icons.qr_code_scanner,
                   isPrimary: true,
-                  onTap: () {
-                    Navigator.of(context).push(CustomerFormScreen.route());
+                  onTap: () async {
+                    await _openAndRefresh(CustomerFormScreen.route());
                   },
                 ),
                 QuickActionCard(
                   title: 'Stock Entry',
                   icon: Icons.inventory_2_outlined,
-                  onTap: () {
-                    Navigator.of(context).push(StockEntryMainScreen.route());
+                  onTap: () async {
+                    await _openAndRefresh(StockEntryMainScreen.route());
                   },
                 ),
                 QuickActionCard(
                   title: 'View Products',
                   icon: Icons.list_alt_outlined,
-                  onTap: () {
-                    Navigator.of(context).push(ProductsScreen.route());
+                  onTap: () async {
+                    await _openAndRefresh(ProductsScreen.route());
                   },
                 ),
                 QuickActionCard(
                   title: 'Sales History',
                   icon: Icons.receipt_long_outlined,
-                  onTap: () {
-                    Navigator.of(context).push(SalesHistoryScreen.route());
+                  onTap: () async {
+                    await _openAndRefresh(SalesHistoryScreen.route());
                   },
                 ),
               ]),
@@ -213,48 +246,75 @@ class HomeScreen extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             sliver: SliverToBoxAdapter(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 520;
+              child: Consumer<HomeDashboardProvider>(
+                builder: (context, dashboardProvider, _) {
+                  final data = dashboardProvider.data;
+                  final summary = data?.todaySummary;
 
-                  final cards = const [
-                    SummaryMetricCard(
-                      label: 'Total Sales Today',
-                      value: '₹18,450',
-                      icon: Icons.payments_outlined,
-                    ),
-                    SummaryMetricCard(
-                      label: 'Bills Generated',
-                      value: '42',
-                      icon: Icons.receipt_long_outlined,
-                    ),
-                    SummaryMetricCard(
-                      label: 'Items Sold',
-                      value: '186',
-                      icon: Icons.shopping_bag_outlined,
-                    ),
-                  ];
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 520;
 
-                  if (isWide) {
-                    return Row(
-                      children: [
-                        Expanded(child: cards[0]),
-                        const SizedBox(width: 12),
-                        Expanded(child: cards[1]),
-                        const SizedBox(width: 12),
-                        Expanded(child: cards[2]),
-                      ],
-                    );
-                  }
+                      final cards = [
+                        SummaryMetricCard(
+                          label: 'Total Sales Today',
+                          value: summary == null
+                              ? '₹0.00'
+                              : '₹${summary.totalSalesDisplay}',
+                          icon: Icons.payments_outlined,
+                        ),
+                        SummaryMetricCard(
+                          label: 'Bills Generated',
+                          value:
+                              summary?.billsGenerated.toString() ?? '0',
+                          icon: Icons.receipt_long_outlined,
+                        ),
+                        SummaryMetricCard(
+                          label: 'Items Sold',
+                          value: summary?.itemsSold.toString() ?? '0',
+                          icon: Icons.shopping_bag_outlined,
+                        ),
+                      ];
 
-                  return Column(
-                    children: [
-                      cards[0],
-                      const SizedBox(height: 12),
-                      cards[1],
-                      const SizedBox(height: 12),
-                      cards[2],
-                    ],
+                      final cardLayout = isWide
+                          ? Row(
+                              children: [
+                                Expanded(child: cards[0]),
+                                const SizedBox(width: 12),
+                                Expanded(child: cards[1]),
+                                const SizedBox(width: 12),
+                                Expanded(child: cards[2]),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                cards[0],
+                                const SizedBox(height: 12),
+                                cards[1],
+                                const SizedBox(height: 12),
+                                cards[2],
+                              ],
+                            );
+
+                      if (dashboardProvider.error != null && data == null) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            cardLayout,
+                            const SizedBox(height: 10),
+                            Text(
+                              dashboardProvider.error!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.error,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+
+                      return cardLayout;
+                    },
                   );
                 },
               ),
@@ -270,30 +330,75 @@ class HomeScreen extends StatelessWidget {
 
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                childCount: recentBills.length,
-                (context, index) {
-                  final bill = recentBills[index];
+            sliver: Consumer<HomeDashboardProvider>(
+              builder: (context, dashboardProvider, _) {
+                final recent = dashboardProvider.data?.recentActivity ?? const [];
 
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      bottom: index == recentBills.length - 1 ? 0 : 12,
-                    ),
-                    child: RecentBillTile(
-                      billNo: bill.billNo,
-                      amount: bill.amount,
-                      method: bill.method,
-                      onTap: null,
+                if (dashboardProvider.isLoading && recent.isEmpty) {
+                  return const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
                   );
-                },
-              ),
+                }
+
+                if (dashboardProvider.error != null && recent.isEmpty) {
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        dashboardProvider.error!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.error,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                if (recent.isEmpty) {
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'No recent bills yet',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                return SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    childCount: recent.length,
+                    (context, index) {
+                      final bill = recent[index];
+
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: index == recent.length - 1 ? 0 : 12,
+                        ),
+                        child: RecentBillTile(
+                          billNo: bill.billNumber,
+                          amount: bill.amountDisplay,
+                          method: bill.paymentMethodLabel,
+                          onTap: null,
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
             ),
           ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 96)),
-        ],
+            const SliverToBoxAdapter(child: SizedBox(height: 96)),
+          ],
+        ),
       ),
     );
   }
@@ -654,16 +759,4 @@ class _EmployeeChip extends StatelessWidget {
       ),
     );
   }
-}
-
-class _RecentBill {
-  const _RecentBill({
-    required this.billNo,
-    required this.amount,
-    required this.method,
-  });
-
-  final String billNo;
-  final double amount;
-  final String method;
 }

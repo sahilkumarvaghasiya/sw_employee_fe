@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'core/providers/theme_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/home/providers/home_dashboard_provider.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/stock_alerts/providers/stock_alerts_provider.dart';
 import 'features/stock_entry/providers/stock_entry_provider.dart';
@@ -14,6 +15,7 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()..loadToken()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => HomeDashboardProvider()),
         ChangeNotifierProvider(create: (_) => StockEntryProvider()),
         ChangeNotifierProvider(create: (_) => StockAlertsProvider()),
       ],

@@ -10,7 +10,7 @@ class RecentBillTile extends StatelessWidget {
   });
 
   final String billNo;
-  final double amount;
+  final String amount;
   final String method;
   final VoidCallback? onTap;
 
@@ -52,7 +52,7 @@ class RecentBillTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Bill #$billNo',
+                      billNo,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -68,7 +68,7 @@ class RecentBillTile extends StatelessWidget {
                 ),
               ),
               Text(
-                '₹${amount.toStringAsFixed(2)}',
+                '₹$amount',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
