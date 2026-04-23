@@ -9,6 +9,7 @@ class SalesHistoryProvider extends ChangeNotifier {
   final SalesHistoryService _service;
 
   List<SalesBill> _bills = const <SalesBill>[];
+  final Map<String, SalesBill> _detailsCache = <String, SalesBill>{};
   bool _isLoading = false;
   String? _error;
   DateTimeRange? _dateRange;
@@ -36,6 +37,7 @@ class SalesHistoryProvider extends ChangeNotifier {
         endDate: _dateRange?.end,
         maxTotal: _maxTotal,
       );
+      _detailsCache.clear();
     } catch (_) {
       _error = 'Failed to load sales history';
     } finally {
@@ -69,5 +71,19 @@ class SalesHistoryProvider extends ChangeNotifier {
       _searchQuery = searchQuery.trim();
     }
     await refresh();
+  }
+
+  Future<SalesBill> fetchBillDetails(String billId) async {
+    final normalizedId = billId.trim();
+    if (normalizedId.isEmpty) {
+      throw const FormatException('Sales bill id is required');
+    }
+
+    final cached = _detailsCache[normalizedId];
+    if (cached != null) return cached;
+
+    final details = await _service.fetchSalesHistoryDetails(normalizedId);
+    _detailsCache[normalizedId] = details;
+    return details;
   }
 }

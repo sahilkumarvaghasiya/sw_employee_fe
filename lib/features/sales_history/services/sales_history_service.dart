@@ -13,6 +13,7 @@ class SalesHistoryService {
   final ApiService _apiService;
 
   static const String _historyListPath = '/sales/historylist/';
+  static const String _historyDetailsPath = '/sales/saleshistory/details/';
 
   static Uri _url(String path, {Map<String, String>? queryParameters}) {
     final base = ApiConfig.baseUrl;
@@ -76,5 +77,29 @@ class SalesHistoryService {
         .whereType<Map>()
         .map((e) => SalesBill.fromHistoryListJson(e.cast<String, dynamic>()))
         .toList(growable: false);
+  }
+
+  Future<SalesBill> fetchSalesHistoryDetails(String billId) async {
+    final normalizedId = billId.trim();
+    if (normalizedId.isEmpty) {
+      throw const FormatException('Sales bill id is required');
+    }
+
+    final response = await _apiService.get(
+      _url('$_historyDetailsPath$normalizedId/').toString(),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw http.ClientException(
+        'Failed to load sales history details (${response.statusCode})',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Invalid sales history details response');
+    }
+
+    return SalesBill.fromHistoryDetailsJson(decoded);
   }
 }

@@ -11,10 +11,10 @@ class ApiConfig {
 
   // For physical phone on same Wi‑Fi as your backend machine.
   // static const String _physicalDeviceBaseUrl = 'http://192.168.1.15:8000/api';
-  static const String _physicalDeviceBaseUrl = 'https://8435-2401-4900-ae2b-6669-f59d-2912-cf15-bc3.ngrok-free.app/api';
+  static const String _physicalDeviceBaseUrl = 'https://c847-2401-4900-790b-280b-9c9-b8d3-c460-a709.ngrok-free.app/api';
 
   // Set true when running on a real device.
-  static const bool usePhysicalDeviceBaseUrl = true;
+  static const bool usePhysicalDeviceBaseUrl = false;
 
   static String get baseUrl {
     if (usePhysicalDeviceBaseUrl) return _physicalDeviceBaseUrl;

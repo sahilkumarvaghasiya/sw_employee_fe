@@ -56,7 +56,7 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
           borderRadius: BorderRadius.circular(32),
           boxShadow: [
             BoxShadow(
-              color: colorScheme.primaryContainer.withOpacity(0.22),
+              color: colorScheme.primaryContainer.withValues(alpha: 0.22),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -74,13 +74,16 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
           foregroundColor: colorScheme.onPrimaryContainer,
         ),
       ),
-      body: CustomScrollView(
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: provider.refreshVendors,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
           SliverAppBar(
             pinned: true,
             elevation: 0,
             scrolledUnderElevation: 1,
-            backgroundColor: colorScheme.surface.withOpacity(0.92),
+            backgroundColor: colorScheme.surface.withValues(alpha: 0.92),
             title: Row(
               children: [
                 Icon(
@@ -185,7 +188,7 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
                     Icon(
                       Icons.search_off_rounded,
                       size: 64,
-                      color: colorScheme.primary.withOpacity(0.18),
+                      color: colorScheme.primary.withValues(alpha: 0.18),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -225,7 +228,8 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
                 },
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -288,7 +292,7 @@ class _VendorCard extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: colorScheme.primary.withOpacity(0.13),
+                    backgroundColor: colorScheme.primary.withValues(alpha: 0.13),
                     child: Text(
                       initials,
                       style: theme.textTheme.titleLarge?.copyWith(

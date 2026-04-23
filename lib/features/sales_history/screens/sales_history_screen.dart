@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../billing/models/billing_models.dart';
@@ -45,6 +46,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _maxTotalController = TextEditingController();
   Timer? _searchDebounce;
+  static final NumberFormat _inrFormat = NumberFormat('#,##,##0.00', 'en_IN');
 
   @override
   void initState() {
@@ -72,7 +74,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     });
   }
 
-  String _money(double value) => '₹${value.toStringAsFixed(2)}';
+  String _money(double value) => '₹${_inrFormat.format(value)}';
 
   String _ddMMyyyy(DateTime d) {
     final dd = d.day.toString().padLeft(2, '0');
@@ -402,12 +404,47 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   }
 
   Future<void> _openBillDetails(SalesBill bill) async {
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    rootNavigator.push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black38,
+        barrierDismissible: false,
+        pageBuilder: (_, _, _) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      ),
+    );
+
+    SalesBill details;
+    try {
+      details = await context.read<SalesHistoryProvider>().fetchBillDetails(
+        bill.id,
+      );
+    } catch (_) {
+      if (rootNavigator.canPop()) {
+        rootNavigator.pop();
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load bill details')),
+      );
+      return;
+    }
+
+    if (rootNavigator.canPop()) {
+      rootNavigator.pop();
+    }
+
+    if (!mounted) return;
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) => _BillDetailsSheet(
-        bill: bill,
+        bill: details,
         money: _money,
         methodLabel: _methodLabel,
       ),
@@ -420,12 +457,12 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final colorScheme = theme.colorScheme;
 
     final provider = context.watch<SalesHistoryProvider>();
-  final bills = provider.bills;
+    final bills = provider.bills;
 
-  final hasAnyFilter =
-    _dateRange != null ||
-    _maxTotalController.text.trim().isNotEmpty ||
-    _searchController.text.trim().isNotEmpty;
+    final hasAnyFilter =
+        _dateRange != null ||
+        _maxTotalController.text.trim().isNotEmpty ||
+        _searchController.text.trim().isNotEmpty;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -485,22 +522,31 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: _onSearchChanged,
-                  decoration: InputDecoration(
-                    hintText: 'Search customer…',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchController.text.trim().isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear search',
-                            onPressed: () {
-                              setState(_searchController.clear);
-                              _onSearchChanged('');
-                            },
-                            icon: const Icon(Icons.close_rounded),
-                          ),
+                child: Material(
+                  elevation: 2,
+                  borderRadius: BorderRadius.circular(24),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    decoration: InputDecoration(
+                      hintText: 'Search customer…',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.trim().isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () {
+                                setState(_searchController.clear);
+                                _onSearchChanged('');
+                              },
+                              icon: const Icon(Icons.clear),
+                            ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 16,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -612,9 +658,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                       borderRadius: BorderRadius.circular(20),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
-                        onTap: bill.items.isEmpty
-                            ? null
-                            : () => _openBillDetails(bill),
+            onTap: () => _openBillDetails(bill),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                           child: Row(
@@ -637,7 +681,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${bill.billNo}',
+                                      bill.billNo,
                                       style: theme.textTheme.titleSmall
                                           ?.copyWith(
                                             fontWeight: FontWeight.w900,
@@ -731,7 +775,7 @@ class _BillDetailsSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${bill.billNo}',
+                        bill.billNo,
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w900,
                         ),

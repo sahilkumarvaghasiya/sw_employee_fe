@@ -574,13 +574,10 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () async {
-          final vendor = widget.vendor;
-          if (vendor == null) return;
-          await provider.refreshHistory(vendor: vendor);
-        },
+        onRefresh: _refreshBackendHistory,
         child: CustomScrollView(
           controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
               pinned: true,
@@ -615,7 +612,12 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
               actions: [
                 IconButton(
                   tooltip: 'Clear filters',
-                  onPressed: hasAnyFilter ? _clearFilters : null,
+                  onPressed: hasAnyFilter
+                      ? () {
+                          _clearFilters();
+                          unawaited(_refreshBackendHistory());
+                        }
+                      : null,
                   icon: const Icon(Icons.filter_alt_off_outlined),
                 ),
                 IconButton(

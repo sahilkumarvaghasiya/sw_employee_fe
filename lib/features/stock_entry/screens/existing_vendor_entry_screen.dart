@@ -51,72 +51,95 @@ class _ExistingVendorEntryScreenState extends State<ExistingVendorEntryScreen> {
               .toList(growable: false);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Existing Vendor Entry')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                hintText: 'Search vendor…',
-                prefixIcon: Icon(Icons.search),
+      appBar: AppBar(
+        title: const Text('Existing Vendor Entry'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: provider.refreshVendors,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'Search vendor…',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: (provider.isLoadingVendors && vendors.isEmpty)
-                ? const Center(child: CircularProgressIndicator())
-                : (provider.vendorsError != null && vendors.isEmpty)
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            provider.vendorsError!,
-                            style: theme.textTheme.titleMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 12),
-                          FilledButton(
-                            onPressed: provider.refreshVendors,
-                            child: const Text('Try again'),
-                          ),
-                        ],
-                      ),
+            if (provider.isLoadingVendors && vendors.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (provider.vendorsError != null && vendors.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          provider.vendorsError!,
+                          style: theme.textTheme.titleMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: provider.refreshVendors,
+                          child: const Text('Try again'),
+                        ),
+                      ],
                     ),
-                  )
-                : filtered.isEmpty
-                ? Center(
+                  ),
+                ),
+              )
+            else if (filtered.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
                     child: Text(
                       'No vendors found',
                       style: theme.textTheme.titleMedium?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    itemCount: filtered.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final vendor = filtered[index];
-                      return _VendorCard(
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final vendor = filtered[index];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == filtered.length - 1 ? 0 : 12,
+                      ),
+                      child: _VendorCard(
                         vendor: vendor,
                         onTap: () {
-                          Navigator.of(
-                            context,
-                          ).push(StockScanningScreen.route(vendor: vendor));
+                          Navigator.of(context).push(
+                            StockScanningScreen.route(vendor: vendor),
+                          );
                         },
-                      );
-                    },
-                  ),
-          ),
-        ],
+                      ),
+                    );
+                  }, childCount: filtered.length),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

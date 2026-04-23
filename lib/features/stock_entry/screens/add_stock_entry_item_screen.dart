@@ -577,6 +577,14 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   Future<bool> _addItemToTable() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
+    final form = _formKey.currentState;
+    if (form == null) return false;
+    if (!form.validate()) {
+      setState(() => _commonExpanded = true);
+      _ensureVisible(_commonSectionKey);
+      return false;
+    }
+
     setState(() {
       _showItemFieldErrors = true;
     });
@@ -598,7 +606,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     if (sell == null) {
       return false;
     }
-    if (sell < 0) {
+    if (sell <= 0) {
       return false;
     }
 
@@ -1123,7 +1131,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         elevation: 1,
-        shadowColor: colorScheme.shadow.withOpacity(0.10),
+  shadowColor: colorScheme.shadow.withValues(alpha: 0.10),
         color: colorScheme.surfaceContainerLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
@@ -2147,8 +2155,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                       final sellError = (() {
                         if (!_showItemFieldErrors) return null;
                         final sell = _sellUnitPrice;
-                        if (sell == null) return 'Required field';
-                        if (sell < 0) return 'Cannot be negative';
+                        if (sell == null || sell <= 0) return 'Required field';
                         return null;
                       })();
 
@@ -2482,7 +2489,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
               color: colorScheme.surface,
               boxShadow: [
                 BoxShadow(
-                  color: colorScheme.shadow.withOpacity(0.08),
+                  color: colorScheme.shadow.withValues(alpha: 0.08),
                   blurRadius: 16,
                   offset: const Offset(0, -6),
                 ),
