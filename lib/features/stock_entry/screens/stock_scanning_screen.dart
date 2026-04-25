@@ -199,7 +199,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-          content: Text('Added block: $barcode (${drafts.length} item(s))'),
+          content: Text('Added block: $barcode with ${drafts.length} items'),
         ),
       );
   }
