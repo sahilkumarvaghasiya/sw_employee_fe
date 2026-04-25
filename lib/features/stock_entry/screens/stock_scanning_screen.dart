@@ -1186,37 +1186,13 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Total: ${_money(_totalStockValue)}',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        'Due: ${_money(_remainingAmount)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: _remainingAmount <= 0
-                              ? colorScheme.tertiary
-                              : colorScheme.error,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: _items.isEmpty ? null : _confirmAndOpenPayment,
-                  icon: const Icon(Icons.save),
-                  label: const Text('Save'),
-                ),
-              ],
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _items.isEmpty ? null : _confirmAndOpenPayment,
+                icon: const Icon(Icons.save),
+                label: const Text('Save'),
+              ),
             ),
           ),
         ),
