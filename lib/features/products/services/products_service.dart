@@ -86,4 +86,28 @@ class ProductsService {
 
     return ProductsPage(items: items, hasMore: hasMore);
   }
+
+  Future<Product> fetchProductDetails({required String productId}) async {
+    final safeProductId = productId.trim();
+    if (safeProductId.isEmpty) {
+      throw http.ClientException('Invalid product id');
+    }
+
+    final response = await _apiService.get(
+      _url('/products/details/$safeProductId').toString(),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw http.ClientException(
+        'Failed to load product details (${response.statusCode})',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw http.ClientException('Invalid product details response');
+    }
+
+    return Product.fromDetailsJson(decoded);
+  }
 }

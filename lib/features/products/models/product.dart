@@ -75,6 +75,84 @@ class Product {
     );
   }
 
+  /// Details API model mapping for `/api/products/details/{id}`.
+  ///
+  /// Response can be either the object itself or wrapped under keys like
+  /// `data`, `result`, `product`, or `details`.
+  factory Product.fromDetailsJson(Map<String, dynamic> json) {
+    final wrapped = _unwrapDetailsPayload(json);
+
+    final id = (wrapped['id'] ?? wrapped['product_id'] ?? '').toString();
+    final name =
+        (wrapped['product_name'] ??
+                wrapped['productName'] ??
+                wrapped['name'] ??
+                '')
+            .toString();
+    final companyName =
+        (wrapped['company_name'] ??
+                wrapped['companyName'] ??
+                wrapped['brand_name'] ??
+                '')
+            .toString();
+
+    final barcode = (wrapped['barcode_number'] ?? wrapped['barcode'] ?? id)
+        .toString();
+
+    final size =
+        (wrapped['size'] ??
+                wrapped['size_name'] ??
+                wrapped['variant_size'] ??
+                '—')
+            .toString()
+            .trim();
+
+    final rawPrice =
+        wrapped['final_price'] ??
+        wrapped['finalPrice'] ??
+        wrapped['price'] ??
+        wrapped['sellprice'] ??
+        0;
+    final price = _toDouble(rawPrice);
+
+    final quantityInStock = _toInt(
+      wrapped['quantity'] ??
+          wrapped['quantity_in_stock'] ??
+          wrapped['quantityInStock'] ??
+          wrapped['stock'] ??
+          0,
+    );
+
+    final genderRaw = (wrapped['gender'] ?? wrapped['product_gender'] ?? '')
+        .toString();
+    final gender = _parseGender(genderRaw) ?? ProductGender.men;
+
+    final createdRaw = (wrapped['created_at'] ?? wrapped['createdAt'] ?? '')
+        .toString();
+    final createdAt = DateTime.tryParse(createdRaw) ?? DateTime.now();
+
+    return Product(
+      id: id,
+      name: name,
+      barcode: barcode,
+      quantityInStock: quantityInStock,
+      size: size.isEmpty ? '—' : size,
+      companyName: companyName,
+      price: price,
+      gender: gender,
+      createdAt: createdAt,
+    );
+  }
+
+  static Map<String, dynamic> _unwrapDetailsPayload(Map<String, dynamic> json) {
+    final candidates = <String>['data', 'result', 'product', 'details'];
+    for (final key in candidates) {
+      final value = json[key];
+      if (value is Map<String, dynamic>) return value;
+    }
+    return json;
+  }
+
   static double _toDouble(Object? value) {
     if (value is num) return value.toDouble();
     return double.tryParse((value ?? 0).toString()) ?? 0.0;

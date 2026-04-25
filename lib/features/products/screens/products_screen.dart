@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/product.dart';
 import '../providers/products_provider.dart';
+import '../services/products_service.dart';
+import 'product_detail_screen.dart';
 import '../widgets/product_card.dart';
 import '../widgets/products_filter_section.dart';
 import '../widgets/products_search_bar.dart';
@@ -29,8 +32,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _sizeController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ProductsService _productsService = ProductsService();
 
   bool _postFramePaginationScheduled = false;
+  String? _loadingProductId;
 
   @override
   void initState() {
@@ -102,6 +107,36 @@ class _ProductsScreenState extends State<ProductsScreen> {
         );
       },
     );
+  }
+
+  Future<void> _openProductDetails(Product product) async {
+    if (_loadingProductId != null) return;
+
+    setState(() => _loadingProductId = product.id);
+    try {
+      final details = await _productsService.fetchProductDetails(
+        productId: product.id,
+      );
+
+      if (!mounted) return;
+
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => ProductDetailScreen(product: details),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(content: Text('Unable to load product details.')),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _loadingProductId = null);
+      }
+    }
   }
 
   @override
@@ -278,19 +313,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 sliver: SliverList.separated(
                   itemBuilder: (context, index) {
                     final product = provider.items[index];
+                    final isLoadingThis = _loadingProductId == product.id;
                     return ProductCard(
                       product: product,
-                      onTap: () {
-                        ScaffoldMessenger.of(context)
-                          ..clearSnackBars()
-                          ..showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Product details will be enabled later.',
-                              ),
-                            ),
-                          );
-                      },
+                      onTap: isLoadingThis
+                          ? () {}
+                          : () => _openProductDetails(product),
                     );
                   },
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
