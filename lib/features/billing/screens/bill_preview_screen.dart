@@ -53,10 +53,34 @@ class BillPreviewScreen extends StatelessWidget {
               setState(() => isSending = true);
 
               try {
+                final paymentMethod = provider.paymentMethod;
+                if (paymentMethod == null) {
+                  throw Exception('Please select a payment method.');
+                }
+
+                final billResult = await BillingService().createSalesBill(
+                  customer: customer,
+                  items: provider.items,
+                  paymentMethod: paymentMethod,
+                  markPaid: provider.markPaid,
+                  finalAmount: provider.finalAmount,
+                  calculatedFinalAmount: provider.calculatedFinalAmount,
+                );
+
+                if (context.mounted) {
+                  final number = billResult.billNumber.trim();
+                  _showSnack(
+                    context,
+                    number.isEmpty
+                        ? billResult.message
+                        : 'Bill created: $number',
+                  );
+                }
+
                 await BillingService().sendWhatsAppInvoice(
                   customer: customer,
                   items: provider.items,
-                  paymentMethod: provider.paymentMethod,
+                  paymentMethod: paymentMethod,
                   markPaid: provider.markPaid,
                   paidAmount: provider.paidAmount,
                   subtotal: provider.subtotal,

@@ -16,6 +16,18 @@ class BillingBarcodeLookupResult {
   final List<BillingProduct> products;
 }
 
+class BillingCreateBillResult {
+  const BillingCreateBillResult({
+    required this.message,
+    required this.billId,
+    required this.billNumber,
+  });
+
+  final String message;
+  final String billId;
+  final String billNumber;
+}
+
 class BillingService {
   BillingService({ApiService? apiService})
     : _apiService = apiService ?? ApiService();
@@ -27,6 +39,7 @@ class BillingService {
       '/sales/barcode-lookup/search/';
   static const String _customerLookupPath = '/sales/customer-lookup/';
   static const String _qrConfigsPath = '/sales/payment-configs/qr/';
+  static const String _createBillPath = '/sales/bills/create/';
 
   final ApiService _apiService;
 
@@ -96,6 +109,102 @@ class BillingService {
     );
   }
 
+  Future<BillingCreateBillResult> createSalesBill({
+    required BillingCustomer customer,
+    required List<BillingLineItem> items,
+    required BillingPaymentMethod paymentMethod,
+    required bool markPaid,
+    required double finalAmount,
+    required double calculatedFinalAmount,
+    String? notes,
+  }) async {
+    if (items.isEmpty) {
+      throw http.ClientException('No products in the bill');
+    }
+
+    String money(double value) => value.toStringAsFixed(2);
+
+    final lineItems = <Map<String, dynamic>>[];
+    for (final item in items) {
+      final productVariantId = int.tryParse(item.id);
+      if (productVariantId == null) {
+        throw http.ClientException(
+          'Product "${item.productName}" cannot be billed because it is not linked to a backend variant.',
+        );
+      }
+
+      final row = <String, dynamic>{
+        'product_variant_id': productVariantId,
+        'quantity': item.quantity,
+      };
+
+      if (item.discountPercent > 0) {
+        row['discount_percent'] = money(item.discountPercent);
+      } else {
+        final perUnitReduction = item.originalUnitPrice - item.unitPrice;
+        final discountAmount = (perUnitReduction * item.quantity)
+            .clamp(0, double.infinity)
+            .toDouble();
+        if (discountAmount > 0.0001) {
+          row['discount_amount'] = money(discountAmount);
+        }
+      }
+
+      lineItems.add(row);
+    }
+
+    final billDiscount = (calculatedFinalAmount - finalAmount)
+        .clamp(0, double.infinity)
+        .toDouble();
+
+    final paymentMethodValue = switch (paymentMethod) {
+      BillingPaymentMethod.cash => 'cash',
+      BillingPaymentMethod.card => 'card',
+      BillingPaymentMethod.qr => 'qr_barcode',
+      BillingPaymentMethod.paytm => 'qr_barcode',
+      BillingPaymentMethod.upi => 'qr_barcode',
+    };
+
+    final paymentStatus = markPaid ? 'paid' : 'unpaid';
+
+    final response = await _apiService.post(
+      _url(_createBillPath).toString(),
+      body: {
+        'customer_name': customer.name,
+        'phone': customer.phone,
+        'address': customer.address,
+        'items': lineItems,
+        'bill_discount_amount': money(billDiscount),
+        'payment_method': paymentMethodValue,
+        'payment_status': paymentStatus,
+        'notes': notes,
+      },
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return BillingCreateBillResult(
+          message: (decoded['message'] ?? 'Bill created successfully.')
+              .toString(),
+          billId: (decoded['bill_id'] ?? '').toString(),
+          billNumber: (decoded['bill_number'] ?? '').toString(),
+        );
+      }
+
+      return const BillingCreateBillResult(
+        message: 'Bill created successfully.',
+        billId: '',
+        billNumber: '',
+      );
+    }
+
+    final message = _errorMessageFromResponse(response);
+    throw http.ClientException(
+      message.isEmpty ? 'Failed to create bill' : message,
+    );
+  }
+
   String _errorMessageFromResponse(http.Response response) {
     try {
       final decoded = jsonDecode(response.body);
@@ -108,7 +217,7 @@ class BillingService {
       // ignore
     }
 
-    return 'Failed to send invoice (${response.statusCode})';
+    return 'Request failed (${response.statusCode})';
   }
 
   Future<BillingBarcodeLookupResult> fetchBarcodeLookup(String barcode) async {
