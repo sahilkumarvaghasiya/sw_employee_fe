@@ -42,6 +42,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   DateTime? _deadline;
 
   bool _itemsLocked = false;
+  bool _showDeadlineValidation = false;
 
   double _totalStockValue = 0;
   double _paidAmount = 0;
@@ -155,9 +156,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     if (!mounted) return;
     if (drafts == null || drafts.isEmpty) return;
 
-    for (final draft in drafts) {
-      _addDraftToList(draft);
-    }
+    _addDraftsToList(drafts);
   }
 
   Future<void> _generateBarcode() async {
@@ -172,26 +171,37 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     if (!mounted) return;
     if (drafts == null || drafts.isEmpty) return;
 
-    for (final draft in drafts) {
-      _addDraftToList(draft);
-    }
+    _addDraftsToList(drafts);
   }
 
-  void _addDraftToList(StockEntryDraftItem draft) {
-    final item = _EditableDraftItem.fromDraft(draft);
+  void _addDraftsToList(List<StockEntryDraftItem> drafts) {
+    if (drafts.isEmpty) return;
 
-    item.attachOnChanged(() {
-      _syncTotalsFromControllers();
-    });
+    final editableItems = drafts
+        .map((draft) => _EditableDraftItem.fromDraft(draft))
+        .toList(growable: false);
+
+    for (final item in editableItems) {
+      item.attachOnChanged(() {
+        _syncTotalsFromControllers();
+      });
+    }
 
     setState(() {
-      _items.insert(0, item);
+      for (final item in editableItems.reversed) {
+        _items.insert(0, item);
+      }
     });
     _syncTotalsFromControllers();
 
+    final barcode = drafts.first.barcode;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text('Added: ${draft.barcode}')));
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Added block: $barcode (${drafts.length} item(s))'),
+        ),
+      );
   }
 
   Future<void> _pickDeadline() async {
@@ -205,27 +215,78 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     );
 
     if (picked == null) return;
-    setState(() => _deadline = picked);
+    setState(() {
+      _deadline = picked;
+      _showDeadlineValidation = false;
+    });
   }
 
-  void _removeItemAt(int index) {
-    final removed = _items.removeAt(index);
-    removed.dispose();
+  Future<bool> _confirmDeleteBlock({
+    required String barcode,
+    required int itemCount,
+  }) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete block?'),
+        content: Text('Delete all $itemCount item(s) from barcode "$barcode"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    return shouldDelete == true;
+  }
+
+  Future<void> _removeBlockByBarcode(String barcode) async {
+    if (_itemsLocked) return;
+
+    final indices = <int>[];
+    for (var i = 0; i < _items.length; i++) {
+      if (_items[i].draft.barcode == barcode) {
+        indices.add(i);
+      }
+    }
+    if (indices.isEmpty) return;
+
+    final shouldDelete = await _confirmDeleteBlock(
+      barcode: barcode,
+      itemCount: indices.length,
+    );
+    if (!shouldDelete || !mounted) return;
+
+    setState(() {
+      for (var i = indices.length - 1; i >= 0; i--) {
+        final removed = _items.removeAt(indices[i]);
+        removed.dispose();
+      }
+    });
 
     _syncTotalsFromControllers();
 
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(content: Text('Removed: ${removed.draft.barcode}')),
-      );
+      ..showSnackBar(SnackBar(content: Text('Removed block: $barcode')));
   }
 
   Future<void> _editItemAt(int index) async {
     if (_itemsLocked) return;
     if (index < 0 || index >= _items.length) return;
 
-    final barcode = _items[index].draft.barcode;
+    await _editBlockByBarcode(_items[index].draft.barcode);
+  }
+
+  Future<void> _editBlockByBarcode(String barcode) async {
+    if (_itemsLocked) return;
+
     final indices = <int>[];
     final draftsToEdit = <StockEntryDraftItem>[];
 
@@ -253,7 +314,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     }
 
     if (draftsToEdit.isEmpty) return;
-    final insertAt = indices.isEmpty ? index : indices.first;
+    final insertAt = indices.first;
 
     final drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
       AddStockEntryItemScreen.route(
@@ -264,20 +325,24 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     );
 
     if (!mounted) return;
-    if (drafts == null || drafts.isEmpty) return;
+    if (drafts == null) return;
 
-    for (var i = indices.length - 1; i >= 0; i--) {
-      final removed = _items.removeAt(indices[i]);
-      removed.dispose();
-    }
+    setState(() {
+      for (var i = indices.length - 1; i >= 0; i--) {
+        final removed = _items.removeAt(indices[i]);
+        removed.dispose();
+      }
 
-    for (var i = drafts.length - 1; i >= 0; i--) {
-      final next = _EditableDraftItem.fromDraft(drafts[i]);
-      next.attachOnChanged(() {
-        _syncTotalsFromControllers();
-      });
-      _items.insert(insertAt, next);
-    }
+      if (drafts.isNotEmpty) {
+        for (var i = drafts.length - 1; i >= 0; i--) {
+          final next = _EditableDraftItem.fromDraft(drafts[i]);
+          next.attachOnChanged(() {
+            _syncTotalsFromControllers();
+          });
+          _items.insert(insertAt, next);
+        }
+      }
+    });
 
     _syncTotalsFromControllers();
   }
@@ -419,11 +484,16 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
             Future<void> onSave() async {
               if (isSaving) return;
 
+              if (_remainingAmount > 0 && _deadline == null) {
+                setState(() => _showDeadlineValidation = true);
+                return;
+              }
+
               setModalState(() => isSaving = true);
               try {
-                await _saveFinal();
-                if (Navigator.of(dialogContext).canPop()) {
-                  Navigator.of(dialogContext).pop(true);
+                final saved = await _saveFinal();
+                if (!saved) {
+                  setModalState(() => isSaving = false);
                 }
               } catch (e) {
                 if (mounted) {
@@ -508,6 +578,12 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                     totalPaymentEditable: true,
                                     onTotalPaymentChanged: (_) =>
                                         _syncTotalsFromControllers(),
+                                    deadlineErrorText:
+                                        _showDeadlineValidation &&
+                                            _remainingAmount > 0 &&
+                                            _deadline == null
+                                        ? 'Required field'
+                                        : null,
                                   ),
                                   const SizedBox(height: 14),
                                   Row(
@@ -580,8 +656,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     );
   }
 
-  Future<void> _saveFinal() async {
-    if (!_validateItemsOnly()) return;
+  Future<bool> _saveFinal() async {
+    if (!_validateItemsOnly()) return false;
 
     final totalRaw = _totalPaymentController.text.trim();
     final parsedTotal = totalRaw.isEmpty
@@ -589,7 +665,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         : double.tryParse(totalRaw.replaceAll(',', ''));
     if (parsedTotal == null || parsedTotal <= 0) {
       _showSnack('Enter a valid total payment.');
-      return;
+      return false;
     }
 
     final paidRaw = _paidAmountController.text.trim();
@@ -598,11 +674,11 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         : double.tryParse(paidRaw.replaceAll(',', ''));
     if (parsedPaid == null) {
       _showSnack('Enter a valid paid amount.');
-      return;
+      return false;
     }
     if (parsedPaid < 0) {
       _showSnack('Paid amount cannot be negative.');
-      return;
+      return false;
     }
 
     if ((_totalStockValue - parsedTotal).abs() > 0.0001 ||
@@ -617,12 +693,14 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     if (_paidAmount > _totalStockValue + 0.0001) {
       _showSnack('Paid amount cannot exceed total payment.');
-      return;
+      return false;
     }
 
     if (_remainingAmount > 0 && _deadline == null) {
-      _showSnack('Please select a payment deadline.');
-      return;
+      if (mounted) {
+        setState(() => _showDeadlineValidation = true);
+      }
+      return false;
     }
 
     final items = _items
@@ -659,7 +737,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     // Keep local history updated after a successful backend save.
     await context.read<StockEntryProvider>().saveStockEntry(entry);
 
-    if (!mounted) return;
+    if (!mounted) return true;
 
     await showDialog<void>(
       context: context,
@@ -680,11 +758,13 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       },
     );
 
-    if (!mounted) return;
+    if (!mounted) return true;
 
     Navigator.of(context).popUntil(
       (route) => route.settings.name == StockEntryMainScreen.routeName,
     );
+
+    return true;
   }
 
   void _showSnack(String message) {
@@ -743,42 +823,72 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         fontWeight: FontWeight.w600,
       );
 
+      final grouped = <String, List<_EditableDraftItem>>{};
+      for (final item in _items) {
+        (grouped[item.draft.barcode] ??= <_EditableDraftItem>[]).add(item);
+      }
+      final groups = grouped.entries.toList(growable: false);
+
       return Card(
         clipBehavior: Clip.antiAlias,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: List<Widget>.generate(_items.length, (i) {
-            final item = _items[i];
+          children: List<Widget>.generate(groups.length, (i) {
+            final group = groups[i];
+            final blockItems = group.value;
+            final first = blockItems.first;
+
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _displayName(item.draft),
+                              'Barcode: ${group.key}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: titleStyle,
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Size: ${item.draft.size}',
+                              '${first.draft.brandName} • ${first.draft.gender.name} • ${first.draft.itemType1}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: metaStyle,
                             ),
+                            const SizedBox(height: 6),
+                            ...List<Widget>.generate(blockItems.length, (j) {
+                              final row = blockItems[j];
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: j == blockItems.length - 1 ? 0 : 3,
+                                ),
+                                child: Text(
+                                  '${j + 1}. ${_displayName(row.draft)} | ${row.draft.size} / ${row.draft.colour} | Qty: ${row.quantity}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            }),
                           ],
                         ),
                       ),
                       IconButton(
                         tooltip: 'Edit',
-                        onPressed: _itemsLocked ? null : () => _editItemAt(i),
+                        onPressed: _itemsLocked
+                            ? null
+                            : () => _editBlockByBarcode(group.key),
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints.tightFor(
@@ -788,20 +898,22 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                         icon: const Icon(Icons.edit_outlined),
                       ),
                       IconButton(
-                        tooltip: 'Remove',
-                        onPressed: _itemsLocked ? null : () => _removeItemAt(i),
+                        tooltip: 'Delete block',
+                        onPressed: _itemsLocked
+                            ? null
+                            : () => _removeBlockByBarcode(group.key),
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints.tightFor(
                           width: 44,
                           height: 44,
                         ),
-                        icon: const Icon(Icons.close_rounded),
+                        icon: const Icon(Icons.delete_outline_rounded),
                       ),
                     ],
                   ),
                 ),
-                if (i != _items.length - 1) const Divider(height: 1),
+                if (i != groups.length - 1) const Divider(height: 1),
               ],
             );
           }),

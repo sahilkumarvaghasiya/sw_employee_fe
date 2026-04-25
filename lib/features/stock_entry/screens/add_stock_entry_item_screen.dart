@@ -377,12 +377,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
     _commonExpanded = true;
     _itemsExpanded = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (_entries.isEmpty) return;
-      _startEditEntry(0);
-    });
   }
 
   @override
@@ -740,7 +734,44 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     });
   }
 
-  void _removeEntryAt(int index) {
+  Future<bool> _confirmDeleteEntry({required bool isLastEntry}) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete item?'),
+        content: Text(
+          isLastEntry
+              ? 'This is the last item in this block. Deleting it will remove the whole block. Continue?'
+              : 'Do you want to delete this item?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    return shouldDelete == true;
+  }
+
+  Future<void> _removeEntryAt(int index) async {
+    if (index < 0 || index >= _entries.length) return;
+
+    final isLastEntry = _entries.length == 1;
+    final shouldDelete = await _confirmDeleteEntry(isLastEntry: isLastEntry);
+    if (!shouldDelete || !mounted) return;
+
+    if (isLastEntry) {
+      Navigator.of(context).pop(<StockEntryDraftItem>[]);
+      return;
+    }
+
     setState(() {
       _entries.removeAt(index);
 
@@ -972,10 +1003,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(null),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('No'),
           ),
@@ -1004,6 +1031,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isEditingExistingBlock =
+        widget.initialDrafts != null && widget.initialDrafts!.isNotEmpty;
 
     final List<String> customSizes = _sizeOptions
         .where((s) => !_sizeOptionsDefault.contains(s))
@@ -1131,7 +1160,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         elevation: 1,
-  shadowColor: colorScheme.shadow.withValues(alpha: 0.10),
+        shadowColor: colorScheme.shadow.withValues(alpha: 0.10),
         color: colorScheme.surfaceContainerLow,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
@@ -1215,7 +1244,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
             icon: const Icon(Icons.arrow_back_rounded),
           ),
           title: const Text(
-            'Add Stock Items',
+            'Manage Stock Items',
             style: TextStyle(fontWeight: FontWeight.w800),
           ),
         ),
@@ -2369,7 +2398,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 ),
                                 label: Text(
                                   _editingIndex == null
-                                      ? 'Add Item'
+                                      ? 'Save'
                                       : 'Update Item',
                                 ),
                               ),
@@ -2460,6 +2489,17 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                     ),
                                   ),
                                   IconButton(
+                                    tooltip: 'Edit',
+                                    onPressed: () => _startEditEntry(i),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: 44,
+                                      height: 44,
+                                    ),
+                                    icon: const Icon(Icons.edit_outlined),
+                                  ),
+                                  IconButton(
                                     tooltip: 'Delete',
                                     onPressed: () => _removeEntryAt(i),
                                     visualDensity: VisualDensity.compact,
@@ -2527,7 +2567,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                             ? (_isGeneratingBarcode
                                   ? 'Generating…'
                                   : 'Generate Barcode')
-                            : 'Add Items',
+                            : (isEditingExistingBlock ? 'Update' : 'Add Items'),
                       ),
                     ),
                   ),

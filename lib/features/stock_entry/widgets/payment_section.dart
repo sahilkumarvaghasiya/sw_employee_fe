@@ -10,6 +10,7 @@ class PaymentSection extends StatelessWidget {
     required this.onPickDeadline,
     this.totalPaymentEditable = false,
     this.onTotalPaymentChanged,
+    this.deadlineErrorText,
   });
 
   final TextEditingController totalPaymentController;
@@ -22,6 +23,7 @@ class PaymentSection extends StatelessWidget {
 
   final bool totalPaymentEditable;
   final ValueChanged<String>? onTotalPaymentChanged;
+  final String? deadlineErrorText;
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
@@ -149,11 +151,11 @@ class PaymentSection extends StatelessWidget {
               ),
             ),
 
-            if (remainingAmount > 0 && deadline == null)
+            if (deadlineErrorText != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'Deadline is required when payment is pending.',
+                  deadlineErrorText!,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colorScheme.error,
                     fontWeight: FontWeight.w600,

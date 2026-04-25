@@ -410,9 +410,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         opaque: false,
         barrierColor: Colors.black38,
         barrierDismissible: false,
-        pageBuilder: (_, _, _) => const Center(
-          child: CircularProgressIndicator(),
-        ),
+        pageBuilder: (_, _, _) =>
+            const Center(child: CircularProgressIndicator()),
       ),
     );
 
@@ -658,7 +657,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                       borderRadius: BorderRadius.circular(20),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
-            onTap: () => _openBillDetails(bill),
+                        onTap: () => _openBillDetails(bill),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                           child: Row(
@@ -756,151 +755,160 @@ class _BillDetailsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final screenHeight = MediaQuery.sizeOf(context).height;
 
     final loc = MaterialLocalizations.of(context);
     final date = loc.formatShortDate(bill.createdAt);
     final time = loc.formatTimeOfDay(TimeOfDay.fromDateTime(bill.createdAt));
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
+      child: SizedBox(
+        height: screenHeight * 0.86,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bill.billNo,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${bill.customer.name} • ${bill.customer.phone}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$date • $time • ${methodLabel(bill.paymentMethod)}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              Card(
+                elevation: 0,
+                color: colorScheme.surfaceContainerHigh,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        bill.billNo,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      _SummaryRow(
+                        label: 'Subtotal',
+                        value: money(bill.subtotal),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${bill.customer.name} • ${bill.customer.phone}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      const SizedBox(height: 8),
+                      _SummaryRow(
+                        label: 'Discount',
+                        value: '- ${money(bill.totalDiscount)}',
+                        muted: true,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '$date • $time • ${methodLabel(bill.paymentMethod)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      const Divider(height: 16),
+                      _SummaryRow(
+                        label: 'Total',
+                        value: money(bill.total),
+                        bold: true,
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Close',
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            Card(
-              elevation: 0,
-              color: colorScheme.surfaceContainerHigh,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                child: Column(
-                  children: [
-                    _SummaryRow(label: 'Subtotal', value: money(bill.subtotal)),
-                    const SizedBox(height: 8),
-                    _SummaryRow(
-                      label: 'Discount',
-                      value: '- ${money(bill.totalDiscount)}',
-                      muted: true,
-                    ),
-                    const Divider(height: 16),
-                    _SummaryRow(
-                      label: 'Total',
-                      value: money(bill.total),
-                      bold: true,
-                    ),
-                  ],
+
+              const SizedBox(height: 12),
+              Text(
+                'Items',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            ),
+              const SizedBox(height: 8),
 
-            const SizedBox(height: 12),
-            Text(
-              'Items',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 420),
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: bill.items.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final item = bill.items[index];
-                  return Card(
-                    elevation: 0,
-                    color: colorScheme.surfaceContainerHigh,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.productName,
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                  ),
+              Expanded(
+                child: Scrollbar(
+                  thumbVisibility: bill.items.length > 4,
+                  child: ListView.separated(
+                    itemCount: bill.items.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final item = bill.items[index];
+                      return Card(
+                        elevation: 0,
+                        color: colorScheme.surfaceContainerHigh,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.productName,
+                                      style: theme.textTheme.titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${item.quantity} × ${money(item.unitPrice)}'
+                                      '${item.discountPercent > 0 ? ' • ${item.discountPercent.toStringAsFixed(0)}% off' : ''}',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${item.quantity} × ${money(item.unitPrice)}'
-                                  '${item.discountPercent > 0 ? ' • ${item.discountPercent.toStringAsFixed(0)}% off' : ''}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                money(item.lineTotal),
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w900,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 10),
-                          Text(
-                            money(item.lineTotal),
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
