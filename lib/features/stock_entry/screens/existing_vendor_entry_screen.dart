@@ -156,26 +156,23 @@ class _VendorCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final subtitle = vendor.phone.trim().isNotEmpty
-        ? vendor.phone
-        : (vendor.address?.trim().isNotEmpty ?? false)
-        ? vendor.address!
-        : '—';
+    final phone = vendor.phone.trim().isEmpty ? '—' : vendor.phone.trim();
+    final address = vendor.address?.trim() ?? '';
 
     return Card(
-      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      color: colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outlineVariant.withAlpha(80)),
+      ),
       child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: colorScheme.primary.withAlpha(31),
-                child: Icon(Icons.person_outline, color: colorScheme.primary),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,30 +180,19 @@ class _VendorCard extends StatelessWidget {
                     Text(
                       vendor.name,
                       style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
               ),
               const SizedBox(width: 10),
               _PulsingArrowButton(onPressed: onTap),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      phone,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+    Widget build(BuildContext context) {
 
 class _PulsingArrowButton extends StatefulWidget {
   const _PulsingArrowButton({required this.onPressed});
@@ -268,5 +254,32 @@ class _PulsingArrowButtonState extends State<_PulsingArrowButton>
         ),
       ),
     );
+  }
+}
+      final colorScheme = Theme.of(context).colorScheme;
+
+      return ScaleTransition(
+        scale: _scale,
+        child: Material(
+          color: colorScheme.primaryContainer,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          child: InkWell(
+            onTap: widget.onPressed,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Icon(
+                Icons.arrow_forward_rounded,
+                size: 22,
+                color: colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
   }
 }
