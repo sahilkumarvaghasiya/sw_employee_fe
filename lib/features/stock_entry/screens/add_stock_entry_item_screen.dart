@@ -1302,8 +1302,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                           ),
                         ),
                         builder: (context, controller, child) {
-                          return SizedBox(
-                            height: 56,
+                          return ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 56),
                             child: InkWell(
                               borderRadius: BorderRadius.circular(14),
                               onTap: () {
@@ -1508,8 +1508,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                           ),
                         ),
                         builder: (context, controller, child) {
-                          return SizedBox(
-                            height: 56,
+                          return ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 56),
                             child: InkWell(
                               borderRadius: BorderRadius.circular(14),
                               onTap: () {
@@ -1626,6 +1626,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                                     _itemType = o;
                                                   });
                                                   field.didChange(o);
+                                                  field.validate();
                                                   _itemTypeMenuController
                                                       .close();
                                                 },
@@ -1671,12 +1672,14 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                                       : text;
                                                 });
                                                 field.didChange(_itemType);
+                                                field.validate();
                                               },
                                               onAdd: () {
                                                 final ok =
                                                     _setCustomItemTypeFromField();
                                                 if (!ok) return;
                                                 field.didChange(_itemType);
+                                                field.validate();
                                                 _itemTypeMenuController.close();
                                               },
                                             ),
@@ -1711,8 +1714,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                           ),
                         ),
                         builder: (context, controller, child) {
-                          return SizedBox(
-                            height: 56,
+                          return ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 56),
                             child: InkWell(
                               borderRadius: BorderRadius.circular(14),
                               onTap: () {
@@ -1771,6 +1774,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                           _gender = g;
                                         });
                                         field.didChange(g);
+                                        field.validate();
                                         _genderMenuController.close();
                                       },
                                       child: Text(

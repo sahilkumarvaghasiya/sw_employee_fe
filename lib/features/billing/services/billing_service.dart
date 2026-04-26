@@ -160,9 +160,7 @@ class BillingService {
     final paymentMethodValue = switch (paymentMethod) {
       BillingPaymentMethod.cash => 'cash',
       BillingPaymentMethod.card => 'card',
-      BillingPaymentMethod.qr => 'qr_barcode',
-      BillingPaymentMethod.paytm => 'qr_barcode',
-      BillingPaymentMethod.upi => 'qr_barcode',
+      BillingPaymentMethod.qr => 'qr',
     };
 
     final paymentStatus = markPaid ? 'paid' : 'unpaid';
@@ -175,6 +173,9 @@ class BillingService {
         'address': customer.address,
         'items': lineItems,
         'bill_discount_amount': money(billDiscount),
+        'selected_payment_config_id': paymentMethod == BillingPaymentMethod.qr
+            ? paymentMethod.configId
+            : null,
         'payment_method': paymentMethodValue,
         'payment_status': paymentStatus,
         'notes': notes,

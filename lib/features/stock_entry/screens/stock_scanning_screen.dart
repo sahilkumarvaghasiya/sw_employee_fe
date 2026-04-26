@@ -388,6 +388,15 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     return {
       'vendor_name': widget.vendor.name,
+      'phone': (widget.vendor.phone?.trim().isNotEmpty ?? false)
+          ? widget.vendor.phone?.trim()
+          : null,
+      'email': (widget.vendor.email?.trim().isNotEmpty ?? false)
+          ? widget.vendor.email?.trim()
+          : null,
+      'gst_number': (widget.vendor.gst?.trim().isNotEmpty ?? false)
+          ? widget.vendor.gst?.trim()
+          : null,
       'vendor_address': (widget.vendor.address?.trim().isNotEmpty ?? false)
           ? widget.vendor.address?.trim()
           : null,
