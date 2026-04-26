@@ -370,6 +370,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
       products.add({
         'company_name': first.brandName,
+        if (first.brandId != null && first.brandId!.trim().isNotEmpty)
+          'brand_id': first.brandId,
         'product_type': first.itemType1,
         'gender': first.gender.name,
         'barcode_number': barcode,

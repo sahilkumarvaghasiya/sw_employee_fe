@@ -51,9 +51,7 @@ class _ExistingVendorEntryScreenState extends State<ExistingVendorEntryScreen> {
               .toList(growable: false);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Existing Vendor Entry'),
-      ),
+      appBar: AppBar(title: const Text('Existing Vendor Entry')),
       body: RefreshIndicator(
         onRefresh: provider.refreshVendors,
         child: CustomScrollView(
@@ -66,7 +64,7 @@ class _ExistingVendorEntryScreenState extends State<ExistingVendorEntryScreen> {
                   controller: _searchController,
                   onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
-                    hintText: 'Search vendor…',
+                    hintText: 'Search vendor...',
                     prefixIcon: Icon(Icons.search),
                   ),
                 ),
@@ -129,9 +127,9 @@ class _ExistingVendorEntryScreenState extends State<ExistingVendorEntryScreen> {
                       child: _VendorCard(
                         vendor: vendor,
                         onTap: () {
-                          Navigator.of(context).push(
-                            StockScanningScreen.route(vendor: vendor),
-                          );
+                          Navigator.of(
+                            context,
+                          ).push(StockScanningScreen.route(vendor: vendor));
                         },
                       ),
                     );
@@ -156,7 +154,7 @@ class _VendorCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final phone = vendor.phone.trim().isEmpty ? '—' : vendor.phone.trim();
+    final phone = vendor.phone.trim().isEmpty ? '-' : vendor.phone.trim();
     final address = vendor.address?.trim() ?? '';
 
     return Card(
@@ -182,9 +180,6 @@ class _VendorCard extends StatelessWidget {
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
-              ),
-              const SizedBox(width: 10),
-              _PulsingArrowButton(onPressed: onTap),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -192,7 +187,31 @@ class _VendorCard extends StatelessWidget {
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w500,
-    Widget build(BuildContext context) {
+                      ),
+                    ),
+                    if (address.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        address,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _PulsingArrowButton(onPressed: onTap),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _PulsingArrowButton extends StatefulWidget {
   const _PulsingArrowButton({required this.onPressed});
@@ -254,32 +273,5 @@ class _PulsingArrowButtonState extends State<_PulsingArrowButton>
         ),
       ),
     );
-  }
-}
-      final colorScheme = Theme.of(context).colorScheme;
-
-      return ScaleTransition(
-        scale: _scale,
-        child: Material(
-          color: colorScheme.primaryContainer,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: colorScheme.outlineVariant),
-          ),
-          child: InkWell(
-            onTap: widget.onPressed,
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Icon(
-                Icons.arrow_forward_rounded,
-                size: 22,
-                color: colorScheme.onPrimaryContainer,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
   }
 }

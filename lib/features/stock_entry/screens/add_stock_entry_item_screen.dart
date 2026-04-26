@@ -58,6 +58,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   String? _itemType;
 
   String? _brandSelection;
+  String? _selectedBrandId;
   bool get _isBrandCustom => _brandSelection == _customOption;
 
   bool _isGeneratingBarcode = false;
@@ -89,6 +90,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
   final StockEntryService _stockEntryService = StockEntryService();
 
+  final Map<String, String> _brandIdByName = <String, String>{};
   final _PagedOptionsState _brandPaged = _PagedOptionsState();
   final _PagedOptionsState _itemTypePaged = _PagedOptionsState();
   final _PagedOptionsState _sizePaged = _PagedOptionsState();
@@ -211,28 +213,198 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     }
   }
 
-  Future<void> _loadBrandOptions({bool reset = false}) {
-    return _loadPagedOptions(option: 'brand', state: _brandPaged, reset: reset);
+  Future<void> _loadBrandOptions({bool reset = false}) async {
+    final nextPage = reset ? 1 : _brandPaged.nextPage;
+    if (reset) {
+      _brandPaged
+        ..values = const <String>[]
+        ..hasMore = true
+        ..nextPage = 1
+        ..isInitialized = false;
+      _brandIdByName.clear();
+    }
+
+    if (_brandPaged.isLoading || (!reset && !_brandPaged.hasMore)) return;
+
+    if (!mounted) return;
+    setState(() => _brandPaged.isLoading = true);
+
+    try {
+      final result = await _stockEntryService.fetchBrandOptionsPage(
+        page: nextPage,
+        pageSize: 30,
+        search: _brandSearchQuery,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        final current = _brandPaged.values.toSet();
+        final names = <String>[];
+        for (final brand in result.items) {
+          _brandIdByName[brand.name.toLowerCase()] = brand.id;
+          if (current.add(brand.name)) names.add(brand.name);
+        }
+        _brandPaged.values = [..._brandPaged.values, ...names];
+        _brandPaged.hasMore = result.hasMore;
+        _brandPaged.nextPage = nextPage + 1;
+        _brandPaged.isInitialized = true;
+
+        final selected = _brandSelection;
+        if (selected != null && selected != _customOption) {
+          final selectedId = _brandIdByName[selected.toLowerCase()];
+          if (selectedId != null) {
+            _selectedBrandId = selectedId;
+          }
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _brandPaged.hasMore = false;
+        _brandPaged.isInitialized = true;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => _brandPaged.isLoading = false);
+    }
   }
 
-  Future<void> _loadItemTypeOptions({bool reset = false}) {
-    return _loadPagedOptions(
-      option: 'item_type',
-      state: _itemTypePaged,
-      reset: reset,
-    );
+  Future<void> _loadItemTypeOptions({bool reset = false}) async {
+    final nextPage = reset ? 1 : _itemTypePaged.nextPage;
+    if (reset) {
+      _itemTypePaged
+        ..values = const <String>[]
+        ..hasMore = true
+        ..nextPage = 1
+        ..isInitialized = false;
+    }
+
+    if (_itemTypePaged.isLoading || (!reset && !_itemTypePaged.hasMore)) return;
+
+    if (!mounted) return;
+    setState(() => _itemTypePaged.isLoading = true);
+
+    try {
+      final result = await _stockEntryService.fetchItemTypeOptionsPage(
+        page: nextPage,
+        pageSize: 30,
+        search: _itemTypeSearchQuery,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        final current = _itemTypePaged.values.toSet();
+        final names = <String>[];
+        for (final itemType in result.items) {
+          if (current.add(itemType.name)) names.add(itemType.name);
+        }
+        _itemTypePaged.values = [..._itemTypePaged.values, ...names];
+        _itemTypePaged.hasMore = result.hasMore;
+        _itemTypePaged.nextPage = nextPage + 1;
+        _itemTypePaged.isInitialized = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _itemTypePaged.hasMore = false;
+        _itemTypePaged.isInitialized = true;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => _itemTypePaged.isLoading = false);
+    }
   }
 
-  Future<void> _loadSizeOptions({bool reset = false}) {
-    return _loadPagedOptions(option: 'size', state: _sizePaged, reset: reset);
+  Future<void> _loadSizeOptions({bool reset = false}) async {
+    final nextPage = reset ? 1 : _sizePaged.nextPage;
+    if (reset) {
+      _sizePaged
+        ..values = const <String>[]
+        ..hasMore = true
+        ..nextPage = 1
+        ..isInitialized = false;
+    }
+
+    if (_sizePaged.isLoading || (!reset && !_sizePaged.hasMore)) return;
+
+    if (!mounted) return;
+    setState(() => _sizePaged.isLoading = true);
+
+    try {
+      final result = await _stockEntryService.fetchSizeOptionsPage(
+        page: nextPage,
+        pageSize: 30,
+        search: _sizeSearchQuery,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        final current = _sizePaged.values.toSet();
+        final names = <String>[];
+        for (final size in result.items) {
+          if (current.add(size.name)) names.add(size.name);
+        }
+        _sizePaged.values = [..._sizePaged.values, ...names];
+        _sizePaged.hasMore = result.hasMore;
+        _sizePaged.nextPage = nextPage + 1;
+        _sizePaged.isInitialized = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _sizePaged.hasMore = false;
+        _sizePaged.isInitialized = true;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => _sizePaged.isLoading = false);
+    }
   }
 
-  Future<void> _loadColourOptions({bool reset = false}) {
-    return _loadPagedOptions(
-      option: 'colour',
-      state: _colourPaged,
-      reset: reset,
-    );
+  Future<void> _loadColourOptions({bool reset = false}) async {
+    final nextPage = reset ? 1 : _colourPaged.nextPage;
+    if (reset) {
+      _colourPaged
+        ..values = const <String>[]
+        ..hasMore = true
+        ..nextPage = 1
+        ..isInitialized = false;
+    }
+
+    if (_colourPaged.isLoading || (!reset && !_colourPaged.hasMore)) return;
+
+    if (!mounted) return;
+    setState(() => _colourPaged.isLoading = true);
+
+    try {
+      final result = await _stockEntryService.fetchColourOptionsPage(
+        page: nextPage,
+        pageSize: 30,
+        search: _colourSearchQuery,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        final current = _colourPaged.values.toSet();
+        final names = <String>[];
+        for (final colour in result.items) {
+          if (current.add(colour.name)) names.add(colour.name);
+        }
+        _colourPaged.values = [..._colourPaged.values, ...names];
+        _colourPaged.hasMore = result.hasMore;
+        _colourPaged.nextPage = nextPage + 1;
+        _colourPaged.isInitialized = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _colourPaged.hasMore = false;
+        _colourPaged.isInitialized = true;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => _colourPaged.isLoading = false);
+    }
   }
 
   void _ensureBrandOptionsLoaded() {
@@ -257,68 +429,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
   static const String _customOption = '__custom__';
 
-  static const List<String> _brandOptions = <String>[
-    'Nova Apparel',
-    'UrbanCo',
-    'BluePeak',
-    'Astra',
-    'DashWear',
-    'MintMode',
-  ];
-
-  static const List<String> _itemTypes = <String>[
-    'T-Shirt',
-    'Jeans',
-    'Shirt',
-    'Trouser',
-    'Shorts',
-    'Top',
-    'Frock',
-    'Skirt',
-    'Kurta',
-    'Track Pant',
-    'Dress',
-  ];
-
-  static const List<String> _sizeOptionsDefault = <String>[
-    'XS',
-    'S',
-    'M',
-    'L',
-    'XL',
-    'XXL',
-    '28',
-    '30',
-    '32',
-    '34',
-    '36',
-    '38',
-    '40',
-    '42',
-    '44',
-  ];
-
-  static const List<String> _colourOptionsDefault = <String>[
-    'Black',
-    'White',
-    'Blue',
-    'Navy',
-    'Grey',
-    'Green',
-    'Red',
-    'Yellow',
-    'Pink',
-    'Brown',
-    'Beige',
-    'Purple',
-    'Orange',
-  ];
-
-  static const String _prefsKeySizes = 'stock_entry_custom_sizes_v1';
   static const String _prefsKeyColours = 'stock_entry_custom_colours_v1';
 
-  List<String> _sizeOptions = List<String>.from(_sizeOptionsDefault);
-  List<String> _colourOptions = List<String>.from(_colourOptionsDefault);
+  List<String> _sizeOptions = <String>[];
+  List<String> _colourOptions = <String>[];
 
   @override
   void initState() {
@@ -353,13 +467,12 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     final brand = first.brandName.trim();
     if (brand.isEmpty) {
       _brandSelection = null;
-      _brandController.text = '';
-    } else if (_brandOptions.contains(brand)) {
-      _brandSelection = brand;
+      _selectedBrandId = null;
       _brandController.text = '';
     } else {
-      _brandSelection = _customOption;
-      _brandController.text = brand;
+      _brandSelection = brand;
+      _selectedBrandId = null;
+      _brandController.text = '';
     }
 
     _entries
@@ -476,13 +589,11 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   Future<void> _loadCustomOptions() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final sizes = prefs.getStringList(_prefsKeySizes) ?? const <String>[];
       final colours = prefs.getStringList(_prefsKeyColours) ?? const <String>[];
 
       if (!mounted) return;
       setState(() {
-        _sizeOptions = _mergeOptions(_sizeOptionsDefault, sizes);
-        _colourOptions = _mergeOptions(_colourOptionsDefault, colours);
+        _colourOptions = [..._colourPaged.values, ...colours];
       });
     } catch (_) {
       // Ignore; defaults will be used.
@@ -514,14 +625,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      final customSizes = _sizeOptions
-          .where((s) => !_sizeOptionsDefault.contains(s))
-          .toList(growable: false);
       final customColours = _colourOptions
-          .where((c) => !_colourOptionsDefault.contains(c))
+          .where((c) => !_colourPaged.values.contains(c))
           .toList(growable: false);
 
-      await prefs.setStringList(_prefsKeySizes, customSizes);
       await prefs.setStringList(_prefsKeyColours, customColours);
     } catch (_) {
       // Ignore.
@@ -877,6 +984,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     }
     setState(() {
       _brandSelection = _customOption;
+      _selectedBrandId = null;
       _brandController.text = raw;
     });
     return true;
@@ -973,6 +1081,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         StockEntryDraftItem(
           barcode: finalBarcode,
           barcodeUrl: _barcodeUrl,
+          brandId: _selectedBrandId,
           brandName: brand,
           size: row.size,
           colour: row.colour,
@@ -1035,10 +1144,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         widget.initialDrafts != null && widget.initialDrafts!.isNotEmpty;
 
     final List<String> customSizes = _sizeOptions
-        .where((s) => !_sizeOptionsDefault.contains(s))
+        .where((s) => !_sizePaged.values.contains(s))
         .toList(growable: false);
     final List<String> customColours = _colourOptions
-        .where((c) => !_colourOptionsDefault.contains(c))
+        .where((c) => !_colourPaged.values.contains(c))
         .toList(growable: false);
 
     final StockEntryItemGender? safeGender =
@@ -1046,12 +1155,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         ? _gender
         : null;
 
-    final String? safeBrandSelection =
-        _brandSelection == null ||
-            _brandSelection == _customOption ||
-            _brandOptions.contains(_brandSelection)
-        ? _brandSelection
-        : null;
+    final String? safeBrandSelection = _brandSelection;
 
     InputDecoration decoration({
       required String label,
@@ -1392,14 +1496,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       8,
                                     ),
                                     children: [
-                                      ..._mergeUniqueOptions(
-                                            _brandPaged.values,
-                                            _brandOptions,
-                                          )
+                                      ..._brandPaged.values
                                           .where((o) {
-                                            if (o.toLowerCase() == 'other') {
-                                              return false;
-                                            }
                                             final q = _brandSearchQuery
                                                 .trim()
                                                 .toLowerCase();
@@ -1420,6 +1518,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                               onPressed: () {
                                                 setState(() {
                                                   _brandSelection = o;
+                                                  _selectedBrandId =
+                                                      _brandIdByName[o
+                                                          .toLowerCase()];
                                                   _brandController.clear();
                                                 });
                                                 field.didChange(o);
@@ -1460,9 +1561,11 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                             final text = raw.trim();
                                             if (text.isEmpty) {
                                               _brandSelection = null;
+                                              _selectedBrandId = null;
                                               return;
                                             }
                                             _brandSelection = _customOption;
+                                            _selectedBrandId = null;
                                           });
                                         },
                                         onAdd: () {
@@ -1593,97 +1696,84 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       8,
                                       8,
                                     ),
-                                    children:
-                                        _mergeUniqueOptions(
-                                              _itemTypePaged.values,
-                                              _itemTypes,
-                                            )
-                                            .where((o) {
-                                              if (o.toLowerCase() == 'other') {
-                                                return false;
-                                              }
-                                              final q = _itemTypeSearchQuery
-                                                  .trim()
-                                                  .toLowerCase();
-                                              if (q.isEmpty) return true;
-                                              return o.toLowerCase().contains(
-                                                q,
-                                              );
-                                            })
-                                            .map<Widget>((o) {
-                                              final isSelected = selected == o;
-                                              return MenuItemButton(
-                                                leadingIcon: isSelected
-                                                    ? const Icon(
-                                                        Icons.check_rounded,
-                                                      )
-                                                    : const SizedBox(
-                                                        width: 24,
-                                                        height: 24,
-                                                      ),
-                                                onPressed: () {
-                                                  setState(() {
-                                                    _itemType = o;
-                                                  });
-                                                  field.didChange(o);
-                                                  field.validate();
-                                                  _itemTypeMenuController
-                                                      .close();
-                                                },
-                                                child: Text(
-                                                  o,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              );
-                                            })
-                                            .toList(growable: true)
-                                          ..addAll([
-                                            if (_itemTypePaged.isLoading)
-                                              const Padding(
-                                                padding: EdgeInsets.symmetric(
-                                                  vertical: 10,
-                                                ),
-                                                child: Center(
-                                                  child: SizedBox(
-                                                    width: 18,
-                                                    height: 18,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                            const SizedBox(height: 8),
-                                            Divider(
-                                              height: 1,
-                                              color: colorScheme.outlineVariant,
-                                            ),
-                                            const SizedBox(height: 6),
-                                            dottedAddField(
-                                              controller: _itemTypeController,
-                                              hint: 'Add item type',
-                                              onChanged: (raw) {
+                                    children: [
+                                      ..._itemTypePaged.values
+                                          .where((o) {
+                                            final q = _itemTypeSearchQuery
+                                                .trim()
+                                                .toLowerCase();
+                                            if (q.isEmpty) return true;
+                                            return o.toLowerCase().contains(q);
+                                          })
+                                          .map<Widget>((o) {
+                                            final isSelected = selected == o;
+                                            return MenuItemButton(
+                                              leadingIcon: isSelected
+                                                  ? const Icon(
+                                                      Icons.check_rounded,
+                                                    )
+                                                  : const SizedBox(
+                                                      width: 24,
+                                                      height: 24,
+                                                    ),
+                                              onPressed: () {
                                                 setState(() {
-                                                  final text = raw.trim();
-                                                  _itemType = text.isEmpty
-                                                      ? null
-                                                      : text;
+                                                  _itemType = o;
                                                 });
-                                                field.didChange(_itemType);
-                                                field.validate();
-                                              },
-                                              onAdd: () {
-                                                final ok =
-                                                    _setCustomItemTypeFromField();
-                                                if (!ok) return;
-                                                field.didChange(_itemType);
+                                                field.didChange(o);
                                                 field.validate();
                                                 _itemTypeMenuController.close();
                                               },
+                                              child: Text(
+                                                o,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            );
+                                          }),
+                                      if (_itemTypePaged.isLoading)
+                                        const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: 10,
+                                          ),
+                                          child: Center(
+                                            child: SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
                                             ),
-                                          ]),
+                                          ),
+                                        ),
+                                      const SizedBox(height: 8),
+                                      Divider(
+                                        height: 1,
+                                        color: colorScheme.outlineVariant,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      dottedAddField(
+                                        controller: _itemTypeController,
+                                        hint: 'Add item type',
+                                        onChanged: (raw) {
+                                          setState(() {
+                                            final text = raw.trim();
+                                            _itemType = text.isEmpty
+                                                ? null
+                                                : text;
+                                          });
+                                          field.didChange(_itemType);
+                                          field.validate();
+                                        },
+                                        onAdd: () {
+                                          final ok =
+                                              _setCustomItemTypeFromField();
+                                          if (!ok) return;
+                                          field.didChange(_itemType);
+                                          field.validate();
+                                          _itemTypeMenuController.close();
+                                        },
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -2216,7 +2306,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 onAdd: _addNewSizeFromField,
                                 options: _mergeUniqueOptions(
                                   _sizePaged.values,
-                                  [...customSizes, ..._sizeOptionsDefault],
+                                  customSizes,
                                 ),
                                 value: _draftRow.resolvedSize,
                                 menuController: _sizeMenuController,
@@ -2256,7 +2346,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 onAdd: _addNewColourFromField,
                                 options: _mergeUniqueOptions(
                                   _colourPaged.values,
-                                  [...customColours, ..._colourOptionsDefault],
+                                  [..._colourPaged.values, ...customColours],
                                 ),
                                 value: _draftRow.resolvedColour,
                                 menuController: _colourMenuController,

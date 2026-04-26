@@ -394,10 +394,6 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         return 'Cash';
       case BillingPaymentMethod.qr:
         return 'QR Barcode';
-      case BillingPaymentMethod.paytm:
-        return 'Paytm';
-      case BillingPaymentMethod.upi:
-        return 'UPI';
       case BillingPaymentMethod.card:
         return 'Card';
     }

@@ -62,6 +62,7 @@ class BillPreviewScreen extends StatelessWidget {
                   customer: customer,
                   items: provider.items,
                   paymentMethod: paymentMethod,
+                  selectedQrConfigId: provider.selectedQrConfig?.id,
                   markPaid: provider.markPaid,
                   finalAmount: provider.finalAmount,
                   calculatedFinalAmount: provider.calculatedFinalAmount,
@@ -148,8 +149,6 @@ class BillPreviewScreen extends StatelessWidget {
     return switch (method) {
       BillingPaymentMethod.cash => 'Cash',
       BillingPaymentMethod.qr => 'QR Barcode',
-      BillingPaymentMethod.upi => 'UPI',
-      BillingPaymentMethod.paytm => 'Paytm',
       BillingPaymentMethod.card => 'Card',
       _ => '—',
     };

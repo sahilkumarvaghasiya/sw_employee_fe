@@ -64,8 +64,6 @@ class RecentActivityItem {
     if (raw.isEmpty) return '-';
 
     switch (raw) {
-      case 'upi':
-        return 'UPI';
       case 'qr':
         return 'QR';
       default:

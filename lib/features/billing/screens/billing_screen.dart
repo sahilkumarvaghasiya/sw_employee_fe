@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
+import '../services/billing_service.dart';
 import '../models/billing_models.dart';
 import '../providers/billing_provider.dart';
 import '../widgets/billing_bottom_sheets.dart';
@@ -32,6 +33,9 @@ class BillingScreen extends StatefulWidget {
 
 class _BillingScreenState extends State<BillingScreen> {
   final MobileScannerController _scannerController = MobileScannerController();
+  final BillingService _billingService = BillingService();
+
+  late final Future<List<BillingQrConfig>> _qrConfigsFuture;
 
   String? _lastBarcode;
   DateTime? _lastBarcodeAt;
@@ -69,6 +73,12 @@ class _BillingScreenState extends State<BillingScreen> {
       barcode: '8901023012218',
     ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _qrConfigsFuture = _billingService.fetchQrPaymentConfigs();
+  }
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context)
@@ -200,9 +210,7 @@ class _BillingScreenState extends State<BillingScreen> {
     Navigator.of(context).push(BillPreviewScreen.route(context));
   }
 
-  Future<void> _showQrPaymentSheet({
-    required BillingPaymentMethod method,
-  }) async {
+  Future<void> _showQrPaymentSheet() async {
     final provider = context.read<BillingProvider>();
 
     await showModalBottomSheet<void>(
@@ -220,18 +228,13 @@ class _BillingScreenState extends State<BillingScreen> {
               return SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Consumer<BillingProvider>(
-                    builder: (context, p, _) {
-                      final title = method == BillingPaymentMethod.paytm
-                          ? 'Paytm'
-                          : 'UPI';
-                      final selectedLabel = method == BillingPaymentMethod.paytm
-                          ? p.selectedPaytmQr?.label
-                          : p.selectedUpiQr?.label;
-
-                      final canContinue = method == BillingPaymentMethod.paytm
-                          ? p.selectedPaytmQr != null
-                          : p.selectedUpiQr != null;
+                  child: FutureBuilder<List<BillingQrConfig>>(
+                    future: _qrConfigsFuture,
+                    builder: (context, snapshot) {
+                      final selectedQr = provider.selectedQrConfig;
+                      final qrConfigs =
+                          snapshot.data ?? const <BillingQrConfig>[];
+                      final canContinue = selectedQr != null;
 
                       return Column(
                         mainAxisSize: MainAxisSize.min,
@@ -246,7 +249,7 @@ class _BillingScreenState extends State<BillingScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  '$title payment',
+                                  'QR barcode payment',
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -260,122 +263,190 @@ class _BillingScreenState extends State<BillingScreen> {
                             ],
                           ),
                           Text(
-                            'Select a QR and show it to the customer.',
+                            'Select a QR from dashboard and show it to the customer.',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 12),
-
-                          if (selectedLabel != null)
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (snapshot.hasError)
                             Card(
-                              elevation: 0,
                               color: colorScheme.surfaceContainerHigh,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: BorderSide(
-                                  color: colorScheme.outlineVariant,
-                                ),
+                              child: const Padding(
+                                padding: EdgeInsets.all(14),
+                                child: Text('Could not load QR codes.'),
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  16,
-                                  16,
-                                  16,
-                                ),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      selectedLabel,
-                                      style: theme.textTheme.titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Container(
-                                      height: 180,
-                                      width: double.infinity,
-                                      decoration: BoxDecoration(
-                                        color: colorScheme.surface,
-                                        borderRadius: BorderRadius.circular(18),
-                                        border: Border.all(
-                                          color: colorScheme.outlineVariant,
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Icon(
-                                          Icons.qr_code_2_rounded,
-                                          size: 120,
-                                          color: colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      'Show this QR to customer to scan and pay.',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ),
+                            )
+                          else if (qrConfigs.isEmpty)
+                            Card(
+                              color: colorScheme.surfaceContainerHigh,
+                              child: const Padding(
+                                padding: EdgeInsets.all(14),
+                                child: Text('No QR barcode available.'),
+                              ),
+                            )
+                          else ...[
+                            Text(
+                              'Choose barcode',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
-
-                          const SizedBox(height: 12),
-                          Text(
-                            'Choose QR',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              if (method == BillingPaymentMethod.paytm)
-                                ...p.paytmQrs.map(
-                                  (qr) => ChoiceChip(
-                                    label: Text(qr.label),
-                                    selected: p.selectedPaytmQr?.id == qr.id,
-                                    onSelected: (_) {
-                                      p.setPaymentMethod(
-                                        BillingPaymentMethod.paytm,
-                                      );
-                                      p.selectPaytmQr(qr);
-                                    },
+                            const SizedBox(height: 8),
+                            GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: qrConfigs.length,
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 4,
+                                    mainAxisSpacing: 10,
+                                    crossAxisSpacing: 10,
+                                    childAspectRatio: 1,
                                   ),
-                                )
-                              else
-                                ...p.upiQrs.map(
-                                  (qr) => ChoiceChip(
-                                    label: Text(qr.label),
-                                    selected: p.selectedUpiQr?.id == qr.id,
-                                    onSelected: (_) {
-                                      p.setPaymentMethod(
-                                        BillingPaymentMethod.upi,
-                                      );
-                                      p.selectUpiQr(qr);
-                                    },
+                              itemBuilder: (context, index) {
+                                final qr = qrConfigs[index];
+                                final isSelected = selectedQr?.id == qr.id;
+                                return InkWell(
+                                  borderRadius: BorderRadius.circular(16),
+                                  onTap: () {
+                                    provider.setPaymentMethod(
+                                      BillingPaymentMethod.qr,
+                                    );
+                                    provider.selectQrConfig(qr);
+                                  },
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 140),
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? colorScheme.primary.withOpacity(
+                                              0.12,
+                                            )
+                                          : colorScheme.surfaceContainerHigh,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? colorScheme.primary
+                                            : colorScheme.outlineVariant,
+                                        width: isSelected ? 1.5 : 1,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Expanded(
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                            child: Image.network(
+                                              qr.imageUrl,
+                                              width: double.infinity,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  Container(
+                                                    color: colorScheme.surface,
+                                                    child: Icon(
+                                                      Icons.qr_code_2_rounded,
+                                                      color: colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          qr.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            if (selectedQr != null) ...[
+                              const SizedBox(height: 12),
+                              Card(
+                                elevation: 0,
+                                color: colorScheme.surfaceContainerHigh,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  side: BorderSide(
+                                    color: colorScheme.outlineVariant,
                                   ),
                                 ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        selectedQr.name,
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: Image.network(
+                                          selectedQr.imageUrl,
+                                          height: 180,
+                                          width: double.infinity,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (_, _, _) => Container(
+                                            height: 180,
+                                            color: colorScheme.surface,
+                                            child: Icon(
+                                              Icons.qr_code_2_rounded,
+                                              size: 92,
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        'Show this QR to customer to scan and pay.',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ],
-                          ),
+                            const SizedBox(height: 16),
+                          ],
 
-                          const SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
                             height: 48,
                             child: FilledButton.icon(
                               onPressed: canContinue
                                   ? () {
-                                      provider.setPaymentMethod(method);
+                                      provider.setPaymentMethod(
+                                        BillingPaymentMethod.qr,
+                                      );
                                       provider.setMarkPaid(true);
                                       Navigator.of(context).pop();
                                       Navigator.of(this.context).push(
@@ -487,20 +558,10 @@ class _BillingScreenState extends State<BillingScreen> {
                 ),
                 option(
                   icon: Icons.qr_code_2_rounded,
-                  title: 'Paytm',
-                  subtitle: 'Show QR to customer',
+                  title: 'QR barcode',
+                  subtitle: 'Select QR and show to customer',
                   onTap: () async {
-                    await _showQrPaymentSheet(
-                      method: BillingPaymentMethod.paytm,
-                    );
-                  },
-                ),
-                option(
-                  icon: Icons.qr_code_scanner_outlined,
-                  title: 'UPI',
-                  subtitle: 'Show UPI QR to customer',
-                  onTap: () async {
-                    await _showQrPaymentSheet(method: BillingPaymentMethod.upi);
+                    await _showQrPaymentSheet();
                   },
                 ),
                 option(

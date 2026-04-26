@@ -20,8 +20,6 @@ class BillingProvider extends ChangeNotifier {
   double _paidAmount = 0;
   double? _manualFinalAmount;
   BillingQrConfig? _selectedQrConfig;
-  PaytmQrCode? _selectedPaytmQr;
-  UpiQrCode? _selectedUpiQr;
 
   late final List<BillingCustomer> _knownCustomers;
 
@@ -33,8 +31,6 @@ class BillingProvider extends ChangeNotifier {
   double get paidAmount => _paidAmount;
   double? get manualFinalAmount => _manualFinalAmount;
   BillingQrConfig? get selectedQrConfig => _selectedQrConfig;
-  PaytmQrCode? get selectedPaytmQr => _selectedPaytmQr;
-  UpiQrCode? get selectedUpiQr => _selectedUpiQr;
 
   List<BillingLineItem> get items => List.unmodifiable(_items);
 
@@ -69,18 +65,6 @@ class BillingProvider extends ChangeNotifier {
   double get remainingAmount =>
       (finalAmount - _paidAmount).clamp(0, double.infinity);
 
-  List<PaytmQrCode> get paytmQrs => const [
-    PaytmQrCode(id: 'ptm_001', label: 'Counter QR #1'),
-    PaytmQrCode(id: 'ptm_002', label: 'Counter QR #2'),
-    PaytmQrCode(id: 'ptm_003', label: 'Delivery QR'),
-  ];
-
-  List<UpiQrCode> get upiQrs => const [
-    UpiQrCode(id: 'upi_001', label: 'UPI QR #1'),
-    UpiQrCode(id: 'upi_002', label: 'UPI QR #2'),
-    UpiQrCode(id: 'upi_003', label: 'UPI QR #3'),
-  ];
-
   void setCustomer(BillingCustomer customer) {
     _customer = customer;
     notifyListeners();
@@ -90,8 +74,6 @@ class BillingProvider extends ChangeNotifier {
     _customer = null;
     _paymentMethod = null;
     _selectedQrConfig = null;
-    _selectedPaytmQr = null;
-    _selectedUpiQr = null;
     _markPaid = false;
     _paidAmount = 0;
     _manualFinalAmount = null;
@@ -248,24 +230,12 @@ class BillingProvider extends ChangeNotifier {
     _paymentMethod = method;
 
     if (_paymentMethod != BillingPaymentMethod.qr) _selectedQrConfig = null;
-    if (_paymentMethod != BillingPaymentMethod.paytm) _selectedPaytmQr = null;
-    if (_paymentMethod != BillingPaymentMethod.upi) _selectedUpiQr = null;
 
     notifyListeners();
   }
 
   void selectQrConfig(BillingQrConfig? qr) {
     _selectedQrConfig = qr;
-    notifyListeners();
-  }
-
-  void selectPaytmQr(PaytmQrCode? qr) {
-    _selectedPaytmQr = qr;
-    notifyListeners();
-  }
-
-  void selectUpiQr(UpiQrCode? qr) {
-    _selectedUpiQr = qr;
     notifyListeners();
   }
 

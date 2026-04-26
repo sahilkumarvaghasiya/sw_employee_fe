@@ -113,6 +113,7 @@ class BillingService {
     required BillingCustomer customer,
     required List<BillingLineItem> items,
     required BillingPaymentMethod paymentMethod,
+    String? selectedQrConfigId,
     required bool markPaid,
     required double finalAmount,
     required double calculatedFinalAmount,
@@ -174,7 +175,7 @@ class BillingService {
         'items': lineItems,
         'bill_discount_amount': money(billDiscount),
         'selected_payment_config_id': paymentMethod == BillingPaymentMethod.qr
-            ? paymentMethod.configId
+            ? selectedQrConfigId
             : null,
         'payment_method': paymentMethodValue,
         'payment_status': paymentStatus,

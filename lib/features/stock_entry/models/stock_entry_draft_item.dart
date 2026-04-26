@@ -22,6 +22,7 @@ class StockEntryDraftItem {
   const StockEntryDraftItem({
     required this.barcode,
     this.barcodeUrl,
+    this.brandId,
     required this.brandName,
     required this.size,
     required this.colour,
@@ -36,6 +37,7 @@ class StockEntryDraftItem {
 
   final String barcode;
   final String? barcodeUrl;
+  final String? brandId;
   final String brandName;
   final String size;
   final String colour;

@@ -36,13 +36,14 @@ class SalesBill {
 
   factory SalesBill.fromHistoryListJson(Map<String, dynamic> json) {
     return SalesBill(
-      id: (json['id'] ??
-              json['bill_id'] ??
-              json['list_uuid'] ??
-              json['uuid'] ??
-              json['bill_number'] ??
-              '')
-          .toString(),
+      id:
+          (json['id'] ??
+                  json['bill_id'] ??
+                  json['list_uuid'] ??
+                  json['uuid'] ??
+                  json['bill_number'] ??
+                  '')
+              .toString(),
       billNo: (json['bill_number'] ?? '-').toString(),
       createdAt: _parseCreatedTime(json['created_time']),
       customer: BillingCustomer(
@@ -60,13 +61,14 @@ class SalesBill {
     final parsedItems = _parseItems(json['items']);
 
     return SalesBill(
-  id: (json['id'] ??
-      json['bill_id'] ??
-      json['list_uuid'] ??
-      json['uuid'] ??
-      json['bill_number'] ??
-      '')
-      .toString(),
+      id:
+          (json['id'] ??
+                  json['bill_id'] ??
+                  json['list_uuid'] ??
+                  json['uuid'] ??
+                  json['bill_number'] ??
+                  '')
+              .toString(),
       billNo: (json['bill_number'] ?? '-').toString(),
       createdAt: _parseCreatedTime(json['created_time']),
       customer: BillingCustomer(
@@ -103,9 +105,9 @@ class SalesBill {
               ? lineSubtotal
               : lineSubtotal / safeQuantity;
 
-      final discountPercent = lineSubtotal <= 0
-        ? 0.0
-        : ((lineDiscount / lineSubtotal) * 100).clamp(0, 100).toDouble();
+          final discountPercent = lineSubtotal <= 0
+              ? 0.0
+              : ((lineDiscount / lineSubtotal) * 100).clamp(0, 100).toDouble();
 
           return BillingLineItem(
             id: (item['id'] ?? item['type_name'] ?? '').toString(),
@@ -140,10 +142,6 @@ class SalesBill {
         return BillingPaymentMethod.cash;
       case 'card':
         return BillingPaymentMethod.card;
-      case 'paytm':
-        return BillingPaymentMethod.paytm;
-      case 'upi':
-        return BillingPaymentMethod.upi;
       case 'qr':
       default:
         return BillingPaymentMethod.qr;
@@ -161,10 +159,10 @@ class SalesBill {
   int get itemsCount => items.fold<int>(0, (sum, i) => sum + i.quantity);
 
   double get subtotal =>
-    subtotalAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineSubtotal);
+      subtotalAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineSubtotal);
 
   double get totalDiscount =>
-    discountAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineDiscount);
+      discountAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineDiscount);
 
   double get total {
     if (totalAmount != null) return totalAmount!;
