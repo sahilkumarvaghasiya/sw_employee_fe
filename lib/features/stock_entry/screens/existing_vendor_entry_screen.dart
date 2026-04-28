@@ -26,6 +26,16 @@ class _ExistingVendorEntryScreenState extends State<ExistingVendorEntryScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<StockEntryProvider>().refreshVendors();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();

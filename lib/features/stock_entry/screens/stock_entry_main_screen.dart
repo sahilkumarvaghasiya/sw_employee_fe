@@ -26,6 +26,16 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<StockEntryProvider>().refreshVendors();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -79,155 +89,155 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-          SliverAppBar(
-            pinned: true,
-            elevation: 0,
-            scrolledUnderElevation: 1,
-            backgroundColor: colorScheme.surface.withValues(alpha: 0.92),
-            title: Row(
-              children: [
-                Icon(
-                  Icons.inventory_2_outlined,
-                  color: colorScheme.primary,
-                  size: 28,
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  'Stock Entry',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-              ],
-            ),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(32),
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Text(
-                  'Select a vendor to begin stock entry',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
+            SliverAppBar(
+              pinned: true,
+              elevation: 0,
+              scrolledUnderElevation: 1,
+              backgroundColor: colorScheme.surface.withValues(alpha: 0.92),
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    color: colorScheme.primary,
+                    size: 28,
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Stock Entry',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ],
               ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Material(
-                elevation: 2,
-                borderRadius: BorderRadius.circular(24),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: 'Search vendor…',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {});
-                            },
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 16,
-                      horizontal: 16,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(32),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    'Select a vendor to begin stock entry',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          if (provider.isLoadingVendors && vendors.isEmpty)
-            const SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (provider.vendorsError != null && vendors.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Material(
+                  elevation: 2,
+                  borderRadius: BorderRadius.circular(24),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Search vendor…',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (provider.isLoadingVendors && vendors.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (provider.vendorsError != null && vendors.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.wifi_off_rounded,
+                          size: 44,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          provider.vendorsError!,
+                          style: theme.textTheme.titleMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: provider.refreshVendors,
+                          child: const Text('Try again'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else if (filtered.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.wifi_off_rounded,
-                        size: 44,
-                        color: colorScheme.onSurfaceVariant,
+                        Icons.search_off_rounded,
+                        size: 64,
+                        color: colorScheme.primary.withValues(alpha: 0.18),
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        provider.vendorsError!,
-                        style: theme.textTheme.titleMedium,
-                        textAlign: TextAlign.center,
+                        'No vendors found',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: provider.refreshVendors,
-                        child: const Text('Try again'),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Try a different name or add a new vendor.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            )
-          else if (filtered.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.search_off_rounded,
-                      size: 64,
-                      color: colorScheme.primary.withValues(alpha: 0.18),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No vendors found',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Try a different name or add a new vendor.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                sliver: SliverList.separated(
+                  itemCount: filtered.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 16),
+                  itemBuilder: (context, index) {
+                    final vendor = filtered[index];
+                    return _VendorCard(
+                      vendor: vendor,
+                      onTap: () {
+                        Navigator.of(
+                          context,
+                        ).push(StockScanningScreen.route(vendor: vendor));
+                      },
+                    );
+                  },
                 ),
               ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              sliver: SliverList.separated(
-                itemCount: filtered.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 16),
-                itemBuilder: (context, index) {
-                  final vendor = filtered[index];
-                  return _VendorCard(
-                    vendor: vendor,
-                    onTap: () {
-                      Navigator.of(
-                        context,
-                      ).push(StockScanningScreen.route(vendor: vendor));
-                    },
-                  );
-                },
-              ),
-            ),
           ],
         ),
       ),

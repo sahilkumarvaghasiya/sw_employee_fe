@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:ui';
 import 'package:flutter/scheduler.dart';
 
 import '../models/stock_entry.dart';
@@ -412,19 +411,19 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     if (!isExistingVendor) {
       payload.addAll({
-      'vendor_name': widget.vendor.name,
-      'phone': (widget.vendor.phone.trim().isNotEmpty ?? false)
-        ? widget.vendor.phone.trim()
-        : null,
-      'email': (widget.vendor.email?.trim().isNotEmpty ?? false)
-        ? widget.vendor.email?.trim()
-        : null,
-      'gst_number': (widget.vendor.gst.trim().isNotEmpty ?? false)
-        ? widget.vendor.gst.trim()
-        : null,
-      'vendor_address': (widget.vendor.address?.trim().isNotEmpty ?? false)
-        ? widget.vendor.address?.trim()
-        : null,
+        'vendor_name': widget.vendor.name,
+        'phone': (widget.vendor.phone.trim().isNotEmpty ?? false)
+            ? widget.vendor.phone.trim()
+            : null,
+        'email': (widget.vendor.email?.trim().isNotEmpty ?? false)
+            ? widget.vendor.email?.trim()
+            : null,
+        'gst_number': (widget.vendor.gst.trim().isNotEmpty ?? false)
+            ? widget.vendor.gst.trim()
+            : null,
+        'vendor_address': (widget.vendor.address?.trim().isNotEmpty ?? false)
+            ? widget.vendor.address?.trim()
+            : null,
       });
     }
 
@@ -518,6 +517,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
               if (_remainingAmount > 0 && _deadline == null) {
                 setState(() => _showDeadlineValidation = true);
+                setModalState(() {});
                 return;
               }
 
@@ -526,6 +526,12 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                 final saved = await _saveFinal();
                 if (!saved) {
                   setModalState(() => isSaving = false);
+                  return;
+                }
+
+                // close the payment popup if still open
+                if (Navigator.of(dialogContext).canPop()) {
+                  Navigator.of(dialogContext).pop(true);
                 }
               } catch (e) {
                 if (mounted) {
@@ -539,10 +545,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
               onWillPop: () async => !isSaving,
               child: Stack(
                 children: [
-                  BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                    child: const SizedBox.expand(),
-                  ),
                   SafeArea(
                     child: Center(
                       child: SingleChildScrollView(
@@ -606,10 +608,19 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                     paidAmountController: _paidAmountController,
                                     remainingAmount: _remainingAmount,
                                     deadline: _deadline,
-                                    onPickDeadline: _pickDeadline,
+                                    onPickDeadline: () async {
+                                      await _pickDeadline();
+                                      setModalState(() {});
+                                    },
                                     totalPaymentEditable: true,
-                                    onTotalPaymentChanged: (_) =>
-                                        _syncTotalsFromControllers(),
+                                    onTotalPaymentChanged: (_) {
+                                      _syncTotalsFromControllers();
+                                      setModalState(() {});
+                                    },
+                                    onPaidAmountChanged: (_) {
+                                      _syncTotalsFromControllers();
+                                      setModalState(() {});
+                                    },
                                     deadlineErrorText:
                                         _showDeadlineValidation &&
                                             _remainingAmount > 0 &&
@@ -768,6 +779,14 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     // Keep local history updated after a successful backend save.
     await context.read<StockEntryProvider>().saveStockEntry(entry);
+
+    // Refresh vendor list from backend so the new vendor appears with the
+    // server record instead of the temporary local placeholder.
+    try {
+      await context.read<StockEntryProvider>().refreshVendors();
+    } catch (_) {
+      // Non-fatal: the stock entry was already saved.
+    }
 
     if (!mounted) return true;
 

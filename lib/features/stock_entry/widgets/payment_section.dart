@@ -8,6 +8,7 @@ class PaymentSection extends StatelessWidget {
     required this.remainingAmount,
     required this.deadline,
     required this.onPickDeadline,
+    this.onPaidAmountChanged,
     this.totalPaymentEditable = false,
     this.onTotalPaymentChanged,
     this.deadlineErrorText,
@@ -20,6 +21,7 @@ class PaymentSection extends StatelessWidget {
   final DateTime? deadline;
 
   final VoidCallback onPickDeadline;
+  final ValueChanged<String>? onPaidAmountChanged;
 
   final bool totalPaymentEditable;
   final ValueChanged<String>? onTotalPaymentChanged;
@@ -115,6 +117,7 @@ class PaymentSection extends StatelessWidget {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    onChanged: onPaidAmountChanged,
                     decoration: const InputDecoration(
                       labelText: 'Paid Amount',
                       prefixText: '₹',

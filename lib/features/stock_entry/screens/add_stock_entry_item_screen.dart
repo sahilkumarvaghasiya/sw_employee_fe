@@ -1480,7 +1480,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         },
                         menuChildren: [
                           SizedBox(
-                            width: MediaQuery.of(context).size.width - 64,
+                            width: MediaQuery.of(context).size.width - 32,
                             height: 320,
                             child: Column(
                               children: [
@@ -1689,7 +1689,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         },
                         menuChildren: [
                           SizedBox(
-                            width: MediaQuery.of(context).size.width - 64,
+                            width: MediaQuery.of(context).size.width - 32,
                             height: 320,
                             child: Column(
                               children: [
@@ -1894,7 +1894,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         },
                         menuChildren: [
                           SizedBox(
-                            width: MediaQuery.of(context).size.width - 64,
+                            width: MediaQuery.of(context).size.width - 32,
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: StockEntryItemGender.values
@@ -1976,9 +1976,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                   LayoutBuilder(
                     builder: (context, constraints) {
                       const gap = 12.0;
-                      const gridHeight = 52.0;
+                      final gridHeight = 52.0;
                       final width = constraints.maxWidth;
-                      final isTwoCol = width >= 320;
+                      final isTwoCol = width >= 360;
                       final fieldWidth = isTwoCol ? ((width - gap) / 2) : width;
 
                       Widget fieldLabel(String text) {
@@ -2117,6 +2117,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         required ValueChanged<String> onSearchChanged,
                         required ScrollController scrollController,
                         required bool isLoadingOptions,
+                        required double menuWidth,
                         String? errorText,
                       }) {
                         return gridField(
@@ -2186,7 +2187,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                             },
                             menuChildren: [
                               SizedBox(
-                                width: fieldWidth,
+                                width: menuWidth,
                                 height: 320,
                                 child: Column(
                                   children: [
@@ -2373,6 +2374,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 },
                                 scrollController: _sizePaged.scrollController,
                                 isLoadingOptions: _sizePaged.isLoading,
+                                menuWidth: width - 32,
                                 errorText: sizeError,
                                 onSelected: (v) {
                                   setState(() {
@@ -2414,6 +2416,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 },
                                 scrollController: _colourPaged.scrollController,
                                 isLoadingOptions: _colourPaged.isLoading,
+                                menuWidth: width - 32,
                                 errorText: colourError,
                                 onSelected: (v) {
                                   setState(() {

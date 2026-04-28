@@ -70,10 +70,6 @@ class StockEntryProvider extends ChangeNotifier {
   }
 
   Future<void> saveStockEntry(StockEntry entry) async {
-    if (vendorById(entry.vendor.id) == null) {
-      _vendors.insert(0, entry.vendor);
-    }
-
     // If the current history view is for this vendor, keep it in sync.
     if (_historyVendor?.id == entry.vendor.id) {
       addStockEntry(entry);
