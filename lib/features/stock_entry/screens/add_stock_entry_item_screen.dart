@@ -56,6 +56,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
   StockEntryItemGender? _gender;
   String? _itemType;
+  int? _selectedItemTypeId;
 
   String? _brandSelection;
   String? _selectedBrandId;
@@ -91,6 +92,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   final StockEntryService _stockEntryService = StockEntryService();
 
   final Map<String, String> _brandIdByName = <String, String>{};
+  final Map<String, int> _itemTypeIdByName = <String, int>{};
+  final Map<String, int> _sizeIdByName = <String, int>{};
+  final Map<String, int> _colourIdByName = <String, int>{};
   final _PagedOptionsState _brandPaged = _PagedOptionsState();
   final _PagedOptionsState _itemTypePaged = _PagedOptionsState();
   final _PagedOptionsState _sizePaged = _PagedOptionsState();
@@ -277,6 +281,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         ..hasMore = true
         ..nextPage = 1
         ..isInitialized = false;
+      _itemTypeIdByName.clear();
     }
 
     if (_itemTypePaged.isLoading || (!reset && !_itemTypePaged.hasMore)) return;
@@ -296,12 +301,21 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         final current = _itemTypePaged.values.toSet();
         final names = <String>[];
         for (final itemType in result.items) {
+          _itemTypeIdByName[itemType.name.toLowerCase()] = itemType.id;
           if (current.add(itemType.name)) names.add(itemType.name);
         }
         _itemTypePaged.values = [..._itemTypePaged.values, ...names];
         _itemTypePaged.hasMore = result.hasMore;
         _itemTypePaged.nextPage = nextPage + 1;
         _itemTypePaged.isInitialized = true;
+
+        final selected = _itemType;
+        if (selected != null && selected.trim().isNotEmpty) {
+          final selectedId = _itemTypeIdByName[selected.toLowerCase()];
+          if (selectedId != null) {
+            _selectedItemTypeId = selectedId;
+          }
+        }
       });
     } catch (_) {
       if (!mounted) return;
@@ -323,6 +337,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         ..hasMore = true
         ..nextPage = 1
         ..isInitialized = false;
+      _sizeIdByName.clear();
     }
 
     if (_sizePaged.isLoading || (!reset && !_sizePaged.hasMore)) return;
@@ -342,6 +357,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         final current = _sizePaged.values.toSet();
         final names = <String>[];
         for (final size in result.items) {
+          _sizeIdByName[size.name.toLowerCase()] = size.id;
           if (current.add(size.name)) names.add(size.name);
         }
         _sizePaged.values = [..._sizePaged.values, ...names];
@@ -369,6 +385,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         ..hasMore = true
         ..nextPage = 1
         ..isInitialized = false;
+      _colourIdByName.clear();
     }
 
     if (_colourPaged.isLoading || (!reset && !_colourPaged.hasMore)) return;
@@ -388,6 +405,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         final current = _colourPaged.values.toSet();
         final names = <String>[];
         for (final colour in result.items) {
+          _colourIdByName[colour.name.toLowerCase()] = colour.id;
           if (current.add(colour.name)) names.add(colour.name);
         }
         _colourPaged.values = [..._colourPaged.values, ...names];
@@ -463,6 +481,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
     _gender = first.gender;
     _itemType = first.itemType1;
+    _selectedItemTypeId = first.itemTypeId;
 
     final brand = first.brandName.trim();
     if (brand.isEmpty) {
@@ -480,7 +499,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       ..addAll(
         drafts.map(
           (d) => _VariantEntry(
+            sizeId: d.sizeId,
             size: d.size,
+            colourId: d.colourId,
             colour: d.colour,
             qty: d.quantity,
             sellUnit: d.sellingPrice,
@@ -713,7 +734,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
     setState(() {
       final next = _VariantEntry(
+        sizeId: _sizeIdByName[size.toLowerCase()],
         size: size,
+        colourId: _colourIdByName[colour.toLowerCase()],
         colour: colour,
         qty: qty,
         sellUnit: sell,
@@ -998,6 +1021,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     }
     setState(() {
       _itemType = raw;
+      _selectedItemTypeId = null;
       _itemTypeController.text = raw;
     });
     return true;
@@ -1083,10 +1107,13 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
           barcodeUrl: _barcodeUrl,
           brandId: _selectedBrandId,
           brandName: brand,
+          sizeId: row.sizeId,
           size: row.size,
+          colourId: row.colourId,
           colour: row.colour,
           gender: gender,
           isPair: false,
+          itemTypeId: _selectedItemTypeId,
           itemType1: itemType,
           itemType2: null,
           quantity: row.qty,
@@ -1487,95 +1514,103 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Expanded(
-                                  child: ListView(
+                                  child: Scrollbar(
                                     controller: _brandPaged.scrollController,
-                                    padding: const EdgeInsets.fromLTRB(
-                                      8,
-                                      4,
-                                      8,
-                                      8,
-                                    ),
-                                    children: [
-                                      ..._brandPaged.values
-                                          .where((o) {
-                                            final q = _brandSearchQuery
-                                                .trim()
-                                                .toLowerCase();
-                                            if (q.isEmpty) return true;
-                                            return o.toLowerCase().contains(q);
-                                          })
-                                          .map((o) {
-                                            final isSelected = selected == o;
-                                            return MenuItemButton(
-                                              leadingIcon: isSelected
-                                                  ? const Icon(
-                                                      Icons.check_rounded,
-                                                    )
-                                                  : const SizedBox(
-                                                      width: 24,
-                                                      height: 24,
+                                    child: ListView(
+                                      controller: _brandPaged.scrollController,
+                                      padding: const EdgeInsets.fromLTRB(
+                                        8,
+                                        4,
+                                        8,
+                                        8,
+                                      ),
+                                      children: [
+                                        ..._brandPaged.values
+                                            .where((o) {
+                                              final q = _brandSearchQuery
+                                                  .trim()
+                                                  .toLowerCase();
+                                              if (q.isEmpty) return true;
+                                              return o.toLowerCase().contains(
+                                                q,
+                                              );
+                                            })
+                                            .map((o) {
+                                              final isSelected = selected == o;
+                                              return MenuItemButton(
+                                                leadingIcon: isSelected
+                                                    ? const Icon(
+                                                        Icons.check_rounded,
+                                                      )
+                                                    : const SizedBox(
+                                                        width: 24,
+                                                        height: 24,
+                                                      ),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _brandSelection = o;
+                                                    _selectedBrandId =
+                                                        _brandIdByName[o
+                                                            .toLowerCase()];
+                                                    _brandController.clear();
+                                                  });
+                                                  field.didChange(o);
+                                                  _brandMenuController.close();
+                                                },
+                                                child: Text(
+                                                  o,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              );
+                                            }),
+                                        if (_brandPaged.isLoading)
+                                          const Padding(
+                                            padding: EdgeInsets.symmetric(
+                                              vertical: 10,
+                                            ),
+                                            child: Center(
+                                              child: SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
                                                     ),
-                                              onPressed: () {
-                                                setState(() {
-                                                  _brandSelection = o;
-                                                  _selectedBrandId =
-                                                      _brandIdByName[o
-                                                          .toLowerCase()];
-                                                  _brandController.clear();
-                                                });
-                                                field.didChange(o);
-                                                _brandMenuController.close();
-                                              },
-                                              child: Text(
-                                                o,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            );
-                                          }),
-                                      if (_brandPaged.isLoading)
-                                        const Padding(
-                                          padding: EdgeInsets.symmetric(
-                                            vertical: 10,
-                                          ),
-                                          child: Center(
-                                            child: SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
                                               ),
                                             ),
                                           ),
+                                        const SizedBox(height: 8),
+                                        Divider(
+                                          height: 1,
+                                          color: colorScheme.outlineVariant,
                                         ),
-                                      const SizedBox(height: 8),
-                                      Divider(
-                                        height: 1,
-                                        color: colorScheme.outlineVariant,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      dottedAddField(
-                                        controller: _brandController,
-                                        hint: 'Add brand',
-                                        onChanged: (raw) {
-                                          setState(() {
-                                            final text = raw.trim();
-                                            if (text.isEmpty) {
-                                              _brandSelection = null;
+                                        const SizedBox(height: 6),
+                                        dottedAddField(
+                                          controller: _brandController,
+                                          hint: 'Add brand',
+                                          onChanged: (raw) {
+                                            setState(() {
+                                              final text = raw.trim();
+                                              if (text.isEmpty) {
+                                                _brandSelection = null;
+                                                _selectedBrandId = null;
+                                                return;
+                                              }
+                                              _brandSelection = _customOption;
                                               _selectedBrandId = null;
-                                              return;
-                                            }
-                                            _brandSelection = _customOption;
-                                            _selectedBrandId = null;
-                                          });
-                                        },
-                                        onAdd: () {
-                                          final ok = _setCustomBrandFromField();
-                                          if (!ok) return;
-                                          field.didChange(_customOption);
-                                          _brandMenuController.close();
-                                        },
-                                      ),
-                                    ],
+                                            });
+                                          },
+                                          onAdd: () {
+                                            final ok =
+                                                _setCustomBrandFromField();
+                                            if (!ok) return;
+                                            field.didChange(_customOption);
+                                            _brandMenuController.close();
+                                          },
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1688,92 +1723,105 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Expanded(
-                                  child: ListView(
+                                  child: Scrollbar(
                                     controller: _itemTypePaged.scrollController,
-                                    padding: const EdgeInsets.fromLTRB(
-                                      8,
-                                      4,
-                                      8,
-                                      8,
-                                    ),
-                                    children: [
-                                      ..._itemTypePaged.values
-                                          .where((o) {
-                                            final q = _itemTypeSearchQuery
-                                                .trim()
-                                                .toLowerCase();
-                                            if (q.isEmpty) return true;
-                                            return o.toLowerCase().contains(q);
-                                          })
-                                          .map<Widget>((o) {
-                                            final isSelected = selected == o;
-                                            return MenuItemButton(
-                                              leadingIcon: isSelected
-                                                  ? const Icon(
-                                                      Icons.check_rounded,
-                                                    )
-                                                  : const SizedBox(
-                                                      width: 24,
-                                                      height: 24,
+                                    child: ListView(
+                                      controller:
+                                          _itemTypePaged.scrollController,
+                                      padding: const EdgeInsets.fromLTRB(
+                                        8,
+                                        4,
+                                        8,
+                                        8,
+                                      ),
+                                      children: [
+                                        ..._itemTypePaged.values
+                                            .where((o) {
+                                              final q = _itemTypeSearchQuery
+                                                  .trim()
+                                                  .toLowerCase();
+                                              if (q.isEmpty) return true;
+                                              return o.toLowerCase().contains(
+                                                q,
+                                              );
+                                            })
+                                            .map<Widget>((o) {
+                                              final isSelected = selected == o;
+                                              return MenuItemButton(
+                                                leadingIcon: isSelected
+                                                    ? const Icon(
+                                                        Icons.check_rounded,
+                                                      )
+                                                    : const SizedBox(
+                                                        width: 24,
+                                                        height: 24,
+                                                      ),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _itemType = o;
+                                                    _selectedItemTypeId =
+                                                        _itemTypeIdByName[o
+                                                            .toLowerCase()];
+                                                  });
+                                                  field.didChange(o);
+                                                  field.validate();
+                                                  _itemTypeMenuController
+                                                      .close();
+                                                },
+                                                child: Text(
+                                                  o,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              );
+                                            }),
+                                        if (_itemTypePaged.isLoading)
+                                          const Padding(
+                                            padding: EdgeInsets.symmetric(
+                                              vertical: 10,
+                                            ),
+                                            child: Center(
+                                              child: SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
                                                     ),
-                                              onPressed: () {
-                                                setState(() {
-                                                  _itemType = o;
-                                                });
-                                                field.didChange(o);
-                                                field.validate();
-                                                _itemTypeMenuController.close();
-                                              },
-                                              child: Text(
-                                                o,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            );
-                                          }),
-                                      if (_itemTypePaged.isLoading)
-                                        const Padding(
-                                          padding: EdgeInsets.symmetric(
-                                            vertical: 10,
-                                          ),
-                                          child: Center(
-                                            child: SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
                                               ),
                                             ),
                                           ),
+                                        const SizedBox(height: 8),
+                                        Divider(
+                                          height: 1,
+                                          color: colorScheme.outlineVariant,
                                         ),
-                                      const SizedBox(height: 8),
-                                      Divider(
-                                        height: 1,
-                                        color: colorScheme.outlineVariant,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      dottedAddField(
-                                        controller: _itemTypeController,
-                                        hint: 'Add item type',
-                                        onChanged: (raw) {
-                                          setState(() {
-                                            final text = raw.trim();
-                                            _itemType = text.isEmpty
-                                                ? null
-                                                : text;
-                                          });
-                                          field.didChange(_itemType);
-                                          field.validate();
-                                        },
-                                        onAdd: () {
-                                          final ok =
-                                              _setCustomItemTypeFromField();
-                                          if (!ok) return;
-                                          field.didChange(_itemType);
-                                          field.validate();
-                                          _itemTypeMenuController.close();
-                                        },
-                                      ),
-                                    ],
+                                        const SizedBox(height: 6),
+                                        dottedAddField(
+                                          controller: _itemTypeController,
+                                          hint: 'Add item type',
+                                          onChanged: (raw) {
+                                            setState(() {
+                                              final text = raw.trim();
+                                              _itemType = text.isEmpty
+                                                  ? null
+                                                  : text;
+                                              _selectedItemTypeId = null;
+                                            });
+                                            field.didChange(_itemType);
+                                            field.validate();
+                                          },
+                                          onAdd: () {
+                                            final ok =
+                                                _setCustomItemTypeFromField();
+                                            if (!ok) return;
+                                            field.didChange(_itemType);
+                                            field.validate();
+                                            _itemTypeMenuController.close();
+                                          },
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
@@ -2168,89 +2216,92 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Expanded(
-                                      child: ListView(
+                                      child: Scrollbar(
                                         controller: scrollController,
-                                        padding: const EdgeInsets.fromLTRB(
-                                          8,
-                                          4,
-                                          8,
-                                          8,
-                                        ),
-                                        children: [
-                                          ...options
-                                              .where((o) {
-                                                final q = searchQuery
-                                                    .trim()
-                                                    .toLowerCase();
-                                                if (q.isEmpty) return true;
-                                                return o.toLowerCase().contains(
-                                                  q,
-                                                );
-                                              })
-                                              .map((o) {
-                                                final isSelected =
-                                                    (value ?? '') == o;
-                                                return MenuItemButton(
-                                                  leadingIcon: isSelected
-                                                      ? const Icon(
-                                                          Icons.check_rounded,
-                                                        )
-                                                      : const SizedBox(
-                                                          width: 24,
-                                                          height: 24,
+                                        child: ListView(
+                                          controller: scrollController,
+                                          padding: const EdgeInsets.fromLTRB(
+                                            8,
+                                            4,
+                                            8,
+                                            8,
+                                          ),
+                                          children: [
+                                            ...options
+                                                .where((o) {
+                                                  final q = searchQuery
+                                                      .trim()
+                                                      .toLowerCase();
+                                                  if (q.isEmpty) return true;
+                                                  return o
+                                                      .toLowerCase()
+                                                      .contains(q);
+                                                })
+                                                .map((o) {
+                                                  final isSelected =
+                                                      (value ?? '') == o;
+                                                  return MenuItemButton(
+                                                    leadingIcon: isSelected
+                                                        ? const Icon(
+                                                            Icons.check_rounded,
+                                                          )
+                                                        : const SizedBox(
+                                                            width: 24,
+                                                            height: 24,
+                                                          ),
+                                                    onPressed: () {
+                                                      onSelected(o);
+                                                      menuController.close();
+                                                    },
+                                                    child: Text(
+                                                      o,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  );
+                                                }),
+                                            if (isLoadingOptions)
+                                              const Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                  vertical: 10,
+                                                ),
+                                                child: Center(
+                                                  child: SizedBox(
+                                                    width: 18,
+                                                    height: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
                                                         ),
-                                                  onPressed: () {
-                                                    onSelected(o);
-                                                    menuController.close();
-                                                  },
-                                                  child: Text(
-                                                    o,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
                                                   ),
-                                                );
-                                              }),
-                                          if (isLoadingOptions)
-                                            const Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                vertical: 10,
-                                              ),
-                                              child: Center(
-                                                child: SizedBox(
-                                                  width: 18,
-                                                  height: 18,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
                                                 ),
                                               ),
+                                            const SizedBox(height: 8),
+                                            Divider(
+                                              height: 1,
+                                              color: colorScheme.outlineVariant,
                                             ),
-                                          const SizedBox(height: 8),
-                                          Divider(
-                                            height: 1,
-                                            color: colorScheme.outlineVariant,
-                                          ),
-                                          const SizedBox(height: 6),
-                                          dottedAddField(
-                                            controller: addController,
-                                            hint: addHint,
-                                            onChanged: onAddChanged,
-                                            onAdd: () async {
-                                              final before = value;
-                                              await onAdd();
-                                              if (!mounted) return;
-                                              final after = selectionGetter();
-                                              final changed =
-                                                  (after != null &&
-                                                  after.trim().isNotEmpty &&
-                                                  after != before);
-                                              if (changed) {
-                                                menuController.close();
-                                              }
-                                            },
-                                          ),
-                                        ],
+                                            const SizedBox(height: 6),
+                                            dottedAddField(
+                                              controller: addController,
+                                              hint: addHint,
+                                              onChanged: onAddChanged,
+                                              onAdd: () async {
+                                                final before = value;
+                                                await onAdd();
+                                                if (!mounted) return;
+                                                final after = selectionGetter();
+                                                final changed =
+                                                    (after != null &&
+                                                    after.trim().isNotEmpty &&
+                                                    after != before);
+                                                if (changed) {
+                                                  menuController.close();
+                                                }
+                                              },
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -2797,13 +2848,17 @@ class _DashedRRectPainter extends CustomPainter {
 
 class _VariantEntry {
   const _VariantEntry({
+    this.sizeId,
     required this.size,
+    this.colourId,
     required this.colour,
     required this.qty,
     required this.sellUnit,
   });
 
+  final int? sizeId;
   final String size;
+  final int? colourId;
   final String colour;
   final int qty;
   final double sellUnit;

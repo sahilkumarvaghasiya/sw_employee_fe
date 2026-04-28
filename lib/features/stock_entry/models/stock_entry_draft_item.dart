@@ -24,10 +24,13 @@ class StockEntryDraftItem {
     this.barcodeUrl,
     this.brandId,
     required this.brandName,
+    this.sizeId,
     required this.size,
+    this.colourId,
     required this.colour,
     required this.gender,
     required this.isPair,
+    this.itemTypeId,
     required this.itemType1,
     required this.itemType2,
     required this.quantity,
@@ -39,11 +42,14 @@ class StockEntryDraftItem {
   final String? barcodeUrl;
   final String? brandId;
   final String brandName;
+  final int? sizeId;
   final String size;
+  final int? colourId;
   final String colour;
   final StockEntryItemGender gender;
 
   final bool isPair;
+  final int? itemTypeId;
   final String itemType1;
   final String? itemType2;
 

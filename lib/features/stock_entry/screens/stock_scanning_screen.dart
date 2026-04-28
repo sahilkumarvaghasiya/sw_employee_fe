@@ -299,11 +299,15 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         StockEntryDraftItem(
           barcode: item.draft.barcode,
           barcodeUrl: item.draft.barcodeUrl,
+          brandId: item.draft.brandId,
           brandName: item.draft.brandName,
+          sizeId: item.draft.sizeId,
           size: item.draft.size,
+          colourId: item.draft.colourId,
           colour: item.draft.colour,
           gender: item.draft.gender,
           isPair: item.draft.isPair,
+          itemTypeId: item.draft.itemTypeId,
           itemType1: item.draft.itemType1,
           itemType2: item.draft.itemType2,
           quantity: item.quantity,
@@ -348,12 +352,22 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   }
 
   Map<String, dynamic> _buildSavePayload() {
+    final isExistingVendor = int.tryParse(widget.vendor.id) != null;
     final productsByBarcode = <String, List<_EditableDraftItem>>{};
     for (final item in _items) {
       (productsByBarcode[item.draft.barcode] ??= []).add(item);
     }
 
     String moneyString(double value) => value.toStringAsFixed(2);
+    Object companyNameValue(StockEntryDraftItem item) {
+      final id = item.brandId?.trim();
+      if (id != null && id.isNotEmpty) {
+        final parsed = int.tryParse(id);
+        if (parsed != null) return parsed;
+      }
+      return item.brandName;
+    }
+
     String? deadlineString(DateTime? d) {
       if (d == null) return null;
       final y = d.year.toString().padLeft(4, '0');
@@ -369,18 +383,18 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       final first = items.first.draft;
 
       products.add({
-        'company_name': first.brandName,
+        'company_name': companyNameValue(first),
         if (first.brandId != null && first.brandId!.trim().isNotEmpty)
           'brand_id': first.brandId,
-        'product_type': first.itemType1,
+        'product_type': first.itemTypeId ?? first.itemType1,
         'gender': first.gender.name,
         'barcode_number': barcode,
         'barcode_url': first.barcodeUrl,
         'item_variants': [
           for (final it in items)
             {
-              'size': it.draft.size,
-              'colour': it.draft.colour,
+              'size': it.draft.sizeId ?? it.draft.size,
+              'colour': it.draft.colourId ?? it.draft.colour,
               'pieces': it.quantity,
               'sellprice': moneyString(it.sellingPrice),
             },
@@ -388,26 +402,33 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       });
     }
 
-    return {
-      'vendor_name': widget.vendor.name,
-      'phone': (widget.vendor.phone?.trim().isNotEmpty ?? false)
-          ? widget.vendor.phone?.trim()
-          : null,
-      'email': (widget.vendor.email?.trim().isNotEmpty ?? false)
-          ? widget.vendor.email?.trim()
-          : null,
-      'gst_number': (widget.vendor.gst?.trim().isNotEmpty ?? false)
-          ? widget.vendor.gst?.trim()
-          : null,
-      'vendor_address': (widget.vendor.address?.trim().isNotEmpty ?? false)
-          ? widget.vendor.address?.trim()
-          : null,
+    final payload = <String, dynamic>{
       'total_amount': moneyString(_totalStockValue),
       'paid_amount': moneyString(_paidAmount),
       'paymentdeadlinedate': deadlineString(_deadline),
       'notes': null,
       'products': products,
     };
+
+    if (!isExistingVendor) {
+      payload.addAll({
+      'vendor_name': widget.vendor.name,
+      'phone': (widget.vendor.phone.trim().isNotEmpty ?? false)
+        ? widget.vendor.phone.trim()
+        : null,
+      'email': (widget.vendor.email?.trim().isNotEmpty ?? false)
+        ? widget.vendor.email?.trim()
+        : null,
+      'gst_number': (widget.vendor.gst.trim().isNotEmpty ?? false)
+        ? widget.vendor.gst.trim()
+        : null,
+      'vendor_address': (widget.vendor.address?.trim().isNotEmpty ?? false)
+        ? widget.vendor.address?.trim()
+        : null,
+      });
+    }
+
+    return payload;
   }
 
   bool _validateItemsOnly() {
