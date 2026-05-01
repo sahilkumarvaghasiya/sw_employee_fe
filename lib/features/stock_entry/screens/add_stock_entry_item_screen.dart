@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/stock_entry_draft_item.dart';
 import '../services/stock_entry_service.dart';
@@ -132,6 +131,31 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     }
 
     return out;
+  }
+
+  String _normalizeOptionKey(String raw) =>
+      raw.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  bool _isDuplicateOption<T>({
+    required String raw,
+    required Iterable<String> loadedOptions,
+    required Map<String, T> idByName,
+  }) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return false;
+
+    final keyLower = trimmed.toLowerCase();
+    final keyNormalized = _normalizeOptionKey(trimmed);
+
+    if (idByName.containsKey(keyLower) || idByName.containsKey(keyNormalized)) {
+      return true;
+    }
+
+    for (final option in loadedOptions) {
+      if (_normalizeOptionKey(option) == keyNormalized) return true;
+    }
+
+    return false;
   }
 
   void _attachOptionScrollListeners() {
@@ -447,11 +471,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
   static const String _customOption = '__custom__';
 
-  static const String _prefsKeyColours = 'stock_entry_custom_colours_v1';
-
-  List<String> _sizeOptions = <String>[];
-  List<String> _colourOptions = <String>[];
-
   @override
   void initState() {
     super.initState();
@@ -461,7 +480,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         : widget.initialBarcode;
 
     _barcodeController = TextEditingController(text: initialBarcode);
-    _loadCustomOptions();
 
     if (prefill != null && prefill.isNotEmpty) {
       _prefillFromDrafts(prefill);
@@ -607,95 +625,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     setState(() {});
   }
 
-  Future<void> _loadCustomOptions() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final colours = prefs.getStringList(_prefsKeyColours) ?? const <String>[];
-
-      if (!mounted) return;
-      setState(() {
-        _colourOptions = [..._colourPaged.values, ...colours];
-      });
-    } catch (_) {
-      // Ignore; defaults will be used.
-    }
-  }
-
-  List<String> _mergeOptions(List<String> defaults, List<String> custom) {
-    final seen = <String>{};
-    final out = <String>[];
-
-    void add(String v) {
-      final trimmed = v.trim();
-      if (trimmed.isEmpty) return;
-      final key = trimmed.toLowerCase();
-      if (seen.add(key)) out.add(trimmed);
-    }
-
-    for (final v in defaults) {
-      add(v);
-    }
-    for (final v in custom) {
-      add(v);
-    }
-
-    return out;
-  }
-
-  Future<void> _persistCustomOptions() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      final customColours = _colourOptions
-          .where((c) => !_colourPaged.values.contains(c))
-          .toList(growable: false);
-
-      await prefs.setStringList(_prefsKeyColours, customColours);
-    } catch (_) {
-      // Ignore.
-    }
-  }
-
-  Future<bool> _maybePersistCustomValue({
-    required String kind,
-    required String value,
-  }) async {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return false;
-
-    if (kind == 'size') {
-      final exists = _sizeOptions.any(
-        (o) => o.toLowerCase() == trimmed.toLowerCase(),
-      );
-      if (exists) return true;
-
-      final ok = await _confirmNewCustomEntry(kind: 'size', value: trimmed);
-      if (!ok) return false;
-      setState(() {
-        _sizeOptions = [..._sizeOptions, trimmed];
-      });
-      await _persistCustomOptions();
-      return true;
-    }
-
-    if (kind == 'colour') {
-      final exists = _colourOptions.any(
-        (o) => o.toLowerCase() == trimmed.toLowerCase(),
-      );
-      if (exists) return true;
-
-      final ok = await _confirmNewCustomEntry(kind: 'colour', value: trimmed);
-      if (!ok) return false;
-      setState(() {
-        _colourOptions = [..._colourOptions, trimmed];
-      });
-      await _persistCustomOptions();
-      return true;
-    }
-
-    return true;
-  }
-
   Future<bool> _addItemToTable() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
@@ -765,21 +694,17 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       return;
     }
 
-    final exists = _sizeOptions.any(
-      (s) => s.toLowerCase() == raw.toLowerCase(),
-    );
-    if (!exists) {
-      final ok = await _maybePersistCustomValue(kind: 'size', value: raw);
-      if (!ok) return;
+    if (_isDuplicateOption<int>(
+      raw: raw,
+      loadedOptions: _sizePaged.values,
+      idByName: _sizeIdByName,
+    )) {
+      _showSnack('Size already exists. Please select it from the list.');
+      return;
     }
 
-    final selected = _sizeOptions.firstWhere(
-      (s) => s.toLowerCase() == raw.toLowerCase(),
-      orElse: () => raw,
-    );
-
     setState(() {
-      _draftRow.sizeSelection = selected;
+      _draftRow.sizeSelection = raw;
       _draftRow.sizeController.clear();
     });
   }
@@ -791,21 +716,17 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       return;
     }
 
-    final exists = _colourOptions.any(
-      (c) => c.toLowerCase() == raw.toLowerCase(),
-    );
-    if (!exists) {
-      final ok = await _maybePersistCustomValue(kind: 'colour', value: raw);
-      if (!ok) return;
+    if (_isDuplicateOption<int>(
+      raw: raw,
+      loadedOptions: _colourPaged.values,
+      idByName: _colourIdByName,
+    )) {
+      _showSnack('Colour already exists. Please select it from the list.');
+      return;
     }
 
-    final selected = _colourOptions.firstWhere(
-      (c) => c.toLowerCase() == raw.toLowerCase(),
-      orElse: () => raw,
-    );
-
     setState(() {
-      _draftRow.colourSelection = selected;
+      _draftRow.colourSelection = raw;
       _draftRow.colourController.clear();
     });
   }
@@ -818,33 +739,11 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _showItemFieldErrors = false;
       _editingIndex = index;
 
-      final sizeExists = _sizeOptions.any(
-        (s) => s.toLowerCase() == entry.size.toLowerCase(),
-      );
-      if (sizeExists) {
-        final matched = _sizeOptions.firstWhere(
-          (s) => s.toLowerCase() == entry.size.toLowerCase(),
-        );
-        _draftRow.sizeSelection = matched;
-        _draftRow.sizeController.text = '';
-      } else {
-        _draftRow.sizeSelection = null;
-        _draftRow.sizeController.text = entry.size;
-      }
+      _draftRow.sizeSelection = entry.size;
+      _draftRow.sizeController.text = '';
 
-      final colourExists = _colourOptions.any(
-        (c) => c.toLowerCase() == entry.colour.toLowerCase(),
-      );
-      if (colourExists) {
-        final matched = _colourOptions.firstWhere(
-          (c) => c.toLowerCase() == entry.colour.toLowerCase(),
-        );
-        _draftRow.colourSelection = matched;
-        _draftRow.colourController.text = '';
-      } else {
-        _draftRow.colourSelection = null;
-        _draftRow.colourController.text = entry.colour;
-      }
+      _draftRow.colourSelection = entry.colour;
+      _draftRow.colourController.text = '';
 
       _draftRow.qtyController.text = entry.qty.toString();
 
@@ -975,34 +874,19 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     return result ?? false;
   }
 
-  Future<bool> _confirmNewCustomEntry({
-    required String kind,
-    required String value,
-  }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirm entry'),
-        content: Text('Save "$value" as a new $kind option for future use?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Yes, save'),
-          ),
-        ],
-      ),
-    );
-    return result ?? false;
-  }
-
   bool _setCustomBrandFromField() {
     final raw = _brandController.text.trim();
     if (raw.isEmpty) {
       _showSnack('Enter a brand name.');
+      return false;
+    }
+
+    if (_isDuplicateOption<String>(
+      raw: raw,
+      loadedOptions: _brandPaged.values,
+      idByName: _brandIdByName,
+    )) {
+      _showSnack('Brand already exists. Please select it from the list.');
       return false;
     }
     setState(() {
@@ -1017,6 +901,15 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     final raw = _itemTypeController.text.trim();
     if (raw.isEmpty) {
       _showSnack('Enter an item type.');
+      return false;
+    }
+
+    if (_isDuplicateOption<int>(
+      raw: raw,
+      loadedOptions: _itemTypePaged.values,
+      idByName: _itemTypeIdByName,
+    )) {
+      _showSnack('Item type already exists. Please select it from the list.');
       return false;
     }
     setState(() {
@@ -1169,13 +1062,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     final colorScheme = theme.colorScheme;
     final isEditingExistingBlock =
         widget.initialDrafts != null && widget.initialDrafts!.isNotEmpty;
-
-    final List<String> customSizes = _sizeOptions
-        .where((s) => !_sizePaged.values.contains(s))
-        .toList(growable: false);
-    final List<String> customColours = _colourOptions
-        .where((c) => !_colourPaged.values.contains(c))
-        .toList(growable: false);
 
     final StockEntryItemGender? safeGender =
         _gender != null && StockEntryItemGender.values.contains(_gender)
@@ -2356,10 +2242,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                   });
                                 },
                                 onAdd: _addNewSizeFromField,
-                                options: _mergeUniqueOptions(
-                                  _sizePaged.values,
-                                  customSizes,
-                                ),
+                                options: _sizePaged.values,
                                 value: _draftRow.resolvedSize,
                                 menuController: _sizeMenuController,
                                 onMenuTap: _ensureSizeOptionsLoaded,
@@ -2397,10 +2280,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                   });
                                 },
                                 onAdd: _addNewColourFromField,
-                                options: _mergeUniqueOptions(
-                                  _colourPaged.values,
-                                  [..._colourPaged.values, ...customColours],
-                                ),
+                                options: _colourPaged.values,
                                 value: _draftRow.resolvedColour,
                                 menuController: _colourMenuController,
                                 onMenuTap: _ensureColourOptionsLoaded,
