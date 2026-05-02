@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 import '../models/stock_entry.dart';
 import '../models/stock_entry_detail.dart';
@@ -24,6 +26,7 @@ class StockEntryDetailScreen extends StatefulWidget {
 
 class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
   late final Future<StockEntryDetail?> _detailsFuture;
+  final Map<int, bool> _expandedProducts = <int, bool>{};
 
   @override
   void initState() {
@@ -38,7 +41,14 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
     }
   }
 
-  String _money(double value) => '₹${value.toStringAsFixed(2)}';
+  String _money(double value) {
+    final formatter = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 2,
+    );
+    return formatter.format(value);
+  }
 
   String _ddMMyyyy(DateTime d) {
     final dd = d.day.toString().padLeft(2, '0');
@@ -81,6 +91,41 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
         ],
       ),
     );
+  }
+
+  void _showInvoiceToast(String invoice) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Invoice: $invoice',
+            softWrap: true,
+            maxLines: 3,
+          ),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  void _showCopyToast(String invoice) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Copied $invoice',
+            textAlign: TextAlign.center,
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          showCloseIcon: false,
+          action: null,
+          dismissDirection: DismissDirection.none,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        ),
+      );
   }
 
   @override
@@ -129,46 +174,111 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Invoice #${details.invoiceNumber}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                  ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(
+                                          6,
+                                        ),
+                                        onTap: () => _showInvoiceToast(
+                                          details.invoiceNumber,
+                                        ),
+                                        child: Text(
+                                          details.invoiceNumber,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.titleLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Copy invoice number',
+                                      onPressed: () async {
+                                        await Clipboard.setData(
+                                          ClipboardData(
+                                            text: details.invoiceNumber,
+                                          ),
+                                        );
+                                        if (!mounted) return;
+                                        _showCopyToast(details.invoiceNumber);
+                                      },
+                                      icon: const Icon(
+                                        Icons.copy_rounded,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  details.vendorName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(width: 12),
+                              _statusBadge(
+                                statusText,
+                                statusColor,
+                                statusIcon,
+                                theme.textTheme,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 72,
+                                child: Text(
+                                  'Vendor:',
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _ddMMyyyy(details.createdDate),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  details.vendorName,
+                                  softWrap: true,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 72,
+                                child: Text(
+                                  'Created:',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     color: colorScheme.onSurfaceVariant,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          _statusBadge(
-                            statusText,
-                            statusColor,
-                            statusIcon,
-                            theme.textTheme,
+                              ),
+                              Expanded(
+                                child: Text(
+                                  _ddMMyyyy(details.createdDate),
+                                  softWrap: true,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -223,15 +333,15 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
               ),
               const SizedBox(height: 8),
 
-              ...details.products.map((p) {
-                final subtitleParts = <String>[];
-                if (p.companyName.trim().isNotEmpty) {
-                  subtitleParts.add(p.companyName.trim());
-                }
-                if (p.gender.trim().isNotEmpty) {
-                  subtitleParts.add(p.gender.trim());
-                }
-                final subtitle = subtitleParts.join(' • ');
+              ...details.products.asMap().entries.map((entry) {
+                final index = entry.key;
+                final p = entry.value;
+                final company = p.companyName.trim();
+                final gender = p.gender.trim();
+                final isExpanded = _expandedProducts[index] ?? false;
+                final variants = p.variants;
+                final visibleVariants =
+                    isExpanded ? variants : variants.take(2).toList();
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -248,52 +358,311 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                               fontWeight: FontWeight.w900,
                             ),
                           ),
-                          if (subtitle.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitle,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
+                          if (company.isNotEmpty || gender.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            if (company.isNotEmpty)
+                              Text(
+                                'Brand: $company',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
+                            if (gender.isNotEmpty)
+                              Text(
+                                'Gender: $gender',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                           ],
                           const SizedBox(height: 10),
-                          ...p.variants.map((v) {
-                            final leftParts = <String>[];
-                            if (v.size.trim().isNotEmpty) {
-                              leftParts.add('Size ${v.size.trim()}');
-                            }
-                            if (v.color.trim().isNotEmpty) {
-                              leftParts.add(v.color.trim());
-                            }
-                            if (v.actualPrice != null) {
-                              leftParts.add('Price ${_money(v.actualPrice!)}');
-                            }
-
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
+                          // White rounded inner box containing a table-like layout
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant.withOpacity(0.9),
+                                width: 1.0,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.02),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                              child: Table(
+                                // NEW
+                                columnWidths: const {
+                                  0: FlexColumnWidth(2.5),
+                                  1: FlexColumnWidth(2.5),
+                                  2: FlexColumnWidth(1.5),
+                                  3: FlexColumnWidth(2),
+                                },
+                                defaultVerticalAlignment:
+                                    TableCellVerticalAlignment.middle,
                                 children: [
-                                  Expanded(
-                                    child: Text(
-                                      leftParts.join(' • '),
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
+                                  // Header row
+                                  TableRow(
+                                    children: [
+                                      // Header cells with bottom border
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 10),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: colorScheme.outlineVariant
+                                                  .withOpacity(0.7),
+                                              width: 1.0,
+                                            ),
                                           ),
-                                    ),
+                                        ),
+                                        child: Text(
+                                          'Size',
+                                          textAlign: TextAlign.center,
+                                          style: theme.textTheme.labelLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 10),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: colorScheme.outlineVariant
+                                                  .withOpacity(0.7),
+                                              width: 1.0,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Color',
+                                          textAlign: TextAlign.center,
+                                          style: theme.textTheme.labelLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 10),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: colorScheme.outlineVariant
+                                                  .withOpacity(0.7),
+                                              width: 1.0,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Qty',
+                                          textAlign: TextAlign.center,
+                                          style: theme.textTheme.labelLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 10),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: colorScheme.outlineVariant
+                                                  .withOpacity(0.7),
+                                              width: 1.0,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Price',
+                                          textAlign: TextAlign.center,
+                                          style: theme.textTheme.labelLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  Text(
-                                    'Qty ${v.quantity}',
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
+                                  // Data rows
+                                  ...visibleVariants.map((v) {
+                                    final size = v.size.trim();
+                                    final color = v.color.trim();
+                                    final price = v.actualPrice;
+                                    return TableRow(
+                                      decoration: const BoxDecoration(),
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 8),
+                                          child: Align(
+                                            alignment: Alignment.center,
+                                            child: LayoutBuilder(
+                                              builder: (context, constraints) {
+                                                return Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 6),
+                                                  child: ConstrainedBox(
+                                                    constraints: BoxConstraints(
+                                                        maxWidth:
+                                                            constraints.maxWidth),
+                                                    child: SingleChildScrollView(
+                                                      scrollDirection:
+                                                          Axis.horizontal,
+                                                      physics:
+                                                          const BouncingScrollPhysics(),
+                                                      child: Text(
+                                                        size.isEmpty ? '—' : size,
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        style: theme
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 8),
+                                          child: Align(
+                                            alignment: Alignment.center,
+                                            child: LayoutBuilder(
+                                              builder: (context, constraints) {
+                                                return Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 6),
+                                                  child: ConstrainedBox(
+                                                    constraints: BoxConstraints(
+                                                        maxWidth:
+                                                            constraints.maxWidth),
+                                                    child: SingleChildScrollView(
+                                                      scrollDirection:
+                                                          Axis.horizontal,
+                                                      physics:
+                                                          const BouncingScrollPhysics(),
+                                                      child: Text(
+                                                        color.isEmpty ? '—' : color,
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        style: theme
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 8),
+                                          child: Align(
+                                            alignment: Alignment.center,
+                                            child: Text(
+                                              v.quantity.toString(),
+                                              textAlign: TextAlign.center,
+                                              style: theme.textTheme.titleSmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 8),
+                                          child: Align(
+                                            alignment: Alignment.center,
+                                            child: LayoutBuilder(
+                                              builder: (context, constraints) {
+                                                return Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 6),
+                                                  child: ConstrainedBox(
+                                                    constraints: BoxConstraints(
+                                                        maxWidth:
+                                                            constraints.maxWidth),
+                                                    child: SingleChildScrollView(
+                                                      scrollDirection:
+                                                          Axis.horizontal,
+                                                      physics:
+                                                          const BouncingScrollPhysics(),
+                                                      child: Text(
+                                                        price == null
+                                                            ? '—'
+                                                            : _money(price),
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        style: theme
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }),
                                 ],
                               ),
-                            );
-                          }),
+                            ),
+                          ),
+                          if (variants.length > 2)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _expandedProducts[index] = !isExpanded;
+                                  });
+                                },
+                                child: Text(
+                                  isExpanded
+                                      ? 'Show less'
+                                      : 'Show more',
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -329,26 +698,87 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
               children: [
                 if (entry.invoiceNumber != null &&
                     entry.invoiceNumber!.trim().isNotEmpty) ...[
-                  Text(
-                    'Invoice #${entry.invoiceNumber!.trim()}',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => _showInvoiceToast(
+                            entry.invoiceNumber!.trim(),
+                          ),
+                          child: Text(
+                            entry.invoiceNumber!.trim(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Copy invoice number',
+                        onPressed: () async {
+                          await Clipboard.setData(
+                            ClipboardData(
+                              text: entry.invoiceNumber!.trim(),
+                            ),
+                          );
+                          if (!mounted) return;
+                          _showCopyToast(entry.invoiceNumber!.trim());
+                        },
+                        icon: const Icon(Icons.copy_rounded, size: 18),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                 ],
-                Text(
-                  entry.vendor.name,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 72,
+                      child: Text(
+                        'Vendor:',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        entry.vendor.name,
+                        softWrap: true,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  createdLabel,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 72,
+                      child: Text(
+                        'Created:',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        createdLabel,
+                        softWrap: true,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

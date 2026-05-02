@@ -44,8 +44,9 @@ DateTime? _parseDdMmYyyyDate(Object? value) {
 
 double _toDouble(Object? value) {
   if (value is num) return value.toDouble();
-  final raw = (value ?? '').toString().trim();
+  var raw = (value ?? '').toString().trim();
   if (raw.isEmpty) return 0;
+  raw = raw.replaceAll(',', '');
   return double.tryParse(raw) ?? 0;
 }
 

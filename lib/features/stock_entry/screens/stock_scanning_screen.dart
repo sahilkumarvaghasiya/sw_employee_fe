@@ -1070,7 +1070,10 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                       ),
                     ),
                     Text(
-                      '${widget.vendor.name} • ${widget.vendor.phone}${(widget.vendor.address == null || widget.vendor.address!.trim().isEmpty) ? '' : ' • ${widget.vendor.address}'}',
+                      (widget.vendor.address == null ||
+                              widget.vendor.address!.trim().isEmpty)
+                          ? widget.vendor.name
+                          : '${widget.vendor.name} • ${widget.vendor.address}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(

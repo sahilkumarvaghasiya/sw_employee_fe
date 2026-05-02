@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/stock_entry.dart';
@@ -347,7 +348,14 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
     super.dispose();
   }
 
-  String _money(double value) => '₹${value.toStringAsFixed(2)}';
+  String _money(double value) {
+    final formatter = NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: 2,
+    );
+    return formatter.format(value);
+  }
 
   String _ddMMyyyy(DateTime d) {
     final dd = d.day.toString().padLeft(2, '0');
@@ -877,7 +885,7 @@ class _HistoryRow extends StatelessWidget {
                         ],
                         if (invoiceNo != null && invoiceNo.isNotEmpty) ...[
                           Text(
-                            'Invoice #$invoiceNo',
+                            invoiceNo,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium?.copyWith(
@@ -887,7 +895,7 @@ class _HistoryRow extends StatelessWidget {
                           const SizedBox(height: 2),
                         ],
                         Text(
-                          dateLabel,
+                          'Created: $dateLabel',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w500,
