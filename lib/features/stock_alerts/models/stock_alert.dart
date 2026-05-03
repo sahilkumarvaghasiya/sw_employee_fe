@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 
 enum StockAlertSeverity { info, warning, critical }
 
@@ -6,35 +7,59 @@ enum StockAlertSeverity { info, warning, critical }
 class StockAlert {
   const StockAlert({
     required this.id,
-    required this.title,
+    required this.type,
     required this.message,
     required this.createdAt,
     required this.isSeen,
     required this.severity,
+    this.displayDate,
+    this.displayTime,
   });
 
   final String id;
-  final String title;
+  /// Raw API value, e.g. `LOW_STOCK`, `OUT_OF_STOCK`.
+  final String type;
   final String message;
   final DateTime createdAt;
   final bool isSeen;
   final StockAlertSeverity severity;
+  // Optional strings returned by API: keep original display_date/display_time
+  final String? displayDate;
+  final String? displayTime;
+
+  /// Human-readable type for UI (underscores → words, capitalized).
+  String get typeDisplay {
+    final raw = type.trim();
+    if (raw.isEmpty) return 'Notification';
+    return raw
+        .split('_')
+        .where((p) => p.isNotEmpty)
+        .map((part) {
+          final lower = part.toLowerCase();
+          return '${lower[0].toUpperCase()}${lower.substring(1)}';
+        })
+        .join(' ');
+  }
 
   StockAlert copyWith({
     String? id,
-    String? title,
+    String? type,
     String? message,
     DateTime? createdAt,
     bool? isSeen,
     StockAlertSeverity? severity,
+    String? displayDate,
+    String? displayTime,
   }) {
     return StockAlert(
       id: id ?? this.id,
-      title: title ?? this.title,
+      type: type ?? this.type,
       message: message ?? this.message,
       createdAt: createdAt ?? this.createdAt,
       isSeen: isSeen ?? this.isSeen,
       severity: severity ?? this.severity,
+      displayDate: displayDate ?? this.displayDate,
+      displayTime: displayTime ?? this.displayTime,
     );
   }
 
@@ -52,25 +77,67 @@ class StockAlert {
     }
   }
 
-  factory StockAlert.fromJson(Map<String, dynamic> json) {
+  static DateTime _parseCreatedAt(Map<String, dynamic> json) {
     final createdRaw = json['createdAt'] ?? json['created_at'];
-    DateTime createdAt;
     if (createdRaw is String) {
-      createdAt = DateTime.tryParse(createdRaw) ?? DateTime.now();
-    } else {
-      createdAt = DateTime.now();
+      final parsed = DateTime.tryParse(createdRaw);
+      if (parsed != null) return parsed;
     }
+
+    final now = DateTime.now();
+    final dateStr = (json['display_date'] ?? '').toString();
+    final timeStr = (json['display_time'] ?? '').toString().trim();
+
+    DateTime datePart;
+    if (dateStr == 'Today') {
+      datePart = DateTime(now.year, now.month, now.day);
+    } else if (dateStr == 'Yesterday') {
+      final y = now.subtract(const Duration(days: 1));
+      datePart = DateTime(y.year, y.month, y.day);
+    } else {
+      final parsed = DateTime.tryParse(dateStr);
+      datePart = parsed ?? DateTime(now.year, now.month, now.day);
+    }
+
+    if (timeStr.isEmpty) return datePart;
+
+    try {
+      final t = DateFormat.jm().parse(timeStr);
+      return DateTime(
+        datePart.year,
+        datePart.month,
+        datePart.day,
+        t.hour,
+        t.minute,
+      );
+    } catch (_) {
+      return datePart;
+    }
+  }
+
+  factory StockAlert.fromJson(Map<String, dynamic> json) {
+    final createdAt = _parseCreatedAt(json);
 
     final seenRaw = json['isSeen'] ?? json['seen'] ?? json['is_seen'];
     final isSeen = seenRaw == true || seenRaw == 1 || seenRaw == '1';
 
+    final typeRaw = (json['type'] ?? '').toString().trim();
+
     return StockAlert(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
-      title: (json['title'] ?? 'Stock alert').toString(),
+      type: typeRaw,
       message: (json['message'] ?? json['body'] ?? '').toString(),
       createdAt: createdAt,
       isSeen: isSeen,
-      severity: _parseSeverity(json['severity'] ?? json['level']),
+      severity: _parseSeverity(
+        json['severity'] ?? json['level'] ?? json['priority'],
+      ),
+      displayDate: (json['display_date'] ?? json['displayDate'] ?? '').toString().isEmpty
+          ? null
+          : (json['display_date'] ?? json['displayDate']).toString(),
+      displayTime: (json['display_time'] ?? json['displayTime'] ?? '').toString().isEmpty
+          ? null
+          : (json['display_time'] ?? json['displayTime']).toString(),
     );
   }
 }

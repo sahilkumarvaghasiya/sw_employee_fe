@@ -27,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Future.wait([
       context.read<HomeDashboardProvider>().refresh(),
       context.read<AuthProvider>().refreshUserInfo(),
+      context.read<StockAlertsProvider>().refreshForHome(),
     ]);
   }
 
@@ -126,8 +127,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               Consumer<StockAlertsProvider>(
                 builder: (context, alertsProvider, _) {
-                  alertsProvider.loadUnseenCountIfNeeded();
-
                   final count = alertsProvider.unseenCount;
                   final showBadge = count > 0;
                   final badgeText = count > 99 ? '99+' : '$count';
@@ -437,19 +436,20 @@ class _EmployeeChip extends StatelessWidget {
       });
 
       try {
-        await context.read<AuthProvider>().changePassword(
+        final message = await context.read<AuthProvider>().changePassword(
           newPassword: newController.text,
+          confirmPassword: confirmController.text,
         );
-        if (context.mounted) Navigator.of(context).pop(true);
+        if (context.mounted) Navigator.of(context).pop(message);
       } catch (e) {
         setState(() {
-          submitError = 'Failed to change password';
+          submitError = e.toString().replaceFirst('Exception: ', '');
           isSubmitting = false;
         });
       }
     }
 
-    final success = await showDialog<bool>(
+    final successMessage = await showDialog<String>(
       context: context,
       barrierDismissible: !isSubmitting,
       builder: (dialogContext) {
@@ -518,8 +518,8 @@ class _EmployeeChip extends StatelessWidget {
                         validator: (value) {
                           final v = (value ?? '').trim();
                           if (v.isEmpty) return 'Enter a new password';
-                          if (v.length < 6) {
-                            return 'Password must be at least 6 characters';
+                          if (v.length < 8) {
+                            return 'Password must be at least 8 characters';
                           }
                           return null;
                         },
@@ -555,6 +555,9 @@ class _EmployeeChip extends StatelessWidget {
                           final v = (value ?? '').trim();
                           final n = newController.text.trim();
                           if (v.isEmpty) return 'Confirm your new password';
+                          if (v.length < 8) {
+                            return 'Password must be at least 8 characters';
+                          }
                           if (v != n) return 'Passwords do not match';
                           return null;
                         },
@@ -612,10 +615,13 @@ class _EmployeeChip extends StatelessWidget {
     newFocus.dispose();
     confirmFocus.dispose();
 
-    if (success == true && context.mounted) {
+    if (successMessage != null &&
+        successMessage.isNotEmpty &&
+        context.mounted) {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
-        ..showSnackBar(const SnackBar(content: Text('Password updated')));
+        ..showSnackBar(SnackBar(content: Text(successMessage)));
+      await context.read<AuthProvider>().logout();
     }
   }
 
@@ -698,7 +704,9 @@ class _EmployeeChip extends StatelessWidget {
                   ),
                 ),
                 onTap: () async {
-                  Navigator.of(context).pop();
+                  Navigator.of(sheetContext).pop();
+                  await Future<void>.delayed(const Duration(milliseconds: 120));
+                  if (!context.mounted) return;
                   await context.read<AuthProvider>().logout();
                 },
               ),

@@ -6,6 +6,17 @@ import '../../../core/config/api_config.dart';
 import '../../auth/services/api_service.dart';
 import '../models/stock_alert.dart';
 
+/// Result of `GET /sales/notifications/`.
+class SalesNotificationsResult {
+  const SalesNotificationsResult({
+    required this.totalUnseen,
+    required this.notifications,
+  });
+
+  final int totalUnseen;
+  final List<StockAlert> notifications;
+}
+
 class StockAlertsService {
   StockAlertsService({ApiService? apiService})
     : _apiService = apiService ?? ApiService();
@@ -21,70 +32,41 @@ class StockAlertsService {
     return Uri.parse('$normalizedBase$normalizedPath');
   }
 
-  Future<int> fetchUnseenCount() async {
+  Future<SalesNotificationsResult> fetchNotificationsList() async {
     final response = await _apiService.get(
-      _url('/stock-alerts/unseen-count').toString(),
+      _url('/sales/notifications/').toString(),
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
-
-      Map<String, dynamic>? map;
-      if (decoded is Map<String, dynamic>) {
-        map = decoded;
-        final data = decoded['data'];
-        if (data is Map<String, dynamic>) {
-          map = data;
-        }
+      if (decoded is! Map<String, dynamic>) {
+        throw http.ClientException('Invalid notifications response');
       }
 
-      if (map == null) return 0;
+      final totalRaw =
+          decoded['total_unseen'] ?? decoded['totalUnseen'] ?? 0;
+      final totalUnseen = int.tryParse(totalRaw.toString()) ?? 0;
 
-      final raw =
-          map['count'] ??
-          map['unseenCount'] ??
-          map['unreadCount'] ??
-          map['unseen'] ??
-          map['unread'] ??
-          map['unseen_count'] ??
-          map['unread_count'];
+      final listRaw = decoded['notifications'];
+      final List<dynamic> list = listRaw is List ? listRaw : const [];
 
-      final parsed = int.tryParse((raw ?? 0).toString());
-      return parsed ?? 0;
-    }
-
-    throw http.ClientException('Failed to fetch unseen count');
-  }
-
-  Future<List<StockAlert>> fetchAlerts() async {
-    final response = await _apiService.get(_url('/stock-alerts').toString());
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final decoded = jsonDecode(response.body);
-
-      final List<dynamic> list;
-      if (decoded is List) {
-        list = decoded;
-      } else if (decoded is Map<String, dynamic> && decoded['items'] is List) {
-        list = decoded['items'] as List<dynamic>;
-      } else if (decoded is Map<String, dynamic> && decoded['alerts'] is List) {
-        list = decoded['alerts'] as List<dynamic>;
-      } else {
-        list = const [];
-      }
-
-      return list
+      final notifications = list
           .whereType<Map<String, dynamic>>()
           .map(StockAlert.fromJson)
           .toList(growable: false);
+
+      return SalesNotificationsResult(
+        totalUnseen: totalUnseen,
+        notifications: notifications,
+      );
     }
 
-    throw http.ClientException('Failed to fetch alerts');
+    throw http.ClientException('Failed to fetch notifications');
   }
 
   Future<void> markAllSeen() async {
     final response = await _apiService.post(
-      _url('/stock-alerts/mark-all-seen').toString(),
+      _url('/sales/notifications/mark-seen/').toString(),
       body: const {},
     );
 

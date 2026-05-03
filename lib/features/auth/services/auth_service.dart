@@ -133,46 +133,84 @@ class AuthService {
     return null;
   }
 
-  Future<void> changePassword({required String newPassword}) async {
+  Future<void> logoutRemote() async {
+    final accessToken = await getValidAccessToken();
+    final refreshToken = await _tokenStorage.getRefreshToken();
+    if (accessToken == null ||
+        refreshToken == null ||
+        refreshToken.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await _client
+          .post(
+            _accountUri('/logout/'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $accessToken',
+            },
+            body: jsonEncode({'refresh': refreshToken}),
+          )
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      // Still clear session locally from AuthProvider.
+    } on SocketException {
+      // Same — offline logout should still sign the user out in-app.
+    } catch (_) {
+      // Ignore — blacklist is best-effort.
+    }
+  }
+
+  Future<String> changePassword({
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
     final accessToken = await getValidAccessToken();
     if (accessToken == null) {
       throw Exception('Not authenticated');
     }
 
-    final response = await _client.post(
-      _accountUri('/change-password/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $accessToken',
-      },
-      body: jsonEncode({'newPassword': newPassword}),
-    );
-
-    if (response.statusCode == 200) {
-      return;
+    Future<http.Response> send(String token) {
+      return _client.post(
+        _accountUri('/change-password/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'new_password': newPassword,
+          'confirm_password': confirmPassword,
+        }),
+      );
     }
+
+    var response = await send(accessToken);
 
     if (response.statusCode == 401) {
       final refreshedAccess = await refreshAccessToken();
       if (refreshedAccess == null) {
         throw Exception('Session expired. Please login again.');
       }
-
-      final retry = await _client.post(
-        _accountUri('/change-password/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $refreshedAccess',
-        },
-        body: jsonEncode({'newPassword': newPassword}),
-      );
-
-      if (retry.statusCode == 200) {
-        return;
-      }
+      response = await send(refreshedAccess);
     }
 
-    throw Exception('Change password failed');
+    if (response.statusCode == 200) {
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          final msg = decoded['message']?.toString();
+          if (msg != null && msg.trim().isNotEmpty) {
+            return msg.trim();
+          }
+        }
+      } catch (_) {
+        // fall through
+      }
+      return 'Password changed successfully.';
+    }
+
+    throw Exception(_changePasswordErrorFromResponse(response));
   }
 
   Future<Map<String, dynamic>> fetchUserInfo() async {
@@ -257,6 +295,42 @@ class AuthService {
     }
 
     return 'Login failed (${response.statusCode})';
+  }
+
+  String _changePasswordErrorFromResponse(http.Response response) {
+    try {
+      final parsed = jsonDecode(response.body);
+      if (parsed is Map<String, dynamic>) {
+        final msg = parsed['message'] ?? parsed['detail'] ?? parsed['error'];
+        if (msg is String && msg.trim().isNotEmpty) {
+          return msg.trim();
+        }
+        if (msg is List && msg.isNotEmpty) {
+          return msg.first.toString();
+        }
+        for (final key in [
+          'new_password',
+          'confirm_password',
+          'non_field_errors',
+        ]) {
+          final v = parsed[key];
+          if (v is List && v.isNotEmpty) {
+            return v.first.toString();
+          }
+          if (v is String && v.trim().isNotEmpty) {
+            return v.trim();
+          }
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    if (response.statusCode == 401) {
+      return 'Session expired. Please login again.';
+    }
+
+    return 'Change password failed (${response.statusCode})';
   }
 
   String _genericErrorMessageFromResponse(http.Response response) {

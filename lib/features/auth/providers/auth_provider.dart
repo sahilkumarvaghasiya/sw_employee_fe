@@ -28,18 +28,17 @@ class AuthProvider extends ChangeNotifier {
 
     final restored = await _authService.restoreSession();
     if (restored) {
-      final savedUserName = (await _tokenStorage.getUserName())?.trim() ?? '';
-      final savedShopName = (await _tokenStorage.getShopName())?.trim() ?? '';
+      _isAuthenticated = true;
+      _employeeName = (await _tokenStorage.getUserName())?.trim() ?? '';
+      _branchName = (await _tokenStorage.getShopName())?.trim() ?? '';
 
-      if (savedUserName.isNotEmpty && savedShopName.isNotEmpty) {
-        _isAuthenticated = true;
-        _employeeName = savedUserName;
-        _branchName = savedShopName;
-      } else {
-        await _tokenStorage.deleteTokens();
-        _isAuthenticated = false;
-        _employeeName = '';
-        _branchName = '';
+      if (_employeeName.isEmpty || _branchName.isEmpty) {
+        try {
+          final userInfo = await _authService.fetchUserInfo();
+          await _applyUserInfoMap(userInfo);
+        } catch (_) {
+          // Keep session; home screen refresh will retry userinfo.
+        }
       }
     } else {
       await _tokenStorage.deleteTokens();
@@ -50,6 +49,23 @@ class AuthProvider extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> _applyUserInfoMap(Map<String, dynamic> userInfo) async {
+    final userName = userInfo['user_name']?.toString().trim() ?? '';
+    final shopName = userInfo['shop_name']?.toString().trim() ?? '';
+
+    if (userName.isNotEmpty) {
+      _employeeName = userName;
+    }
+    if (shopName.isNotEmpty) {
+      _branchName = shopName;
+    }
+
+    await _tokenStorage.saveUserContext(
+      userName: userName.isNotEmpty ? userName : _employeeName,
+      shopName: shopName.isNotEmpty ? shopName : _branchName,
+    );
   }
 
   Future<void> login(String email, String password) async {
@@ -64,20 +80,16 @@ class AuthProvider extends ChangeNotifier {
         loginData['refresh']!.toString(),
       );
 
-      final userName = loginData['user_name']?.toString().trim() ?? '';
-      final shopName = loginData['shop_name']?.toString().trim() ?? '';
-      if (userName.isEmpty || shopName.isEmpty) {
-        throw Exception('Login response missing user_name or shop_name');
+      Map<String, dynamic> userInfo;
+      try {
+        userInfo = await _authService.fetchUserInfo();
+      } catch (e) {
+        await _tokenStorage.deleteTokens();
+        rethrow;
       }
 
-      await _tokenStorage.saveUserContext(
-        userName: userName,
-        shopName: shopName,
-      );
-
+      await _applyUserInfoMap(userInfo);
       _isAuthenticated = true;
-      _employeeName = userName;
-      _branchName = shopName;
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
       _isAuthenticated = false;
@@ -89,6 +101,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await _authService.logoutRemote();
     await _tokenStorage.deleteTokens();
     _isAuthenticated = false;
     _employeeName = '';
@@ -101,23 +114,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final userInfo = await _authService.fetchUserInfo();
-      final userName = userInfo['user_name']?.toString().trim() ?? '';
-      final shopName = userInfo['shop_name']?.toString().trim() ?? '';
-
-      if (userName.isNotEmpty) {
-        _employeeName = userName;
-      }
-      if (shopName.isNotEmpty) {
-        _branchName = shopName;
-      }
-
-      if (userName.isNotEmpty || shopName.isNotEmpty) {
-        await _tokenStorage.saveUserContext(
-          userName: userName.isNotEmpty ? userName : _employeeName,
-          shopName: shopName.isNotEmpty ? shopName : _branchName,
-        );
-      }
-
+      await _applyUserInfoMap(userInfo);
       notifyListeners();
     } catch (_) {
       // Ignore errors to avoid blocking the home UI.
@@ -131,14 +128,22 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> changePassword({required String newPassword}) async {
-    final normalized = newPassword.trim();
-    if (normalized.isEmpty) {
+  Future<String> changePassword({
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    final n = newPassword.trim();
+    final c = confirmPassword.trim();
+    if (n.isEmpty) {
       throw Exception('Password cannot be empty');
     }
+    if (n != c) {
+      throw Exception('Passwords do not match');
+    }
 
-    await _authService.changePassword(
-      newPassword: normalized,
+    return _authService.changePassword(
+      newPassword: n,
+      confirmPassword: c,
     );
   }
 }

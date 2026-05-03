@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import '../../../core/config/api_config.dart';
 import '../models/stock_alert.dart';
 import '../services/stock_alerts_service.dart';
 
@@ -9,8 +8,6 @@ class StockAlertsProvider extends ChangeNotifier {
     : _service = service ?? StockAlertsService();
 
   final StockAlertsService _service;
-
-  bool _requestedUnseenCount = false;
 
   int _unseenCount = 0;
   int get unseenCount => _unseenCount;
@@ -24,33 +21,36 @@ class StockAlertsProvider extends ChangeNotifier {
   List<StockAlert> _alerts = const [];
   List<StockAlert> get alerts => _alerts;
 
-  Future<void> loadUnseenCountIfNeeded() async {
-    if (_requestedUnseenCount) return;
-    _requestedUnseenCount = true;
-    Future<void>.microtask(fetchUnseenCount);
-  }
-
-  Future<void> fetchUnseenCount() async {
+  /// Lightweight sync when the home dashboard refreshes (no loading spinner).
+  Future<void> refreshForHome() async {
     try {
-      final count = await _service.fetchUnseenCount();
-      final normalized = count < 0 ? 0 : count;
-      if (_unseenCount == normalized && _error == null) return;
+      final result = await _service.fetchNotificationsList();
+      _alerts = result.notifications;
+      // Sort notifications by priority: critical (high) first, then warning (medium), then info (low)
+      _alerts = List.of(_alerts)
+        ..sort((a, b) {
+          final rank = (StockAlertSeverity severity) {
+            switch (severity) {
+              case StockAlertSeverity.critical:
+                return 0;
+              case StockAlertSeverity.warning:
+                return 1;
+              case StockAlertSeverity.info:
+                return 2;
+            }
+          };
 
-      _unseenCount = normalized;
+          final rA = rank(a.severity);
+          final rB = rank(b.severity);
+          if (rA != rB) return rA - rB;
+          // Newer first for same priority
+          return b.createdAt.compareTo(a.createdAt);
+        });
+      _unseenCount = result.totalUnseen < 0 ? 0 : result.totalUnseen;
       _error = null;
       notifyListeners();
     } catch (e) {
-      if (kDebugMode) {
-        if (ApiConfig.baseUrl.contains('your-backend.com')) {
-          final demoCount = _alerts.where((a) => !a.isSeen).length;
-          final normalized = demoCount <= 0 ? 2 : demoCount;
-          if (_unseenCount != normalized) {
-            _unseenCount = normalized;
-            notifyListeners();
-          }
-        }
-        return;
-      }
+      // Remove demo-only fallback. Surface the error so UI can show it.
       if (_error == 'Failed to fetch alerts count') return;
       _error = 'Failed to fetch alerts count';
       notifyListeners();
@@ -63,37 +63,31 @@ class StockAlertsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final results = await _service.fetchAlerts();
-      _alerts = results;
+      final result = await _service.fetchNotificationsList();
+      _alerts = result.notifications;
+      // Sort by priority (high -> medium -> low) and newest first within same priority
+      _alerts = List.of(_alerts)
+        ..sort((a, b) {
+          final rank = (StockAlertSeverity severity) {
+            switch (severity) {
+              case StockAlertSeverity.critical:
+                return 0;
+              case StockAlertSeverity.warning:
+                return 1;
+              case StockAlertSeverity.info:
+                return 2;
+            }
+          };
 
-      final count = await _service.fetchUnseenCount();
-      _unseenCount = count < 0 ? 0 : count;
+          final rA = rank(a.severity);
+          final rB = rank(b.severity);
+          if (rA != rB) return rA - rB;
+          return b.createdAt.compareTo(a.createdAt);
+        });
+      _unseenCount = result.totalUnseen < 0 ? 0 : result.totalUnseen;
     } catch (e) {
-      if (kDebugMode) {
-        final now = DateTime.now();
-        _alerts = [
-          StockAlert(
-            id: 'a_1',
-            title: 'Low stock: Sugar 1kg',
-            message: 'Only 3 units left. Consider restocking today.',
-            createdAt: now.subtract(const Duration(minutes: 25)),
-            isSeen: false,
-            severity: StockAlertSeverity.warning,
-          ),
-          StockAlert(
-            id: 'a_2',
-            title: 'Out of stock: Tea 500g',
-            message:
-                'This item is out of stock. Add stock entry to continue sales.',
-            createdAt: now.subtract(const Duration(hours: 3, minutes: 10)),
-            isSeen: true,
-            severity: StockAlertSeverity.critical,
-          ),
-        ];
-        _unseenCount = _alerts.where((a) => !a.isSeen).length;
-      } else {
-        _error = 'Failed to load stock alerts';
-      }
+      // Remove debug/demo fallback; report error so UI can display it
+      _error = 'Failed to load stock alerts';
     } finally {
       _isLoading = false;
       notifyListeners();
