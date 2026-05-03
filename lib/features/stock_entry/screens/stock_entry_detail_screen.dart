@@ -98,11 +98,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-          content: Text(
-            'Invoice: $invoice',
-            softWrap: true,
-            maxLines: 3,
-          ),
+          content: Text('Invoice: $invoice', softWrap: true, maxLines: 3),
           duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
         ),
@@ -114,10 +110,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-          content: Text(
-            'Copied $invoice',
-            textAlign: TextAlign.center,
-          ),
+          content: Text('Copied $invoice', textAlign: TextAlign.center),
           duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
           showCloseIcon: false,
@@ -185,9 +178,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                   children: [
                                     Expanded(
                                       child: InkWell(
-                                        borderRadius: BorderRadius.circular(
-                                          6,
-                                        ),
+                                        borderRadius: BorderRadius.circular(6),
                                         onTap: () => _showInvoiceToast(
                                           details.invoiceNumber,
                                         ),
@@ -340,8 +331,9 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                 final gender = p.gender.trim();
                 final isExpanded = _expandedProducts[index] ?? false;
                 final variants = p.variants;
-                final visibleVariants =
-                    isExpanded ? variants : variants.take(2).toList();
+                final visibleVariants = isExpanded
+                    ? variants
+                    : variants.take(2).toList();
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -384,7 +376,9 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: colorScheme.outlineVariant.withOpacity(0.9),
+                                color: colorScheme.outlineVariant.withOpacity(
+                                  0.9,
+                                ),
                                 width: 1.0,
                               ),
                               boxShadow: [
@@ -414,7 +408,8 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                       // Header cells with bottom border
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                            vertical: 10),
+                                          vertical: 10,
+                                        ),
                                         decoration: BoxDecoration(
                                           border: Border(
                                             bottom: BorderSide(
@@ -435,7 +430,8 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                            vertical: 10),
+                                          vertical: 10,
+                                        ),
                                         decoration: BoxDecoration(
                                           border: Border(
                                             bottom: BorderSide(
@@ -456,7 +452,8 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                            vertical: 10),
+                                          vertical: 10,
+                                        ),
                                         decoration: BoxDecoration(
                                           border: Border(
                                             bottom: BorderSide(
@@ -477,7 +474,8 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                            vertical: 10),
+                                          vertical: 10,
+                                        ),
                                         decoration: BoxDecoration(
                                           border: Border(
                                             bottom: BorderSide(
@@ -508,25 +506,31 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                       children: [
                                         Padding(
                                           padding: const EdgeInsets.symmetric(
-                                              vertical: 8),
+                                            vertical: 8,
+                                          ),
                                           child: Align(
                                             alignment: Alignment.center,
                                             child: LayoutBuilder(
                                               builder: (context, constraints) {
                                                 return Padding(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(horizontal: 6),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                      ),
                                                   child: ConstrainedBox(
                                                     constraints: BoxConstraints(
-                                                        maxWidth:
-                                                            constraints.maxWidth),
+                                                      maxWidth:
+                                                          constraints.maxWidth,
+                                                    ),
                                                     child: SingleChildScrollView(
                                                       scrollDirection:
                                                           Axis.horizontal,
                                                       physics:
                                                           const BouncingScrollPhysics(),
                                                       child: Text(
-                                                        size.isEmpty ? '—' : size,
+                                                        size.isEmpty
+                                                            ? '—'
+                                                            : size,
                                                         textAlign:
                                                             TextAlign.center,
                                                         style: theme
@@ -547,25 +551,31 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                         ),
                                         Padding(
                                           padding: const EdgeInsets.symmetric(
-                                              vertical: 8),
+                                            vertical: 8,
+                                          ),
                                           child: Align(
                                             alignment: Alignment.center,
                                             child: LayoutBuilder(
                                               builder: (context, constraints) {
                                                 return Padding(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(horizontal: 6),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                      ),
                                                   child: ConstrainedBox(
                                                     constraints: BoxConstraints(
-                                                        maxWidth:
-                                                            constraints.maxWidth),
+                                                      maxWidth:
+                                                          constraints.maxWidth,
+                                                    ),
                                                     child: SingleChildScrollView(
                                                       scrollDirection:
                                                           Axis.horizontal,
                                                       physics:
                                                           const BouncingScrollPhysics(),
                                                       child: Text(
-                                                        color.isEmpty ? '—' : color,
+                                                        color.isEmpty
+                                                            ? '—'
+                                                            : color,
                                                         textAlign:
                                                             TextAlign.center,
                                                         style: theme
@@ -586,7 +596,8 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                         ),
                                         Padding(
                                           padding: const EdgeInsets.symmetric(
-                                              vertical: 8),
+                                            vertical: 8,
+                                          ),
                                           child: Align(
                                             alignment: Alignment.center,
                                             child: Text(
@@ -601,18 +612,22 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                         ),
                                         Padding(
                                           padding: const EdgeInsets.symmetric(
-                                              vertical: 8),
+                                            vertical: 8,
+                                          ),
                                           child: Align(
                                             alignment: Alignment.center,
                                             child: LayoutBuilder(
                                               builder: (context, constraints) {
                                                 return Padding(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(horizontal: 6),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                      ),
                                                   child: ConstrainedBox(
                                                     constraints: BoxConstraints(
-                                                        maxWidth:
-                                                            constraints.maxWidth),
+                                                      maxWidth:
+                                                          constraints.maxWidth,
+                                                    ),
                                                     child: SingleChildScrollView(
                                                       scrollDirection:
                                                           Axis.horizontal,
@@ -657,9 +672,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                   });
                                 },
                                 child: Text(
-                                  isExpanded
-                                      ? 'Show less'
-                                      : 'Show more',
+                                  isExpanded ? 'Show less' : 'Show more',
                                 ),
                               ),
                             ),
@@ -703,9 +716,8 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                       Expanded(
                         child: InkWell(
                           borderRadius: BorderRadius.circular(6),
-                          onTap: () => _showInvoiceToast(
-                            entry.invoiceNumber!.trim(),
-                          ),
+                          onTap: () =>
+                              _showInvoiceToast(entry.invoiceNumber!.trim()),
                           child: Text(
                             entry.invoiceNumber!.trim(),
                             maxLines: 1,
@@ -720,9 +732,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                         tooltip: 'Copy invoice number',
                         onPressed: () async {
                           await Clipboard.setData(
-                            ClipboardData(
-                              text: entry.invoiceNumber!.trim(),
-                            ),
+                            ClipboardData(text: entry.invoiceNumber!.trim()),
                           );
                           if (!mounted) return;
                           _showCopyToast(entry.invoiceNumber!.trim());

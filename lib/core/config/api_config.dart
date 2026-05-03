@@ -4,7 +4,7 @@ class ApiConfig {
   const ApiConfig._();
 
   // For Android emulator
-  static const String _androidEmulatorBaseUrl = 'http://10.0.2.2:8000/api';
+  static const String _androidEmulatorBaseUrl = 'https://swbillingemployeebe-production.up.railway.app/api';
 
   // For iOS simulator / macOS / local web
   static const String _localhostBaseUrl = 'http://127.0.0.1:8000/api';

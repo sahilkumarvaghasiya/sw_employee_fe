@@ -889,83 +889,357 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
             final blockItems = group.value;
             final first = blockItems.first;
 
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Barcode: ${group.key}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: titleStyle,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${first.draft.brandName} • ${first.draft.gender.name} • ${first.draft.itemType1}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: metaStyle,
-                            ),
-                            const SizedBox(height: 6),
-                            ...List<Widget>.generate(blockItems.length, (j) {
-                              final row = blockItems[j];
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: j == blockItems.length - 1 ? 0 : 3,
-                                ),
-                                child: Text(
-                                  '${j + 1}. ${_displayName(row.draft)} | ${row.draft.size} / ${row.draft.colour} | Qty: ${row.quantity}',
+            return Dismissible(
+              key: ValueKey('block-${group.key}-$i'),
+              direction: _itemsLocked
+                  ? DismissDirection.none
+                  : DismissDirection.horizontal,
+              dismissThresholds: const {
+                DismissDirection.startToEnd: 0.02,
+                DismissDirection.endToStart: 0.02,
+              },
+              movementDuration: const Duration(milliseconds: 180),
+              background: Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary.withOpacity(0.20),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.edit_outlined,
+                        color: colorScheme.primary,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Edit',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              secondaryBackground: Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.error.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Delete',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.error,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: colorScheme.error.withOpacity(0.20),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.delete_rounded,
+                        color: colorScheme.error,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              confirmDismiss: (direction) async {
+                if (_itemsLocked) return false;
+
+                if (direction == DismissDirection.startToEnd) {
+                  await _editBlockByBarcode(group.key);
+                  return false;
+                }
+
+                if (direction == DismissDirection.endToStart) {
+                  await _removeBlockByBarcode(group.key);
+                  return false;
+                }
+
+                return false;
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          tooltip: 'Edit block',
+                          onPressed: _itemsLocked
+                              ? null
+                              : () => _editBlockByBarcode(group.key),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 44,
+                            height: 44,
+                          ),
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Barcode: ${group.key}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: titleStyle,
+                              ),
+                              const SizedBox(height: 2),
+                              // Show brand and gender with labels (like Barcode)
+                              if ((first.draft.brandName).trim().isNotEmpty)
+                                Text(
+                                  'Brand: ${first.draft.brandName.trim()}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: metaStyle,
                                 ),
-                              );
-                            }),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                'Gender: ${first.draft.gender.name}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: metaStyle,
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        'Item',
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'Size',
+                                        textAlign: TextAlign.center,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'Colour',
+                                        textAlign: TextAlign.center,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 1,
+                                      child: Text(
+                                        'Qty',
+                                        textAlign: TextAlign.center,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'Price',
+                                        textAlign: TextAlign.end,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              ...List<Widget>.generate(blockItems.length, (j) {
+                                final row = blockItems[j];
+
+                                return Container(
+                                  margin: EdgeInsets.only(
+                                    bottom: j == blockItems.length - 1 ? 0 : 6,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: colorScheme.outlineVariant,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Expanded(
+                                            flex: 3,
+                                            child: SingleChildScrollView(
+                                              scrollDirection: Axis.horizontal,
+                                              physics:
+                                                  const BouncingScrollPhysics(),
+                                              child: Text(
+                                                // Only show the item name in the Item column
+                                                '${row.draft.itemType1}${row.draft.itemType2 != null && row.draft.itemType2!.trim().isNotEmpty ? ' / ${row.draft.itemType2}' : ''}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.visible,
+                                                style: theme
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(
+                                              row.draft.size,
+                                              textAlign: TextAlign.center,
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: SingleChildScrollView(
+                                              scrollDirection: Axis.horizontal,
+                                              physics:
+                                                  const BouncingScrollPhysics(),
+                                              child: Text(
+                                                row.draft.colour,
+                                                textAlign: TextAlign.center,
+                                                style: theme.textTheme.bodySmall
+                                                    ?.copyWith(
+                                                      color: colorScheme
+                                                          .onSurfaceVariant,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                overflow: TextOverflow.visible,
+                                              ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 1,
+                                            child: Text(
+                                              '${row.quantity}',
+                                              textAlign: TextAlign.center,
+                                              style: theme.textTheme.titleSmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(
+                                              _money(
+                                                row.sellingPrice * row.quantity,
+                                              ),
+                                              textAlign: TextAlign.end,
+                                              style: theme.textTheme.titleSmall
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Edit',
-                        onPressed: _itemsLocked
-                            ? null
-                            : () => _editBlockByBarcode(group.key),
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 44,
-                          height: 44,
+                        IconButton(
+                          tooltip: 'Delete block',
+                          onPressed: _itemsLocked
+                              ? null
+                              : () => _removeBlockByBarcode(group.key),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 44,
+                            height: 44,
+                          ),
+                          icon: const Icon(Icons.delete_outline_rounded),
                         ),
-                        icon: const Icon(Icons.edit_outlined),
-                      ),
-                      IconButton(
-                        tooltip: 'Delete block',
-                        onPressed: _itemsLocked
-                            ? null
-                            : () => _removeBlockByBarcode(group.key),
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(
-                          width: 44,
-                          height: 44,
-                        ),
-                        icon: const Icon(Icons.delete_outline_rounded),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                if (i != groups.length - 1) const Divider(height: 1),
-              ],
+                  if (i != groups.length - 1) const Divider(height: 1),
+                ],
+              ),
             );
           }),
         ),

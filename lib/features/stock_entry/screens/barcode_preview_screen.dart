@@ -12,16 +12,25 @@ class BarcodePreviewScreen extends StatefulWidget {
     super.key,
     required this.barcode,
     this.barcodeUrl,
+    this.headerLines = const <String>[],
   });
 
   final String barcode;
   final String? barcodeUrl;
+  final List<String> headerLines;
 
-  static Route<void> route({required String barcode, String? barcodeUrl}) {
+  static Route<void> route({
+    required String barcode,
+    String? barcodeUrl,
+    List<String> headerLines = const <String>[],
+  }) {
     return MaterialPageRoute<void>(
       settings: const RouteSettings(name: '/stock-entry/barcode-preview'),
-      builder: (_) =>
-          BarcodePreviewScreen(barcode: barcode, barcodeUrl: barcodeUrl),
+      builder: (_) => BarcodePreviewScreen(
+        barcode: barcode,
+        barcodeUrl: barcodeUrl,
+        headerLines: headerLines,
+      ),
     );
   }
 
@@ -128,32 +137,75 @@ class _BarcodePreviewScreenState extends State<BarcodePreviewScreen> {
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: colorScheme.outlineVariant),
                       ),
-                      child:
-                          widget.barcodeUrl != null &&
-                              widget.barcodeUrl!.trim().isNotEmpty
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                widget.barcodeUrl!,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return BarcodeWidget(
-                                    barcode: Barcode.code128(),
-                                    data: widget.barcode,
-                                    drawText: true,
-                                    color: colorScheme.onSurface,
-                                    backgroundColor: colorScheme.surface,
-                                  );
-                                },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (widget.headerLines.isNotEmpty) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.fromLTRB(
+                                12,
+                                10,
+                                12,
+                                10,
                               ),
-                            )
-                          : BarcodeWidget(
-                              barcode: Barcode.code128(),
-                              data: widget.barcode,
-                              drawText: true,
-                              color: colorScheme.onSurface,
-                              backgroundColor: colorScheme.surface,
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: colorScheme.outlineVariant,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: widget.headerLines
+                                    .map((line) {
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 1,
+                                        ),
+                                        child: Text(
+                                          line,
+                                          textAlign: TextAlign.center,
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      );
+                                    })
+                                    .toList(growable: false),
+                              ),
                             ),
+                            const SizedBox(height: 12),
+                          ],
+                          widget.barcodeUrl != null &&
+                                  widget.barcodeUrl!.trim().isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    widget.barcodeUrl!,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return BarcodeWidget(
+                                        barcode: Barcode.code128(),
+                                        data: widget.barcode,
+                                        drawText: true,
+                                        color: colorScheme.onSurface,
+                                        backgroundColor: colorScheme.surface,
+                                      );
+                                    },
+                                  ),
+                                )
+                              : BarcodeWidget(
+                                  barcode: Barcode.code128(),
+                                  data: widget.barcode,
+                                  drawText: true,
+                                  color: colorScheme.onSurface,
+                                  backgroundColor: colorScheme.surface,
+                                ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),

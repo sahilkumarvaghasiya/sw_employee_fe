@@ -118,21 +118,47 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         color: colorScheme.surface,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: BarcodeWidget(
-                        barcode: Barcode.code128(),
-                        data: product.barcode,
-                        drawText: true,
-                        color: colorScheme.onSurface,
-                        backgroundColor: colorScheme.surface,
-                        errorBuilder: (context, error) {
-                          return Text(
-                            'Invalid barcode',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: colorScheme.error,
-                              fontWeight: FontWeight.w700,
+                      child: Column(
+                        children: [
+                          if (product.size.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                'Size: ${product.size}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ),
-                          );
-                        },
+                          if (product.color.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                'Colour: ${product.color}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          BarcodeWidget(
+                            barcode: Barcode.code128(),
+                            data: product.barcode,
+                            drawText: true,
+                            color: colorScheme.onSurface,
+                            backgroundColor: colorScheme.surface,
+                            errorBuilder: (context, error) {
+                              return Text(
+                                'Invalid barcode',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: colorScheme.error,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
                     ),
                   ),

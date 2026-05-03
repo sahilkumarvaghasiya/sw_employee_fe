@@ -185,8 +185,9 @@ class _TagValueChip extends StatelessWidget {
       TextSpan(text: value, style: valueStyle),
       context,
     );
-    final valueSlotW =
-        math.min(math.max(valueTextW, 1.0), valueSlotCap).toDouble();
+    final valueSlotW = math
+        .min(math.max(valueTextW, 1.0), valueSlotCap)
+        .toDouble();
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxChipWidth),
@@ -201,23 +202,26 @@ class _TagValueChip extends StatelessWidget {
           border: Border.all(color: colorScheme.outlineVariant.withAlpha(120)),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text.rich(prefixSpan, maxLines: 1, softWrap: false),
             SizedBox(
-              width: valueSlotW,
-              height: lineHeight,
-              child: ClipRect(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  reverse: false,
-                  physics: const BouncingScrollPhysics(),
-                  child: Text(
-                    value,
-                    style: valueStyle,
-                    softWrap: false,
-                    maxLines: 1,
+              width: prefixW,
+              child: Text.rich(prefixSpan, maxLines: 1, softWrap: false),
+            ),
+            Expanded(
+              child: SizedBox(
+                height: lineHeight,
+                child: ClipRect(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    reverse: false,
+                    physics: const BouncingScrollPhysics(),
+                    child: Text(
+                      value,
+                      style: valueStyle,
+                      softWrap: false,
+                      maxLines: 1,
+                    ),
                   ),
                 ),
               ),
@@ -254,12 +258,7 @@ class _HorizontalScrollText extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         reverse: reverse,
         physics: const BouncingScrollPhysics(),
-        child: Text(
-          text,
-          style: s,
-          softWrap: false,
-          maxLines: 1,
-        ),
+        child: Text(text, style: s, softWrap: false, maxLines: 1),
       ),
     );
   }
