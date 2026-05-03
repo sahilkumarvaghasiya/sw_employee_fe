@@ -96,6 +96,34 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refreshUserInfo() async {
+    if (!_isAuthenticated) return;
+
+    try {
+      final userInfo = await _authService.fetchUserInfo();
+      final userName = userInfo['user_name']?.toString().trim() ?? '';
+      final shopName = userInfo['shop_name']?.toString().trim() ?? '';
+
+      if (userName.isNotEmpty) {
+        _employeeName = userName;
+      }
+      if (shopName.isNotEmpty) {
+        _branchName = shopName;
+      }
+
+      if (userName.isNotEmpty || shopName.isNotEmpty) {
+        await _tokenStorage.saveUserContext(
+          userName: userName.isNotEmpty ? userName : _employeeName,
+          shopName: shopName.isNotEmpty ? shopName : _branchName,
+        );
+      }
+
+      notifyListeners();
+    } catch (_) {
+      // Ignore errors to avoid blocking the home UI.
+    }
+  }
+
   void setBranchName(String name) {
     final normalized = name.trim();
     if (normalized.isEmpty || normalized == _branchName) return;

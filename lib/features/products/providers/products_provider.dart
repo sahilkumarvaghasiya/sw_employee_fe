@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/product.dart';
+import '../models/product_size.dart';
+import '../models/product_color.dart';
 import '../services/products_service.dart';
 
 class ProductsProvider extends ChangeNotifier {
@@ -17,24 +19,8 @@ class ProductsProvider extends ChangeNotifier {
 
   late final (double, double) _priceBounds;
 
-  static final List<String> _staticSizes = <String>[
-    'XS',
-    'S',
-    'M',
-    'L',
-    'XL',
-    'XXL',
-    'XXXL',
-    '28',
-    '30',
-    '32',
-    '34',
-    '36',
-    '38',
-    '40',
-    '42',
-    '44',
-  ];
+  final List<ProductSize> _sizes = [];
+  final List<ProductColor> _colors = [];
 
   int _page = 1;
   final List<Product> _items = [];
@@ -50,7 +36,11 @@ class ProductsProvider extends ChangeNotifier {
   final Set<ProductGender> _selectedGenders = {};
   late RangeValues _selectedPriceRange;
   DateTimeRange? _selectedDateRange;
-  String? _selectedSize;
+  ProductSize? _selectedSize;
+  ProductColor? _selectedColor;
+
+  bool _isLoadingSizes = false;
+  bool _isLoadingColors = false;
 
   bool get isLoadingInitial => _isLoadingInitial;
   bool get isLoadingMore => _isLoadingMore;
@@ -65,8 +55,12 @@ class ProductsProvider extends ChangeNotifier {
   DateTimeRange? get selectedDateRange => _selectedDateRange;
   (double, double) get priceBounds => _priceBounds;
 
-  List<String> get availableSizes => List.unmodifiable(_staticSizes);
-  String? get selectedSize => _selectedSize;
+  List<ProductSize> get availableSizes => List.unmodifiable(_sizes);
+  List<ProductColor> get availableColors => List.unmodifiable(_colors);
+  String? get selectedSize => _selectedSize?.name;
+  int? get selectedSizeId => _selectedSize?.id;
+  String? get selectedColor => _selectedColor?.name;
+  int? get selectedColorId => _selectedColor?.id;
 
   bool get hasActiveFilters {
     return _selectedGenders.isNotEmpty ||
@@ -82,17 +76,22 @@ class ProductsProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  void setSelectedSize(String? size) {
-    final normalized = (size == null || size.trim().isEmpty)
-        ? null
-        : size.trim().toUpperCase();
-    if (_selectedSize == normalized) return;
+  void setSelectedSize(ProductSize? size) {
+    if (_selectedSize?.id == size?.id) return;
 
-    _selectedSize = normalized;
+    _selectedSize = size;
+    _refetch();
+  }
+
+  void setSelectedColor(ProductColor? color) {
+    if (_selectedColor?.id == color?.id) return;
+
+    _selectedColor = color;
     _refetch();
   }
 
   Future<void> init() async {
+    await Future.wait([_loadSizes(), _loadColors()]);
     await refresh();
   }
 
@@ -145,6 +144,50 @@ class ProductsProvider extends ChangeNotifier {
     _selectedPriceRange = RangeValues(_priceBounds.$1, _priceBounds.$2);
     _selectedSize = null;
     _refetch();
+  }
+
+  Future<void> _loadSizes() async {
+    if (_isLoadingSizes) return;
+
+    _isLoadingSizes = true;
+    try {
+      final sizes = await _service.fetchSizes();
+      _sizes
+        ..clear()
+        ..addAll(sizes);
+
+      if (_selectedSize != null) {
+        final matches = _sizes.where((s) => s.id == _selectedSize!.id).toList();
+        _selectedSize = matches.isNotEmpty ? matches.first : null;
+      }
+    } catch (_) {
+      _sizes.clear();
+    } finally {
+      _isLoadingSizes = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadColors() async {
+    if (_isLoadingColors) return;
+
+    _isLoadingColors = true;
+    try {
+      final colors = await _service.fetchColors();
+      _colors
+        ..clear()
+        ..addAll(colors);
+
+      if (_selectedColor != null) {
+        final matches = _colors.where((s) => s.id == _selectedColor!.id).toList();
+        _selectedColor = matches.isNotEmpty ? matches.first : null;
+      }
+    } catch (_) {
+      _colors.clear();
+    } finally {
+      _isLoadingColors = false;
+      notifyListeners();
+    }
   }
 
   Future<void> loadMore() async {
@@ -202,7 +245,13 @@ class ProductsProvider extends ChangeNotifier {
       out['end_date'] = _ddMMyyyy(_selectedDateRange!.end);
     }
 
-    // NOTE: Backend expects size_id, but size filter stays static/client-side for now.
+    if (_selectedSize != null) {
+      out['size_id'] = _selectedSize!.id.toString();
+    }
+    if (_selectedColor != null) {
+      out['color_id'] = _selectedColor!.id.toString();
+    }
+
     return out;
   }
 
@@ -222,16 +271,7 @@ class ProductsProvider extends ChangeNotifier {
       filters: _buildApiFilters(),
     );
 
-    final normalizedSize = _selectedSize;
-    final List<Product> filtered = normalizedSize == null
-        ? page.items
-        : page.items
-              .where(
-                (p) => p.size.trim().toUpperCase().contains(normalizedSize),
-              )
-              .toList(growable: false);
-
-    _items.addAll(filtered);
+    _items.addAll(page.items);
     _hasMore = page.hasMore;
     _page += 1;
 

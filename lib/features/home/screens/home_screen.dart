@@ -24,7 +24,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _refreshDashboard() {
-    return context.read<HomeDashboardProvider>().refresh();
+    return Future.wait([
+      context.read<HomeDashboardProvider>().refresh(),
+      context.read<AuthProvider>().refreshUserInfo(),
+    ]);
   }
 
   Future<void> _openAndRefresh(Route<dynamic> route) async {

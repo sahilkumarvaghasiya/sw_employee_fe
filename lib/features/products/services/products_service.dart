@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import '../../../core/config/api_config.dart';
 import '../../auth/services/api_service.dart';
 import '../models/product.dart';
+import '../models/product_size.dart';
+import '../models/product_color.dart';
 
 class ProductsPage {
   const ProductsPage({required this.items, required this.hasMore});
@@ -109,5 +111,79 @@ class ProductsService {
     }
 
     return Product.fromDetailsJson(decoded);
+  }
+
+  Future<List<ProductSize>> fetchSizes() async {
+    final response = await _apiService.get(
+      _url('/products/sizes/list/').toString(),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw http.ClientException(
+        'Failed to load sizes (${response.statusCode})',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+
+    List<dynamic> list;
+    if (decoded is Map<String, dynamic>) {
+      if (decoded['results'] is List) {
+        list = decoded['results'] as List<dynamic>;
+      } else if (decoded['data'] is List) {
+        list = decoded['data'] as List<dynamic>;
+      } else if (decoded['items'] is List) {
+        list = decoded['items'] as List<dynamic>;
+      } else {
+        list = const [];
+      }
+    } else if (decoded is List) {
+      list = decoded;
+    } else {
+      list = const [];
+    }
+
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(ProductSize.fromJson)
+        .where((s) => s.name.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<List<ProductColor>> fetchColors() async {
+    final response = await _apiService.get(
+      _url('/products/colors/list/').toString(),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw http.ClientException(
+        'Failed to load colors (${response.statusCode})',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+
+    List<dynamic> list;
+    if (decoded is Map<String, dynamic>) {
+      if (decoded['results'] is List) {
+        list = decoded['results'] as List<dynamic>;
+      } else if (decoded['data'] is List) {
+        list = decoded['data'] as List<dynamic>;
+      } else if (decoded['items'] is List) {
+        list = decoded['items'] as List<dynamic>;
+      } else {
+        list = const [];
+      }
+    } else if (decoded is List) {
+      list = decoded;
+    } else {
+      list = const [];
+    }
+
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(ProductColor.fromJson)
+        .where((s) => s.name.isNotEmpty)
+        .toList(growable: false);
   }
 }

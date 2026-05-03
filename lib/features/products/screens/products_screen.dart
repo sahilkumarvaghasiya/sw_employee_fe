@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/product.dart';
+import '../models/product_size.dart';
+import '../models/product_color.dart';
 import '../providers/products_provider.dart';
 import '../services/products_service.dart';
 import 'product_detail_screen.dart';
@@ -202,12 +204,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
             SliverPersistentHeader(
               pinned: true,
               delegate: _PinnedHeaderDelegate(
-                height: 96,
+                // Search bar + spacing + filter row; must match or exceed real content height
+                // or the header clips/overlaps the list below.
+                height: 140,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final isNarrow = constraints.maxWidth < 420;
+                      final dropdownWidth =
+                          (constraints.maxWidth - 10) / 2;
 
                       final search = ProductsSearchBar(
                         controller: _searchController,
@@ -216,16 +221,25 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
                       final sizeOptions = provider.availableSizes
                           .map(
-                            (s) => SearchableDropdownOption<String>(
-                              label: s,
+                            (s) => SearchableDropdownOption<ProductSize>(
+                              label: s.name,
                               value: s,
                             ),
                           )
                           .toList(growable: false);
 
-                      final sizeMenu = SearchableDropdown<String>(
+                      final colorOptions = provider.availableColors
+                          .map(
+                            (c) => SearchableDropdownOption<ProductColor>(
+                              label: c.name,
+                              value: c,
+                            ),
+                          )
+                          .toList(growable: false);
+
+                      final sizeMenu = SearchableDropdown<ProductSize>(
                         placeholder: 'Size',
-                        width: isNarrow ? 140 : 190,
+                        width: dropdownWidth,
                         height: 48,
                         selectedLabel: provider.selectedSize,
                         options: sizeOptions,
@@ -244,21 +258,34 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         },
                       );
 
-                      if (isNarrow) {
-                        return Row(
-                          children: [
-                            Expanded(child: search),
-                            const SizedBox(width: 10),
-                            sizeMenu,
-                          ],
-                        );
-                      }
+                      final colorMenu = SearchableDropdown<ProductColor>(
+                        placeholder: 'Color',
+                        width: dropdownWidth,
+                        height: 48,
+                        selectedLabel: provider.selectedColor,
+                        options: colorOptions,
+                        filterHintText: 'Type colour',
+                        onClear: () {
+                          provider.setSelectedColor(null);
+                        },
+                        clearLabel: 'All colours',
+                        onSelected: (opt) {
+                          provider.setSelectedColor(opt.value);
+                        },
+                      );
 
-                      return Row(
+                      // Layout: full-width search on top, then size & color on next line
+                      return Column(
                         children: [
-                          Expanded(child: search),
-                          const SizedBox(width: 10),
-                          sizeMenu,
+                          Row(children: [Expanded(child: search)]),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              sizeMenu,
+                              const SizedBox(width: 10),
+                              colorMenu,
+                            ],
+                          ),
                         ],
                       );
                     },

@@ -64,7 +64,10 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
   }
 
   void _openMenu() {
-    if (_menuController.isOpen) return;
+    if (_menuController.isOpen) {
+      _menuController.close();
+      return; // Close the menu if it's already open
+    }
 
     setState(() {
       _filterController.text = '';

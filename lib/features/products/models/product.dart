@@ -10,6 +10,7 @@ class Product {
     required this.barcode,
     required this.quantityInStock,
     required this.size,
+    required this.color,
     required this.companyName,
     required this.price,
     required this.gender,
@@ -21,6 +22,7 @@ class Product {
   final String barcode;
   final int quantityInStock;
   final String size;
+  final String color;
   final String companyName;
   final double price;
   final ProductGender gender;
@@ -42,6 +44,8 @@ class Product {
     final companyName = (json['company_name'] ?? json['companyName'] ?? '')
         .toString();
     final size = (json['size'] ?? '').toString().trim();
+    final colorRaw = json['color'];
+    final colorStr = colorRaw == null ? '' : colorRaw.toString().trim();
 
     final rawPrice =
         json['final_price'] ?? json['finalPrice'] ?? json['price'] ?? 0;
@@ -68,6 +72,7 @@ class Product {
       barcode: barcode,
       quantityInStock: quantityInStock,
       size: size.isEmpty ? '—' : size,
+      color: colorStr.isEmpty ? '—' : colorStr,
       companyName: companyName,
       price: price,
       gender: gender,
@@ -107,6 +112,10 @@ class Product {
             .toString()
             .trim();
 
+    final colorVal = wrapped['color'];
+    final colorStr =
+        colorVal == null ? '' : colorVal.toString().trim();
+
     final rawPrice =
         wrapped['final_price'] ??
         wrapped['finalPrice'] ??
@@ -137,6 +146,7 @@ class Product {
       barcode: barcode,
       quantityInStock: quantityInStock,
       size: size.isEmpty ? '—' : size,
+      color: colorStr.isEmpty ? '—' : colorStr,
       companyName: companyName,
       price: price,
       gender: gender,
@@ -155,7 +165,10 @@ class Product {
 
   static double _toDouble(Object? value) {
     if (value is num) return value.toDouble();
-    return double.tryParse((value ?? 0).toString()) ?? 0.0;
+    var s = (value ?? 0).toString().trim();
+    // Allow API strings like "₹1,50,000" / Indian grouping before parsing.
+    s = s.replaceAll(RegExp(r'[₹\s,]'), '');
+    return double.tryParse(s) ?? 0.0;
   }
 
   static int _toInt(Object? value) {

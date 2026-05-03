@@ -175,6 +175,42 @@ class AuthService {
     throw Exception('Change password failed');
   }
 
+  Future<Map<String, dynamic>> fetchUserInfo() async {
+    final accessToken = await getValidAccessToken();
+    if (accessToken == null) {
+      throw Exception('Not authenticated');
+    }
+
+    Future<http.Response> send(String token) {
+      return _client.get(
+        _accountUri('/userinfo/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+    }
+
+    var response = await send(accessToken);
+    if (response.statusCode == 401) {
+      final refreshedAccess = await refreshAccessToken();
+      if (refreshedAccess == null) {
+        throw Exception('Session expired. Please login again.');
+      }
+      response = await send(refreshedAccess);
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      throw Exception('Invalid user info response');
+    }
+
+    throw Exception(_genericErrorMessageFromResponse(response));
+  }
+
   bool _isJwtExpired(
     String token, {
     Duration grace = const Duration(seconds: 30),
@@ -221,5 +257,25 @@ class AuthService {
     }
 
     return 'Login failed (${response.statusCode})';
+  }
+
+  String _genericErrorMessageFromResponse(http.Response response) {
+    try {
+      final parsed = jsonDecode(response.body);
+      if (parsed is Map<String, dynamic>) {
+        final value = parsed['error'] ?? parsed['detail'] ?? parsed['message'];
+        if (value != null) {
+          return value.toString();
+        }
+      }
+    } catch (_) {
+      // ignore parse errors and fallback to status-based message.
+    }
+
+    if (response.statusCode == 401) {
+      return 'Session expired. Please login again.';
+    }
+
+    return 'Request failed (${response.statusCode})';
   }
 }

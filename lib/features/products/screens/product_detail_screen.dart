@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../../core/utils/barcode_saver.dart';
+import '../../../core/utils/inr_format.dart';
 
 import '../models/product.dart';
 
@@ -158,10 +159,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     value: product.quantityInStock.toString(),
                   ),
                   _DetailRow(label: 'Size', value: product.size),
+                  _DetailRow(label: 'Color', value: product.color),
                   _DetailRow(label: 'Gender', value: product.gender.label),
                   _DetailRow(
                     label: 'Price',
-                    value: '₹${product.price.toStringAsFixed(2)}',
+                    value: formatInr(product.price, decimalDigits: 2),
                   ),
                 ],
               ),
