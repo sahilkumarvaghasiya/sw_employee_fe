@@ -450,6 +450,36 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     return true;
   }
 
+  Widget _metaChip({
+    required ThemeData theme,
+    required ColorScheme colorScheme,
+    required IconData icon,
+    required String text,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _confirmAndOpenPayment() async {
     if (!_validateItemsOnly()) return;
 
@@ -866,16 +896,14 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     final colorScheme = theme.colorScheme;
 
     Widget buildItemsList() {
-      final blockSurface = Color.lerp(
+      final blockSurface = Color.alphaBlend(
+        colorScheme.primary.withAlpha(10),
         colorScheme.surface,
-        colorScheme.primary,
-        0.03,
-      )!;
-      final blockCardSurface = Color.lerp(
+      );
+      final blockCardSurface = Color.alphaBlend(
+        colorScheme.secondary.withAlpha(8),
         colorScheme.surface,
-        colorScheme.primary,
-        0.01,
-      )!;
+      );
 
       final grouped = <String, List<_EditableDraftItem>>{};
       for (final item in _items) {
@@ -894,6 +922,13 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
               final group = groups[i];
               final blockItems = group.value;
               final first = blockItems.first;
+              final accents = <Color>[
+                colorScheme.primary,
+                colorScheme.tertiary,
+                colorScheme.secondary,
+                colorScheme.primary.withAlpha(190),
+              ];
+              final accent = accents[i % accents.length];
 
               return Padding(
                 padding: EdgeInsets.only(
@@ -998,7 +1033,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                     color: blockCardSurface,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
-                      side: BorderSide(color: colorScheme.outlineVariant),
+                      side: BorderSide(color: accent.withAlpha(70)),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -1012,12 +1047,12 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                 width: 58,
                                 height: 58,
                                 decoration: BoxDecoration(
-                                  color: colorScheme.primary.withAlpha(14),
+                                  color: accent.withAlpha(20),
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: Icon(
                                   Icons.inventory_2_outlined,
-                                  color: colorScheme.primary,
+                                  color: accent,
                                   size: 26,
                                 ),
                               ),
@@ -1027,35 +1062,50 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      first.draft.itemType1,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Barcode: ${group.key}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodySmall
+                                      'Barcode:',
+                                      style: theme.textTheme.labelMedium
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
                                             fontWeight: FontWeight.w700,
                                           ),
                                     ),
                                     const SizedBox(height: 2),
-                                    Text(
-                                      '${first.draft.brandName.trim().isEmpty ? 'No brand' : first.draft.brandName.trim()} • ${first.draft.gender.name}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w600,
+                                    SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      physics: const BouncingScrollPhysics(),
+                                      child: Text(
+                                        group.key,
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                    ),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3,
                                           ),
+                                          decoration: BoxDecoration(
+                                            color: accent.withAlpha(20),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '${blockItems.length} variants',
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                                  color: accent,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -1116,17 +1166,75 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            '${blockItems.length} variants',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
                           const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: colorScheme.outlineVariant,
+                                  ),
+                                ),
+                                child: Text(
+                                  first.draft.brandName.trim().isEmpty
+                                      ? 'No brand'
+                                      : first.draft.brandName.trim(),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: colorScheme.outlineVariant,
+                                  ),
+                                ),
+                                child: Text(
+                                  first.draft.gender.name,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: accent.withAlpha(16),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: accent.withAlpha(48),
+                                  ),
+                                ),
+                                child: Text(
+                                  first.draft.itemType1,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: accent,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const SizedBox(height: 2),
                           ...List<Widget>.generate(blockItems.length, (j) {
                             final row = blockItems[j];
                             final rowTotal = row.sellingPrice * row.quantity;
@@ -1137,119 +1245,88 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                               margin: EdgeInsets.only(
                                 bottom: j == blockItems.length - 1 ? 0 : 8,
                               ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 8,
+                              padding: const EdgeInsets.fromLTRB(
+                                12,
+                                10,
+                                12,
+                                10,
                               ),
                               decoration: BoxDecoration(
-                                color: colorScheme.surface,
-                                borderRadius: BorderRadius.circular(12),
+                                color: colorScheme.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: colorScheme.outlineVariant,
+                                  color: colorScheme.outlineVariant.withAlpha(
+                                    160,
+                                  ),
                                 ),
                               ),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child: SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      physics: const BouncingScrollPhysics(),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                              vertical: 5,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: colorScheme.primary
-                                                  .withAlpha(10),
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                              border: Border.all(
-                                                color: colorScheme.primary
-                                                    .withAlpha(24),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          itemLabel,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                                color: colorScheme.onSurface,
+                                                fontWeight: FontWeight.w800,
                                               ),
-                                            ),
-                                            child: Text(
-                                              itemLabel,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    color: colorScheme.primary,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                              vertical: 5,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: colorScheme.surface,
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                              border: Border.all(
-                                                color:
-                                                    colorScheme.outlineVariant,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              'Size ${row.draft.size}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                              vertical: 5,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: colorScheme.surface,
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                              border: Border.all(
-                                                color:
-                                                    colorScheme.outlineVariant,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              row.draft.colour,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(width: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: accent.withAlpha(20),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                          border: Border.all(
+                                            color: accent.withAlpha(48),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _money(rowTotal),
+                                          style: theme.textTheme.labelLarge
+                                              ?.copyWith(
+                                                color: accent,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${row.quantity} pcs',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    _money(rowTotal),
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      fontWeight: FontWeight.w900,
-                                    ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      _metaChip(
+                                        theme: theme,
+                                        colorScheme: colorScheme,
+                                        icon: Icons.straighten_rounded,
+                                        text: row.draft.size,
+                                      ),
+                                      _metaChip(
+                                        theme: theme,
+                                        colorScheme: colorScheme,
+                                        icon: Icons.palette_outlined,
+                                        text: row.draft.colour,
+                                      ),
+                                      _metaChip(
+                                        theme: theme,
+                                        colorScheme: colorScheme,
+                                        icon: Icons.inventory_2_outlined,
+                                        text: '${row.quantity} pcs',
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
