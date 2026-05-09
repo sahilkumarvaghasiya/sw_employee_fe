@@ -8,6 +8,7 @@ class StockAlert {
   const StockAlert({
     required this.id,
     required this.type,
+    required this.typeDisplay,
     required this.message,
     required this.createdAt,
     required this.isSeen,
@@ -19,6 +20,7 @@ class StockAlert {
   final String id;
   /// Raw API value, e.g. `LOW_STOCK`, `OUT_OF_STOCK`.
   final String type;
+  final String typeDisplay;
   final String message;
   final DateTime createdAt;
   final bool isSeen;
@@ -27,23 +29,12 @@ class StockAlert {
   final String? displayDate;
   final String? displayTime;
 
-  /// Human-readable type for UI (underscores → words, capitalized).
-  String get typeDisplay {
-    final raw = type.trim();
-    if (raw.isEmpty) return 'Notification';
-    return raw
-        .split('_')
-        .where((p) => p.isNotEmpty)
-        .map((part) {
-          final lower = part.toLowerCase();
-          return '${lower[0].toUpperCase()}${lower.substring(1)}';
-        })
-        .join(' ');
-  }
+  
 
   StockAlert copyWith({
     String? id,
     String? type,
+    String? typeDisplay,
     String? message,
     DateTime? createdAt,
     bool? isSeen,
@@ -54,6 +45,7 @@ class StockAlert {
     return StockAlert(
       id: id ?? this.id,
       type: type ?? this.type,
+      typeDisplay: typeDisplay ?? this.typeDisplay,
       message: message ?? this.message,
       createdAt: createdAt ?? this.createdAt,
       isSeen: isSeen ?? this.isSeen,
@@ -126,6 +118,7 @@ class StockAlert {
     return StockAlert(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       type: typeRaw,
+      typeDisplay: (json['type_display'] ?? '').toString(),
       message: (json['message'] ?? json['body'] ?? '').toString(),
       createdAt: createdAt,
       isSeen: isSeen,
