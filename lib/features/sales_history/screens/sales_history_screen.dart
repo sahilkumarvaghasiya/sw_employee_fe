@@ -651,71 +651,148 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                     return Material(
                       color: colorScheme.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(20),
+                      elevation: 0,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
                         onTap: () => _openBillDetails(bill),
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.primary.withAlpha(18),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(
-                                  Icons.receipt_long_outlined,
-                                  color: colorScheme.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      bill.billNo,
-                                      style: theme.textTheme.titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w900,
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 38,
+                                          height: 38,
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.primary
+                                                .withAlpha(18),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '${bill.customer.name} • ${bill.customer.phone}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w600,
+                                          child: Icon(
+                                            Icons.receipt_long_outlined,
+                                            color: colorScheme.primary,
                                           ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '$date • $time • ${_methodLabel(bill.paymentMethod)}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w600,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            bill.billNo,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.titleSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w900,
+                                                ),
                                           ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.surface,
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                            border: Border.all(
+                                              color: colorScheme.outlineVariant,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '$date • $time',
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                                  color: colorScheme
+                                                      .onSurfaceVariant,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.primary
+                                                .withOpacity(0.08),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                            border: Border.all(
+                                              color: colorScheme.outlineVariant,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            bill.customer.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.secondary
+                                                .withOpacity(0.06),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                            border: Border.all(
+                                              color: colorScheme.outlineVariant,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            bill.customer.phone,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  color: colorScheme
+                                                      .onSurfaceVariant,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (bill.listAmount != null) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        _money(bill.listAmount!),
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              if (bill.listAmount != null)
-                                Text(
-                                  _money(bill.listAmount!),
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 6),
                               Icon(
                                 Icons.chevron_right_rounded,
                                 color: colorScheme.onSurfaceVariant,
@@ -766,36 +843,22 @@ class _BillDetailsSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          bill.billNo,
+                          'Invoice #${bill.billNo}',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${bill.customer.name} • ${bill.customer.phone}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$date • $time • ${methodLabel(bill.paymentMethod)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   IconButton(
                     tooltip: 'Close',
                     onPressed: () => Navigator.of(context).pop(),
@@ -809,23 +872,81 @@ class _BillDetailsSheet extends StatelessWidget {
                 elevation: 0,
                 color: colorScheme.surfaceContainerHigh,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      _InvoiceMetaRow(
+                        first: _InvoiceMetaTile(
+                          label: 'Customer',
+                          value: bill.customer.name,
+                          icon: Icons.person_outline_rounded,
+                          backgroundColor: colorScheme.primary.withOpacity(
+                            0.08,
+                          ),
+                          iconColor: colorScheme.primary,
+                        ),
+                        second: _InvoiceMetaTile(
+                          label: 'Phone',
+                          value: bill.customer.phone,
+                          icon: Icons.phone_outlined,
+                          backgroundColor: colorScheme.primary.withOpacity(
+                            0.08,
+                          ),
+                          iconColor: colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _InvoiceMetaRow(
+                        first: _InvoiceMetaTile(
+                          label: 'Date',
+                          value: '$date, $time',
+                          icon: Icons.event_outlined,
+                          backgroundColor: colorScheme.primary.withOpacity(
+                            0.08,
+                          ),
+                          iconColor: colorScheme.primary,
+                        ),
+                        second: _InvoiceMetaTile(
+                          label: 'Payment',
+                          value: methodLabel(bill.paymentMethod),
+                          icon: Icons.payments_outlined,
+                          backgroundColor: colorScheme.primary.withOpacity(
+                            0.08,
+                          ),
+                          iconColor: colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Card(
+                elevation: 0,
+                color: colorScheme.surfaceContainerHigh,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                   child: Column(
                     children: [
                       _SummaryRow(
                         label: 'Subtotal',
                         value: money(bill.subtotal),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _SummaryRow(
                         label: 'Discount',
                         value: '- ${money(bill.totalDiscount)}',
                         muted: true,
                       ),
-                      const Divider(height: 16),
+                      const Divider(height: 14),
                       _SummaryRow(
                         label: 'Total',
                         value: money(bill.total),
@@ -858,10 +979,10 @@ class _BillDetailsSheet extends StatelessWidget {
                         elevation: 0,
                         color: colorScheme.surfaceContainerHigh,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
                           child: Row(
                             children: [
                               Expanded(
@@ -875,15 +996,46 @@ class _BillDetailsSheet extends StatelessWidget {
                                             fontWeight: FontWeight.w900,
                                           ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '${item.quantity} × ${money(item.unitPrice)}'
-                                      '${item.discountPercent > 0 ? ' • ${item.discountPercent.toStringAsFixed(0)}% off' : ''}',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                            fontWeight: FontWeight.w600,
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          '${item.quantity} × ${money(item.unitPrice)}',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                        if (item.discountPercent > 0) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: colorScheme.surface,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color:
+                                                    colorScheme.outlineVariant,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              '${item.discountPercent.toStringAsFixed(0)}% off',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: colorScheme
+                                                        .onSurfaceVariant,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                            ),
                                           ),
+                                        ],
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -906,6 +1058,92 @@ class _BillDetailsSheet extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _InvoiceMetaRow extends StatelessWidget {
+  const _InvoiceMetaRow({required this.first, required this.second});
+
+  final Widget first;
+  final Widget second;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: first),
+        const SizedBox(width: 10),
+        Expanded(child: second),
+      ],
+    );
+  }
+}
+
+class _InvoiceMetaTile extends StatelessWidget {
+  const _InvoiceMetaTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.backgroundColor,
+    this.iconColor,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color? backgroundColor;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: backgroundColor ?? colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: iconColor ?? colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: iconColor ?? colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Text(
+                    value,
+                    softWrap: false,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: iconColor ?? colorScheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

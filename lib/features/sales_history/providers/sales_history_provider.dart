@@ -15,6 +15,7 @@ class SalesHistoryProvider extends ChangeNotifier {
   DateTimeRange? _dateRange;
   double? _maxTotal;
   String _searchQuery = '';
+  int _requestGeneration = 0;
 
   List<SalesBill> get bills => List.unmodifiable(_bills);
   bool get isLoading => _isLoading;
@@ -24,25 +25,30 @@ class SalesHistoryProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
 
   Future<void> refresh() async {
-    if (_isLoading) return;
-
+    final requestGeneration = ++_requestGeneration;
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      _bills = await _service.fetchSalesHistoryList(
+      final bills = await _service.fetchSalesHistoryList(
         search: _searchQuery,
         startDate: _dateRange?.start,
         endDate: _dateRange?.end,
         maxTotal: _maxTotal,
       );
+      if (requestGeneration != _requestGeneration) return;
+      _bills = bills;
       _detailsCache.clear();
     } catch (_) {
-      _error = 'Failed to load sales history';
+      if (requestGeneration == _requestGeneration) {
+        _error = 'Failed to load sales history';
+      }
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (requestGeneration == _requestGeneration) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -50,10 +56,7 @@ class SalesHistoryProvider extends ChangeNotifier {
     DateTimeRange? dateRange,
     double? maxTotal,
   }) async {
-    await applyQueryFilters(
-      dateRange: dateRange,
-      maxTotal: maxTotal,
-    );
+    await applyQueryFilters(dateRange: dateRange, maxTotal: maxTotal);
   }
 
   Future<void> updateSearchQuery(String value) async {

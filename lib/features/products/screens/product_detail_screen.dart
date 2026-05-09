@@ -74,17 +74,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final colorScheme = theme.colorScheme;
 
     final product = widget.product;
+    final priceLabel = formatInr(product.price, decimalDigits: 2);
+    final genderText = product.gender?.label;
 
     return Scaffold(
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: colorScheme.surface,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Card(
             elevation: 0,
-            color: colorScheme.surfaceContainerHigh,
+            color: colorScheme.surfaceContainerLow,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
@@ -93,22 +98,116 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    product.name,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withAlpha(12),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          Icons.inventory_2_outlined,
+                          color: colorScheme.primary,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              product.name,
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                height: 1.05,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              product.companyName.isEmpty
+                                  ? '—'
+                                  : product.companyName,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                if (genderText != null)
+                                  _TagChip(
+                                    icon: Icons.people_alt_outlined,
+                                    text: genderText,
+                                    background: colorScheme.primary.withAlpha(
+                                      12,
+                                    ),
+                                    foreground: colorScheme.primary,
+                                  ),
+                                _TagChip(
+                                  icon: Icons.straighten_outlined,
+                                  text: product.size,
+                                  background: colorScheme.surface,
+                                  foreground: colorScheme.onSurfaceVariant,
+                                ),
+                                _TagChip(
+                                  icon: Icons.palette_outlined,
+                                  text: product.color,
+                                  background: colorScheme.surface,
+                                  foreground: colorScheme.onSurfaceVariant,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    product.companyName,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withAlpha(8),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Price',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          priceLabel,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _DetailRow(label: 'Barcode', value: product.barcode),
+                  Text(
+                    'Barcode',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   RepaintBoundary(
                     key: _barcodeBoundaryKey,
@@ -117,31 +216,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       decoration: BoxDecoration(
                         color: colorScheme.surface,
                         borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant.withAlpha(80),
+                        ),
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (product.size.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(
-                                'Size: ${product.size}',
-                                style: theme.textTheme.bodySmall?.copyWith(
+                          Row(
+                            children: [
+                              Text(
+                                'Barcode: ${product.barcode}',
+                                style: theme.textTheme.labelMedium?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                            ),
-                          if (product.color.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Text(
-                                'Colour: ${product.color}',
-                                style: theme.textTheme.bodySmall?.copyWith(
+                              const Spacer(),
+                              Text(
+                                'Stock: ${product.quantityInStock}',
+                                style: theme.textTheme.labelMedium?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                            ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
                           BarcodeWidget(
                             barcode: Barcode.code128(),
                             data: product.barcode,
@@ -162,7 +263,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerRight,
                     child: FilledButton.icon(
@@ -179,20 +280,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 18),
                   _DetailRow(
                     label: 'Quantity in stock',
                     value: product.quantityInStock.toString(),
                   ),
                   _DetailRow(label: 'Size', value: product.size),
-                  _DetailRow(label: 'Color', value: product.color),
+                  _DetailRow(label: 'Colour', value: product.color),
                   _DetailRow(
                     label: 'Gender',
                     value: product.gender?.label ?? '—',
-                  ),
-                  _DetailRow(
-                    label: 'Price',
-                    value: formatInr(product.price, decimalDigits: 2),
                   ),
                 ],
               ),
@@ -233,6 +330,47 @@ class _DetailRow extends StatelessWidget {
             value,
             style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  const _TagChip({
+    required this.icon,
+    required this.text,
+    required this.background,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final String text;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: foreground),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],

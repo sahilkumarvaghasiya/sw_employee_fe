@@ -85,8 +85,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               floating: false,
               elevation: 0,
               scrolledUnderElevation: 1,
-              backgroundColor: colorScheme.surfaceContainerLow.withAlpha(235),
-              surfaceTintColor: colorScheme.surfaceTint,
+              backgroundColor: colorScheme.primaryContainer,
+              foregroundColor: colorScheme.onPrimaryContainer,
+              surfaceTintColor: colorScheme.primaryContainer,
+              titleTextStyle: theme.textTheme.titleMedium?.copyWith(
+                color: colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w800,
+              ),
               title: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onPrimaryContainer,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -462,7 +468,7 @@ class _EmployeeChip extends StatelessWidget {
                     tooltip: 'Close',
                     onPressed: isSubmitting
                         ? null
-                        : () => Navigator.of(context).pop(false),
+                        : () => Navigator.of(dialogContext).pop(),
                     icon: const Icon(Icons.close_rounded),
                   ),
                 ],
@@ -583,7 +589,7 @@ class _EmployeeChip extends StatelessWidget {
                 TextButton(
                   onPressed: isSubmitting
                       ? null
-                      : () => Navigator.of(context).pop(false),
+                      : () => Navigator.of(dialogContext).pop(),
                   child: const Text('Cancel'),
                 ),
                 FilledButton.icon(

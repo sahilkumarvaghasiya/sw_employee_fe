@@ -29,6 +29,7 @@ class ProductsProvider extends ChangeNotifier {
   bool _isLoadingMore = false;
   bool _hasMore = true;
   String? _error;
+  int _requestGeneration = 0;
 
   String _searchQuery = '';
   Timer? _searchDebounce;
@@ -96,20 +97,23 @@ class ProductsProvider extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    if (_isLoadingInitial) return;
-
+    final requestGeneration = ++_requestGeneration;
     _isLoadingInitial = true;
     _error = null;
     _resetPaging(notify: false);
     notifyListeners();
 
     try {
-      await _fetchNextPage(notify: false);
+      await _fetchNextPage(requestGeneration: requestGeneration, notify: false);
     } catch (_) {
-      _error = 'Failed to load products';
+      if (_isCurrentRequest(requestGeneration)) {
+        _error = 'Failed to load products';
+      }
     } finally {
-      _isLoadingInitial = false;
-      notifyListeners();
+      if (_isCurrentRequest(requestGeneration)) {
+        _isLoadingInitial = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -179,7 +183,9 @@ class ProductsProvider extends ChangeNotifier {
         ..addAll(colors);
 
       if (_selectedColor != null) {
-        final matches = _colors.where((s) => s.id == _selectedColor!.id).toList();
+        final matches = _colors
+            .where((s) => s.id == _selectedColor!.id)
+            .toList();
         _selectedColor = matches.isNotEmpty ? matches.first : null;
       }
     } catch (_) {
@@ -198,7 +204,10 @@ class ProductsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _fetchNextPage(notify: false);
+      await _fetchNextPage(
+        requestGeneration: _requestGeneration,
+        notify: false,
+      );
     } catch (_) {
       _error = 'Failed to load more products';
     } finally {
@@ -211,14 +220,30 @@ class ProductsProvider extends ChangeNotifier {
     _page = 1;
     _items.clear();
     _hasMore = true;
+    _isLoadingMore = false;
     if (notify) notifyListeners();
   }
 
   void _refetch() {
+    final requestGeneration = ++_requestGeneration;
     _error = null;
+    _isLoadingInitial = true;
     _resetPaging(notify: false);
     notifyListeners();
-    unawaited(_fetchNextPage());
+    unawaited(() async {
+      try {
+        await _fetchNextPage(requestGeneration: requestGeneration);
+      } catch (_) {
+        if (_isCurrentRequest(requestGeneration)) {
+          _error = 'Failed to load products';
+        }
+      } finally {
+        if (_isCurrentRequest(requestGeneration)) {
+          _isLoadingInitial = false;
+          notifyListeners();
+        }
+      }
+    }());
   }
 
   Map<String, String> _buildApiFilters() {
@@ -262,7 +287,14 @@ class ProductsProvider extends ChangeNotifier {
     return '$dd-$mm-$yyyy';
   }
 
-  Future<void> _fetchNextPage({bool notify = true}) async {
+  bool _isCurrentRequest(int requestGeneration) {
+    return requestGeneration == _requestGeneration;
+  }
+
+  Future<void> _fetchNextPage({
+    required int requestGeneration,
+    bool notify = true,
+  }) async {
     if (!_hasMore) return;
 
     final page = await _service.fetchProductVariants(
@@ -270,6 +302,8 @@ class ProductsProvider extends ChangeNotifier {
       pageSize: pageSize,
       filters: _buildApiFilters(),
     );
+
+    if (!_isCurrentRequest(requestGeneration)) return;
 
     _items.addAll(page.items);
     _hasMore = page.hasMore;

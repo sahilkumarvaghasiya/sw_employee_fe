@@ -246,9 +246,12 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     required _PagedOptionsState state,
     bool reset = false,
   }) async {
-    if (state.isLoading) return;
+    if (state.isLoading && !reset) return;
     if (!reset && !state.hasMore) return;
 
+    final requestGeneration = reset
+        ? ++state.requestGeneration
+        : state.requestGeneration;
     final int page = reset ? 1 : state.nextPage;
     if (mounted) {
       setState(() {
@@ -269,7 +272,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         search: state.searchQuery,
       );
 
-      if (!mounted) return;
+      if (!mounted || requestGeneration != state.requestGeneration) return;
       setState(() {
         state.values = _mergeUniqueOptions(state.values, result.items);
         state.hasMore = result.hasMore;
@@ -277,13 +280,13 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         state.isInitialized = true;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != state.requestGeneration) return;
       setState(() {
         state.hasMore = false;
         state.isInitialized = true;
       });
     } finally {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != state.requestGeneration) return;
       setState(() {
         state.isLoading = false;
       });
@@ -291,6 +294,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   }
 
   Future<void> _loadBrandOptions({bool reset = false}) async {
+    if (_brandPaged.isLoading && !reset) return;
+    if (!reset && !_brandPaged.hasMore) return;
+
     final nextPage = reset ? 1 : _brandPaged.nextPage;
     if (reset) {
       _brandPaged
@@ -301,7 +307,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _brandIdByName.clear();
     }
 
-    if (_brandPaged.isLoading || (!reset && !_brandPaged.hasMore)) return;
+    final requestGeneration = reset
+        ? ++_brandPaged.requestGeneration
+        : _brandPaged.requestGeneration;
 
     if (!mounted) return;
     setState(() => _brandPaged.isLoading = true);
@@ -313,7 +321,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         search: _brandSearchQuery,
       );
 
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _brandPaged.requestGeneration) {
+        return;
+      }
       setState(() {
         final current = _brandPaged.values.toSet();
         final names = <String>[];
@@ -335,18 +345,25 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         }
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _brandPaged.requestGeneration) {
+        return;
+      }
       setState(() {
         _brandPaged.hasMore = false;
         _brandPaged.isInitialized = true;
       });
     } finally {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _brandPaged.requestGeneration) {
+        return;
+      }
       setState(() => _brandPaged.isLoading = false);
     }
   }
 
   Future<void> _loadItemTypeOptions({bool reset = false}) async {
+    if (_itemTypePaged.isLoading && !reset) return;
+    if (!reset && !_itemTypePaged.hasMore) return;
+
     final nextPage = reset ? 1 : _itemTypePaged.nextPage;
     if (reset) {
       _itemTypePaged
@@ -357,7 +374,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _itemTypeIdByName.clear();
     }
 
-    if (_itemTypePaged.isLoading || (!reset && !_itemTypePaged.hasMore)) return;
+    final requestGeneration = reset
+        ? ++_itemTypePaged.requestGeneration
+        : _itemTypePaged.requestGeneration;
 
     if (!mounted) return;
     setState(() => _itemTypePaged.isLoading = true);
@@ -369,7 +388,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         search: _itemTypeSearchQuery,
       );
 
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _itemTypePaged.requestGeneration) {
+        return;
+      }
       setState(() {
         final current = _itemTypePaged.values.toSet();
         final names = <String>[];
@@ -391,18 +412,25 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         }
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _itemTypePaged.requestGeneration) {
+        return;
+      }
       setState(() {
         _itemTypePaged.hasMore = false;
         _itemTypePaged.isInitialized = true;
       });
     } finally {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _itemTypePaged.requestGeneration) {
+        return;
+      }
       setState(() => _itemTypePaged.isLoading = false);
     }
   }
 
   Future<void> _loadSizeOptions({bool reset = false}) async {
+    if (_sizePaged.isLoading && !reset) return;
+    if (!reset && !_sizePaged.hasMore) return;
+
     final nextPage = reset ? 1 : _sizePaged.nextPage;
     if (reset) {
       _sizePaged
@@ -413,7 +441,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _sizeIdByName.clear();
     }
 
-    if (_sizePaged.isLoading || (!reset && !_sizePaged.hasMore)) return;
+    final requestGeneration = reset
+        ? ++_sizePaged.requestGeneration
+        : _sizePaged.requestGeneration;
 
     if (!mounted) return;
     setState(() => _sizePaged.isLoading = true);
@@ -425,7 +455,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         search: _sizeSearchQuery,
       );
 
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _sizePaged.requestGeneration) {
+        return;
+      }
       setState(() {
         final current = _sizePaged.values.toSet();
         final names = <String>[];
@@ -439,18 +471,25 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         _sizePaged.isInitialized = true;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _sizePaged.requestGeneration) {
+        return;
+      }
       setState(() {
         _sizePaged.hasMore = false;
         _sizePaged.isInitialized = true;
       });
     } finally {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _sizePaged.requestGeneration) {
+        return;
+      }
       setState(() => _sizePaged.isLoading = false);
     }
   }
 
   Future<void> _loadColourOptions({bool reset = false}) async {
+    if (_colourPaged.isLoading && !reset) return;
+    if (!reset && !_colourPaged.hasMore) return;
+
     final nextPage = reset ? 1 : _colourPaged.nextPage;
     if (reset) {
       _colourPaged
@@ -461,7 +500,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _colourIdByName.clear();
     }
 
-    if (_colourPaged.isLoading || (!reset && !_colourPaged.hasMore)) return;
+    final requestGeneration = reset
+        ? ++_colourPaged.requestGeneration
+        : _colourPaged.requestGeneration;
 
     if (!mounted) return;
     setState(() => _colourPaged.isLoading = true);
@@ -473,7 +514,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         search: _colourSearchQuery,
       );
 
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _colourPaged.requestGeneration) {
+        return;
+      }
       setState(() {
         final current = _colourPaged.values.toSet();
         final names = <String>[];
@@ -487,13 +530,17 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         _colourPaged.isInitialized = true;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _colourPaged.requestGeneration) {
+        return;
+      }
       setState(() {
         _colourPaged.hasMore = false;
         _colourPaged.isInitialized = true;
       });
     } finally {
-      if (!mounted) return;
+      if (!mounted || requestGeneration != _colourPaged.requestGeneration) {
+        return;
+      }
       setState(() => _colourPaged.isLoading = false);
     }
   }
@@ -3044,6 +3091,7 @@ class _PagedOptionsState {
   bool hasMore = true;
   bool isLoading = false;
   bool isInitialized = false;
+  int requestGeneration = 0;
 }
 
 class _VariantDraftRow {
