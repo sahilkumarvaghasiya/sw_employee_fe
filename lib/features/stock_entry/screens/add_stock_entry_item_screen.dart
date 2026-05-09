@@ -113,24 +113,30 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   }
 
   IconData _iconForItemType(String? itemType) {
-    if (itemType == null || itemType.trim().isEmpty)
+    if (itemType == null || itemType.trim().isEmpty) {
       return Icons.shopping_bag_rounded;
+    }
     final s = itemType.toLowerCase();
-    if (s.contains('shoe') || s.contains('sneaker') || s.contains('boot'))
+    if (s.contains('shoe') || s.contains('sneaker') || s.contains('boot')) {
       return Icons.directions_run;
+    }
     if (s.contains('shirt') ||
         s.contains('t-shirt') ||
         s.contains('dress') ||
         s.contains('clothes') ||
-        s.contains('jean'))
+        s.contains('jean')) {
       return Icons.checkroom;
-    if (s.contains('bag') || s.contains('purse'))
+    }
+    if (s.contains('bag') || s.contains('purse')) {
       return Icons.shopping_bag_rounded;
+    }
     if (s.contains('bottle') || s.contains('drink')) return Icons.local_drink;
-    if (s.contains('box') || s.contains('pack'))
+    if (s.contains('box') || s.contains('pack')) {
       return Icons.inventory_2_outlined;
-    if (s.contains('watch') || s.contains('accessory'))
+    }
+    if (s.contains('watch') || s.contains('accessory')) {
       return Icons.watch_outlined;
+    }
     return Icons.shopping_bag_rounded;
   }
 
@@ -2591,6 +2597,20 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         final total = e.sellUnit * e.qty;
                         final priceStr = total.toStringAsFixed(0);
 
+                        final itemTypeName = (_itemType ?? '').trim();
+                        final itemName = _barcodeController.text.trim();
+                        final itemLabel = itemTypeName.isEmpty
+                            ? itemName
+                            : (itemName.isEmpty
+                                  ? itemTypeName
+                                  : '$itemName ($itemTypeName)');
+
+                        final brandName =
+                            (_isBrandCustom
+                                    ? _brandController.text
+                                    : (_brandSelection ?? ''))
+                                .trim();
+
                         return Padding(
                           padding: EdgeInsets.only(
                             bottom: i == _entries.length - 1 ? 0 : 8,
@@ -2647,92 +2667,100 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                             children: [
                                               Row(
                                                 children: [
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 10,
-                                                          vertical: 6,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          colorScheme.surface,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            999,
+                                                  Flexible(
+                                                    child: Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 10,
+                                                            vertical: 6,
                                                           ),
-                                                    ),
-                                                    child: SingleChildScrollView(
-                                                      scrollDirection:
-                                                          Axis.horizontal,
-                                                      physics:
-                                                          const BouncingScrollPhysics(),
-                                                      child: Text(
-                                                        e.size,
-                                                        style: theme
-                                                            .textTheme
-                                                            .bodyMedium
-                                                            ?.copyWith(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w800,
+                                                      decoration: BoxDecoration(
+                                                        color:
+                                                            colorScheme.surface,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              999,
                                                             ),
+                                                      ),
+                                                      child: SingleChildScrollView(
+                                                        scrollDirection:
+                                                            Axis.horizontal,
+                                                        physics:
+                                                            const BouncingScrollPhysics(),
+                                                        child: Text(
+                                                          itemLabel,
+                                                          style: theme
+                                                              .textTheme
+                                                              .bodyMedium
+                                                              ?.copyWith(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w800,
+                                                              ),
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
-                                                  const SizedBox(width: 8),
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 10,
-                                                          vertical: 6,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          colorScheme.surface,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            999,
-                                                          ),
-                                                    ),
-                                                    child: SingleChildScrollView(
-                                                      scrollDirection:
-                                                          Axis.horizontal,
-                                                      physics:
-                                                          const BouncingScrollPhysics(),
-                                                      child: Text(
-                                                        _itemType ?? '',
-                                                        style: theme
-                                                            .textTheme
-                                                            .bodyMedium
-                                                            ?.copyWith(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w800,
+                                                  if (brandName.isNotEmpty) ...[
+                                                    const SizedBox(width: 8),
+                                                    Flexible(
+                                                      child: Container(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 10,
+                                                              vertical: 6,
                                                             ),
+                                                        decoration: BoxDecoration(
+                                                          color: colorScheme
+                                                              .surface,
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                999,
+                                                              ),
+                                                        ),
+                                                        child: SingleChildScrollView(
+                                                          scrollDirection:
+                                                              Axis.horizontal,
+                                                          physics:
+                                                              const BouncingScrollPhysics(),
+                                                          child: Text(
+                                                            brandName,
+                                                            style: theme
+                                                                .textTheme
+                                                                .bodyMedium
+                                                                ?.copyWith(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w800,
+                                                                ),
+                                                          ),
+                                                        ),
                                                       ),
                                                     ),
-                                                  ),
+                                                  ],
                                                 ],
                                               ),
-                                              const SizedBox(height: 4),
-                                              SingleChildScrollView(
-                                                scrollDirection:
-                                                    Axis.horizontal,
-                                                physics:
-                                                    const BouncingScrollPhysics(),
-                                                child: Text(
-                                                  '${_barcodeController.text} SKU-${(1000 + i).toString().padLeft(5, '0')}',
-                                                  style: theme
-                                                      .textTheme
-                                                      .labelMedium
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
+                                              if (itemName.isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                SingleChildScrollView(
+                                                  scrollDirection:
+                                                      Axis.horizontal,
+                                                  physics:
+                                                      const BouncingScrollPhysics(),
+                                                  child: Text(
+                                                    itemName,
+                                                    style: theme
+                                                        .textTheme
+                                                        .labelMedium
+                                                        ?.copyWith(
+                                                          color: colorScheme
+                                                              .onSurfaceVariant,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                  ),
                                                 ),
-                                              ),
+                                              ],
                                             ],
                                           ),
                                         ),
@@ -2787,44 +2815,127 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                     const SizedBox(height: 12),
                                     Row(
                                       children: [
-                                        Container(
-                                          width: 150,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: colorScheme.surface,
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                          ),
+                                        Expanded(
                                           child: Row(
                                             children: [
-                                              Container(
-                                                width: 12,
-                                                height: 12,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.green,
-                                                  shape: BoxShape.circle,
+                                              Expanded(
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: colorScheme.surface,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          999,
+                                                        ),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      Container(
+                                                        width: 12,
+                                                        height: 12,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                              color:
+                                                                  Colors.green,
+                                                              shape: BoxShape
+                                                                  .circle,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Expanded(
+                                                        child: SingleChildScrollView(
+                                                          scrollDirection:
+                                                              Axis.horizontal,
+                                                          physics:
+                                                              const BouncingScrollPhysics(),
+                                                          child: Text(
+                                                            e.colour,
+                                                            style: theme
+                                                                .textTheme
+                                                                .bodySmall
+                                                                ?.copyWith(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
-                                              Expanded(
-                                                child: SingleChildScrollView(
-                                                  scrollDirection:
-                                                      Axis.horizontal,
-                                                  physics:
-                                                      const BouncingScrollPhysics(),
-                                                  child: Text(
-                                                    e.colour,
-                                                    style: theme
-                                                        .textTheme
-                                                        .bodySmall
-                                                        ?.copyWith(
-                                                          fontWeight:
-                                                              FontWeight.w700,
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 6,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: colorScheme.surface,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        999,
+                                                      ),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons
+                                                          .inventory_2_outlined,
+                                                      size: 14,
+                                                      color:
+                                                          colorScheme.primary,
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      '${e.qty} pcs',
+                                                      style: theme
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Flexible(
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: colorScheme.surface,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          999,
                                                         ),
+                                                  ),
+                                                  child: SingleChildScrollView(
+                                                    scrollDirection:
+                                                        Axis.horizontal,
+                                                    physics:
+                                                        const BouncingScrollPhysics(),
+                                                    child: Text(
+                                                      e.size,
+                                                      style: theme
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                          ),
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -2832,37 +2943,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                           ),
                                         ),
                                         const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: colorScheme.surface,
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.inventory_2_outlined,
-                                                size: 14,
-                                                color: colorScheme.primary,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                '${e.qty} pcs',
-                                                style: theme.textTheme.bodySmall
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const Spacer(),
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 12,

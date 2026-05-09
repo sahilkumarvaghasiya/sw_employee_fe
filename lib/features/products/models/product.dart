@@ -25,7 +25,7 @@ class Product {
   final String color;
   final String companyName;
   final double price;
-  final ProductGender gender;
+  final ProductGender? gender;
   final DateTime createdAt;
 
   /// List API model mapping for `/api/products/list/`.
@@ -58,9 +58,11 @@ class Product {
       json['quantity'] ?? json['quantityInStock'] ?? 0,
     );
 
+    // Parse gender from JSON - will be null if not provided by backend
+    // IMPORTANT: Never default to any gender (esp. women) when missing from backend
     final genderRaw = (json['gender'] ?? json['product_gender'] ?? '')
         .toString();
-    final gender = _parseGender(genderRaw) ?? ProductGender.men;
+    final gender = _parseGender(genderRaw);
 
     final createdRaw = (json['created_at'] ?? json['createdAt'] ?? '')
         .toString();
@@ -113,8 +115,7 @@ class Product {
             .trim();
 
     final colorVal = wrapped['color'];
-    final colorStr =
-        colorVal == null ? '' : colorVal.toString().trim();
+    final colorStr = colorVal == null ? '' : colorVal.toString().trim();
 
     final rawPrice =
         wrapped['final_price'] ??
@@ -132,9 +133,11 @@ class Product {
           0,
     );
 
+    // Parse gender from JSON - will be null if not provided by backend
+    // IMPORTANT: Never default to any gender (esp. women) when missing from backend
     final genderRaw = (wrapped['gender'] ?? wrapped['product_gender'] ?? '')
         .toString();
-    final gender = _parseGender(genderRaw) ?? ProductGender.men;
+    final gender = _parseGender(genderRaw);
 
     final createdRaw = (wrapped['created_at'] ?? wrapped['createdAt'] ?? '')
         .toString();
@@ -179,6 +182,7 @@ class Product {
 
   static ProductGender? _parseGender(String raw) {
     final v = raw.trim().toLowerCase();
+    // Explicitly return null for empty/missing values - never default to any gender
     if (v.isEmpty) return null;
 
     switch (v) {
@@ -194,8 +198,10 @@ class Product {
         return ProductGender.boy;
       case 'girl':
         return ProductGender.girl;
+      default:
+        // No match found - return null instead of any default
+        return null;
     }
-    return null;
   }
 }
 

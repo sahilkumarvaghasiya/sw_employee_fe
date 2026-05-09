@@ -92,12 +92,14 @@ class ProductCard extends StatelessWidget {
                         spacing: 5,
                         runSpacing: 4,
                         children: [
-                          _MetaChip(
-                            text: product.gender.label,
-                            colorScheme: colorScheme,
-                            highlighted: true,
-                            compact: true,
-                          ),
+                          // Only show gender chip if explicitly provided by backend
+                          if (product.gender != null)
+                            _MetaChip(
+                              text: product.gender!.label,
+                              colorScheme: colorScheme,
+                              highlighted: true,
+                              compact: true,
+                            ),
                           _MetaChip(
                             text: product.size,
                             colorScheme: colorScheme,

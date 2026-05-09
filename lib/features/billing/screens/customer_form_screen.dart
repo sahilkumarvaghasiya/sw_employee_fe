@@ -88,6 +88,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String _barcodeErrorMessage(Object error) {
+    final message = error.toString();
+    const prefix = 'ClientException: ';
+    if (message.startsWith(prefix)) {
+      return message.substring(prefix.length);
+    }
+    return message;
+  }
+
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
   String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
@@ -209,8 +218,13 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     if (_handlingBarcode) return;
     _handlingBarcode = true;
 
+    final provider = context.read<BillingProvider>();
+
     try {
-      final lookup = await _billingService.fetchBarcodeLookup(barcode);
+      final lookup = await _billingService.fetchBarcodeLookup(
+        barcode,
+        scannedBarcodes: provider.buildScannedBarcodesForLookup(barcode),
+      );
       final products = lookup.products;
       if (!mounted) return;
 
@@ -221,7 +235,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
       if (!lookup.isMultiple) {
         final selected = products.first;
-        context.read<BillingProvider>().addOrIncrementProduct(selected);
+        provider.addOrIncrementProduct(selected);
+        provider.registerScannedBarcode(barcode);
         _showSnack('${selected.name} added');
         return;
       }
@@ -244,9 +259,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         return;
       }
 
-      for (final product in selected) {
-        context.read<BillingProvider>().addOrIncrementProduct(product);
-      }
+      provider.syncMultiBarcodeSelection(
+        barcode: barcode,
+        selectedProducts: selected,
+      );
+      provider.registerScannedBarcode(barcode);
       _showSnack('${selected.length} product(s) added');
 
       if (shouldRestartScanner && mounted) {
@@ -254,7 +271,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showSnack('Barcode lookup failed. Please try again.');
+      final message = _barcodeErrorMessage(e).trim();
+      _showSnack(
+        message.isEmpty ? 'Barcode lookup failed. Please try again.' : message,
+      );
     } finally {
       await Future<void>.delayed(const Duration(milliseconds: 400));
       _handlingBarcode = false;
@@ -265,6 +285,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     required String barcode,
     required List<BillingProduct> products,
   }) {
+    final provider = context.read<BillingProvider>();
+    final initialSelectedProductIds = provider.selectedProductIdsForBarcode(
+      barcode,
+    );
+
     return showModalBottomSheet<List<BillingProduct>>(
       context: context,
       isScrollControlled: true,
@@ -273,7 +298,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         final theme = Theme.of(context);
         final colorScheme = theme.colorScheme;
         final searchController = TextEditingController();
-        final selectedProductIds = <String>{};
+        final selectedProductIds = Set<String>.from(initialSelectedProductIds);
         List<BillingProduct>? backendSearchProducts;
         bool isSearching = false;
         int searchRequestId = 0;

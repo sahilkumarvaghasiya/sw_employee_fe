@@ -208,6 +208,13 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
     }
 
     Widget quantityStepper() {
+      final maxQuantity = widget.item.availableQuantity;
+      final canIncrement =
+          maxQuantity == null || widget.item.quantity < maxQuantity;
+      final incrementTooltip = canIncrement
+          ? 'Increase quantity'
+          : 'Maximum available quantity reached';
+
       return DecoratedBox(
         decoration: BoxDecoration(
           color: colorScheme.surface,
@@ -234,8 +241,8 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
               ),
             ),
             IconButton(
-              tooltip: 'Increase quantity',
-              onPressed: widget.onIncrement,
+              tooltip: incrementTooltip,
+              onPressed: canIncrement ? widget.onIncrement : null,
               icon: const Icon(Icons.add_rounded),
               visualDensity: VisualDensity.compact,
             ),

@@ -336,7 +336,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 sliver: SliverList.separated(
                   itemBuilder: (context, index) {
                     final product = provider.items[index];

@@ -29,7 +29,7 @@ class StockAlertsProvider extends ChangeNotifier {
       // Sort notifications by priority: critical (high) first, then warning (medium), then info (low)
       _alerts = List.of(_alerts)
         ..sort((a, b) {
-          final rank = (StockAlertSeverity severity) {
+          int rank(StockAlertSeverity severity) {
             switch (severity) {
               case StockAlertSeverity.critical:
                 return 0;
@@ -38,7 +38,7 @@ class StockAlertsProvider extends ChangeNotifier {
               case StockAlertSeverity.info:
                 return 2;
             }
-          };
+          }
 
           final rA = rank(a.severity);
           final rB = rank(b.severity);
@@ -68,7 +68,7 @@ class StockAlertsProvider extends ChangeNotifier {
       // Sort by priority (high -> medium -> low) and newest first within same priority
       _alerts = List.of(_alerts)
         ..sort((a, b) {
-          final rank = (StockAlertSeverity severity) {
+          int rank(StockAlertSeverity severity) {
             switch (severity) {
               case StockAlertSeverity.critical:
                 return 0;
@@ -77,7 +77,7 @@ class StockAlertsProvider extends ChangeNotifier {
               case StockAlertSeverity.info:
                 return 2;
             }
-          };
+          }
 
           final rA = rank(a.severity);
           final rB = rank(b.severity);

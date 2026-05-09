@@ -43,6 +43,7 @@ class BillingLineItem {
     required this.originalUnitPrice,
     required this.unitPrice,
     required this.discountPercent,
+    this.availableQuantity,
     this.size,
   });
 
@@ -52,6 +53,7 @@ class BillingLineItem {
   final double originalUnitPrice;
   final double unitPrice;
   final double discountPercent;
+  final int? availableQuantity;
   final String? size;
 
   double get lineSubtotal => unitPrice * quantity;
@@ -69,6 +71,7 @@ class BillingLineItem {
     double? originalUnitPrice,
     double? unitPrice,
     double? discountPercent,
+    int? availableQuantity,
     String? size,
   }) {
     return BillingLineItem(
@@ -78,6 +81,7 @@ class BillingLineItem {
       originalUnitPrice: originalUnitPrice ?? this.originalUnitPrice,
       unitPrice: unitPrice ?? this.unitPrice,
       discountPercent: discountPercent ?? this.discountPercent,
+      availableQuantity: availableQuantity ?? this.availableQuantity,
       size: size ?? this.size,
     );
   }

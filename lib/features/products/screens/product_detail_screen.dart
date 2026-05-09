@@ -186,7 +186,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   _DetailRow(label: 'Size', value: product.size),
                   _DetailRow(label: 'Color', value: product.color),
-                  _DetailRow(label: 'Gender', value: product.gender.label),
+                  _DetailRow(
+                    label: 'Gender',
+                    value: product.gender?.label ?? '—',
+                  ),
                   _DetailRow(
                     label: 'Price',
                     value: formatInr(product.price, decimalDigits: 2),

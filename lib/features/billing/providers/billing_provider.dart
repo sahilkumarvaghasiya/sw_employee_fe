@@ -21,6 +21,9 @@ class BillingProvider extends ChangeNotifier {
   double? _manualFinalAmount;
   BillingQrConfig? _selectedQrConfig;
 
+  final List<String> _scannedBarcodes = [];
+  final Map<String, Set<String>> _selectedProductIdsByBarcode = {};
+
   late final List<BillingCustomer> _knownCustomers;
 
   final List<BillingLineItem> _items = [];
@@ -31,8 +34,60 @@ class BillingProvider extends ChangeNotifier {
   double get paidAmount => _paidAmount;
   double? get manualFinalAmount => _manualFinalAmount;
   BillingQrConfig? get selectedQrConfig => _selectedQrConfig;
+  List<String> get scannedBarcodes => List.unmodifiable(_scannedBarcodes);
 
   List<BillingLineItem> get items => List.unmodifiable(_items);
+
+  List<String> buildScannedBarcodesForLookup(String barcode) {
+    final normalized = barcode.trim();
+    final values = List<String>.from(_scannedBarcodes);
+    if (normalized.isNotEmpty) {
+      values.add(normalized);
+    }
+    return values;
+  }
+
+  Set<String> selectedProductIdsForBarcode(String barcode) {
+    final normalized = barcode.trim();
+    final selected = _selectedProductIdsByBarcode[normalized];
+    return selected == null ? <String>{} : Set<String>.from(selected);
+  }
+
+  void registerScannedBarcode(String barcode) {
+    final normalized = barcode.trim();
+    if (normalized.isEmpty) return;
+    _scannedBarcodes.add(normalized);
+  }
+
+  void syncMultiBarcodeSelection({
+    required String barcode,
+    required List<BillingProduct> selectedProducts,
+  }) {
+    final normalized = barcode.trim();
+    if (normalized.isEmpty) return;
+
+    final previousSelectedIds =
+        _selectedProductIdsByBarcode[normalized] ?? <String>{};
+    final nextSelectedIds = selectedProducts.map((p) => p.id).toSet();
+
+    for (final removedId in previousSelectedIds.difference(nextSelectedIds)) {
+      _items.removeWhere((item) => item.id == removedId);
+    }
+
+    for (final product in selectedProducts) {
+      if (previousSelectedIds.contains(product.id)) continue;
+      addOrIncrementProduct(product);
+    }
+
+    if (nextSelectedIds.isEmpty) {
+      _selectedProductIdsByBarcode.remove(normalized);
+    } else {
+      _selectedProductIdsByBarcode[normalized] = nextSelectedIds;
+    }
+
+    _manualFinalAmount = null;
+    notifyListeners();
+  }
 
   List<BillingCustomer> searchCustomers(String query) {
     final q = query.trim().toLowerCase();
@@ -78,6 +133,8 @@ class BillingProvider extends ChangeNotifier {
     _paidAmount = 0;
     _manualFinalAmount = null;
     _items.clear();
+    _scannedBarcodes.clear();
+    _selectedProductIdsByBarcode.clear();
     notifyListeners();
   }
 
@@ -85,6 +142,11 @@ class BillingProvider extends ChangeNotifier {
     final existingIndex = _items.indexWhere((i) => i.id == product.id);
     if (existingIndex >= 0) {
       final existing = _items[existingIndex];
+      final maxQuantity =
+          existing.availableQuantity ?? product.availableQuantity;
+      if (maxQuantity != null && existing.quantity >= maxQuantity) {
+        return existing;
+      }
       final nextQty = existing.quantity + 1;
       final nextUnitPrice = _unitPriceKeepingTotalReduction(
         item: existing,
@@ -108,6 +170,7 @@ class BillingProvider extends ChangeNotifier {
         originalUnitPrice: product.unitPrice,
         unitPrice: product.unitPrice,
         discountPercent: 0,
+        availableQuantity: product.availableQuantity,
         size: product.size,
       ),
     );
@@ -165,6 +228,8 @@ class BillingProvider extends ChangeNotifier {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
     final item = _items[index];
+    final maxQuantity = item.availableQuantity;
+    if (maxQuantity != null && item.quantity >= maxQuantity) return;
     final nextQty = item.quantity + 1;
     final nextUnitPrice = _unitPriceKeepingTotalReduction(
       item: item,

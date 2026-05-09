@@ -38,6 +38,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   final TextEditingController _paidAmountController = TextEditingController();
 
   final List<_EditableDraftItem> _items = [];
+  final Set<String> _expandedBarcodes = <String>{};
   DateTime? _deadline;
 
   bool _itemsLocked = false;
@@ -208,7 +209,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: _deadline ?? now.add(const Duration(days: 7)),
+      initialDate: _deadline ?? now,
       firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
     );
@@ -468,11 +469,21 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         children: [
           Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
           const SizedBox(width: 5),
-          Text(
-            text,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurface,
-              fontWeight: FontWeight.w700,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 120),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Text(
+                text,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.visible,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
         ],
@@ -929,6 +940,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                 colorScheme.primary.withAlpha(190),
               ];
               final accent = accents[i % accents.length];
+              final expanded = _expandedBarcodes.contains(group.key);
+              final showCount = expanded ? blockItems.length : 1;
 
               return Padding(
                 padding: EdgeInsets.only(
@@ -940,8 +953,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                       ? DismissDirection.none
                       : DismissDirection.horizontal,
                   dismissThresholds: const {
-                    DismissDirection.startToEnd: 0.02,
-                    DismissDirection.endToStart: 0.02,
+                    DismissDirection.startToEnd: 0.75,
+                    DismissDirection.endToStart: 0.75,
                   },
                   movementDuration: const Duration(milliseconds: 180),
                   background: Container(
@@ -1183,12 +1196,25 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                     color: colorScheme.outlineVariant,
                                   ),
                                 ),
-                                child: Text(
-                                  first.draft.brandName.trim().isEmpty
-                                      ? 'No brand'
-                                      : first.draft.brandName.trim(),
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 140,
+                                  ),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Text(
+                                      first.draft.brandName.trim().isEmpty
+                                          ? 'No brand'
+                                          : first.draft.brandName.trim(),
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      overflow: TextOverflow.visible,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1204,10 +1230,23 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                     color: colorScheme.outlineVariant,
                                   ),
                                 ),
-                                child: Text(
-                                  first.draft.gender.name,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 100,
+                                  ),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Text(
+                                      first.draft.gender.name,
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      overflow: TextOverflow.visible,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1223,11 +1262,24 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                     color: accent.withAlpha(48),
                                   ),
                                 ),
-                                child: Text(
-                                  first.draft.itemType1,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: accent,
-                                    fontWeight: FontWeight.w800,
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 140,
+                                  ),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Text(
+                                      first.draft.itemType1,
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      overflow: TextOverflow.visible,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: accent,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1235,7 +1287,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                           ),
                           const SizedBox(height: 12),
                           const SizedBox(height: 2),
-                          ...List<Widget>.generate(blockItems.length, (j) {
+                          ...List<Widget>.generate(showCount, (j) {
                             final row = blockItems[j];
                             final rowTotal = row.sellingPrice * row.quantity;
                             final itemLabel =
@@ -1266,15 +1318,21 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: Text(
-                                          itemLabel,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.bodyMedium
-                                              ?.copyWith(
-                                                color: colorScheme.onSurface,
-                                                fontWeight: FontWeight.w800,
-                                              ),
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          physics:
+                                              const BouncingScrollPhysics(),
+                                          child: Text(
+                                            itemLabel,
+                                            maxLines: 1,
+                                            softWrap: false,
+                                            overflow: TextOverflow.visible,
+                                            style: theme.textTheme.bodyMedium
+                                                ?.copyWith(
+                                                  color: colorScheme.onSurface,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(width: 10),
@@ -1332,6 +1390,26 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                               ),
                             );
                           }),
+                          if (blockItems.length > 1)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    if (expanded) {
+                                      _expandedBarcodes.remove(group.key);
+                                    } else {
+                                      _expandedBarcodes.add(group.key);
+                                    }
+                                  });
+                                },
+                                child: Text(
+                                  expanded
+                                      ? 'Show less'
+                                      : 'Show more (${blockItems.length - showCount})',
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),

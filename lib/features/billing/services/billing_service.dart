@@ -210,11 +210,8 @@ class BillingService {
   String _errorMessageFromResponse(http.Response response) {
     try {
       final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        final value =
-            decoded['error'] ?? decoded['detail'] ?? decoded['message'];
-        if (value != null) return value.toString();
-      }
+      final message = _extractErrorMessage(decoded);
+      if (message.isNotEmpty) return message;
     } catch (_) {
       // ignore
     }
@@ -222,13 +219,66 @@ class BillingService {
     return 'Request failed (${response.statusCode})';
   }
 
-  Future<BillingBarcodeLookupResult> fetchBarcodeLookup(String barcode) async {
+  String _extractErrorMessage(dynamic decoded) {
+    if (decoded is Map) {
+      final map = Map<String, dynamic>.from(decoded);
+
+      const preferredKeys = [
+        'error',
+        'detail',
+        'message',
+        'quantity',
+        'non_field_errors',
+      ];
+
+      for (final key in preferredKeys) {
+        final value = map[key];
+        if (value == null) continue;
+        final message = _extractErrorMessage(value);
+        if (message.isNotEmpty) return message;
+      }
+
+      for (final value in map.values) {
+        final message = _extractErrorMessage(value);
+        if (message.isNotEmpty) return message;
+      }
+
+      return '';
+    }
+
+    if (decoded is List) {
+      final messages = decoded
+          .map(_extractErrorMessage)
+          .where((message) => message.isNotEmpty)
+          .toList(growable: false);
+      return messages.isEmpty ? '' : messages.join(' ');
+    }
+
+    final text = decoded?.toString().trim() ?? '';
+    if (text.isEmpty || text == 'null') return '';
+    return text;
+  }
+
+  Future<BillingBarcodeLookupResult> fetchBarcodeLookup(
+    String barcode, {
+    List<String> scannedBarcodes = const [],
+  }) async {
     final normalized = barcode.trim();
     if (normalized.isEmpty) {
       return const BillingBarcodeLookupResult(isMultiple: false, products: []);
     }
 
-    final uri = _url('$_barcodeLookupPath${Uri.encodeComponent(normalized)}/');
+    final queryParameters = <String, String>{};
+    if (scannedBarcodes.isNotEmpty) {
+      queryParameters['scanned_barcodes'] = scannedBarcodes
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .join(', ');
+    }
+
+    final uri = _url(
+      '$_barcodeLookupPath${Uri.encodeComponent(normalized)}/',
+    ).replace(queryParameters: queryParameters);
 
     final response = await _apiService.get(uri.toString());
     if (response.statusCode < 200 || response.statusCode >= 300) {

@@ -80,323 +80,317 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-          SliverAppBar(
-            pinned: true,
-            floating: false,
-            elevation: 0,
-            scrolledUnderElevation: 1,
-            backgroundColor: colorScheme.surfaceContainerLow.withAlpha(235),
-            surfaceTintColor: colorScheme.surfaceTint,
-            title: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'RetailAgent',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-                if (branchName.isNotEmpty)
-                  Text(
-                    branchName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                      height: 1.05,
+            SliverAppBar(
+              pinned: true,
+              floating: false,
+              elevation: 0,
+              scrolledUnderElevation: 1,
+              backgroundColor: colorScheme.surfaceContainerLow.withAlpha(235),
+              surfaceTintColor: colorScheme.surfaceTint,
+              title: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (branchName.isNotEmpty)
+                    Text(
+                      branchName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
+                ],
+              ),
+              actions: [
+                Consumer<ThemeProvider>(
+                  builder: (context, themeProvider, _) {
+                    final isDark = themeProvider.isDark;
+                    return IconButton(
+                      tooltip: isDark
+                          ? 'Switch to light mode'
+                          : 'Switch to dark mode',
+                      onPressed: themeProvider.toggle,
+                      icon: Icon(
+                        isDark
+                            ? Icons.light_mode_outlined
+                            : Icons.dark_mode_outlined,
+                      ),
+                    );
+                  },
+                ),
+                Consumer<StockAlertsProvider>(
+                  builder: (context, alertsProvider, _) {
+                    final count = alertsProvider.unseenCount;
+                    final showBadge = count > 0;
+                    final badgeText = count > 99 ? '99+' : '$count';
+
+                    return IconButton(
+                      tooltip: 'Stock alerts',
+                      onPressed: () async {
+                        await _openAndRefresh(StockAlertsScreen.route());
+                      },
+                      icon: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(Icons.notifications_outlined),
+                          if (showBadge)
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.error,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                constraints: const BoxConstraints(minWidth: 16),
+                                child: Text(
+                                  badgeText,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onError,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1,
+                                      ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _EmployeeChip(name: employeeName),
+                ),
               ],
             ),
-            actions: [
-              Consumer<ThemeProvider>(
-                builder: (context, themeProvider, _) {
-                  final isDark = themeProvider.isDark;
-                  return IconButton(
-                    tooltip: isDark
-                        ? 'Switch to light mode'
-                        : 'Switch to dark mode',
-                    onPressed: themeProvider.toggle,
-                    icon: Icon(
-                      isDark
-                          ? Icons.light_mode_outlined
-                          : Icons.dark_mode_outlined,
-                    ),
-                  );
-                },
-              ),
-              Consumer<StockAlertsProvider>(
-                builder: (context, alertsProvider, _) {
-                  final count = alertsProvider.unseenCount;
-                  final showBadge = count > 0;
-                  final badgeText = count > 99 ? '99+' : '$count';
 
-                  return IconButton(
-                    tooltip: 'Stock alerts',
-                    onPressed: () async {
-                      await _openAndRefresh(StockAlertsScreen.route());
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              sliver: SliverToBoxAdapter(
+                child: SectionHeader(
+                  title: 'Quick actions',
+                  action: Text(
+                    'Tap to start',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.25,
+                ),
+                delegate: SliverChildListDelegate.fixed([
+                  QuickActionCard(
+                    title: 'Start Billing',
+                    icon: Icons.qr_code_scanner,
+                    isPrimary: true,
+                    onTap: () async {
+                      await _openAndRefresh(CustomerFormScreen.route());
                     },
-                    icon: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        const Icon(Icons.notifications_outlined),
-                        if (showBadge)
-                          Positioned(
-                            right: -2,
-                            top: -2,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.error,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              constraints: const BoxConstraints(minWidth: 16),
-                              child: Text(
-                                badgeText,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onError,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1,
-                                    ),
-                              ),
-                            ),
+                  ),
+                  QuickActionCard(
+                    title: 'Stock Entry',
+                    icon: Icons.inventory_2_outlined,
+                    onTap: () async {
+                      await _openAndRefresh(StockEntryMainScreen.route());
+                    },
+                  ),
+                  QuickActionCard(
+                    title: 'View Products',
+                    icon: Icons.list_alt_outlined,
+                    onTap: () async {
+                      await _openAndRefresh(ProductsScreen.route());
+                    },
+                  ),
+                  QuickActionCard(
+                    title: 'Sales History',
+                    icon: Icons.receipt_long_outlined,
+                    onTap: () async {
+                      await _openAndRefresh(SalesHistoryScreen.route());
+                    },
+                  ),
+                ]),
+              ),
+            ),
+
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              sliver: const SliverToBoxAdapter(
+                child: SectionHeader(title: 'Today summary'),
+              ),
+            ),
+
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              sliver: SliverToBoxAdapter(
+                child: Consumer<HomeDashboardProvider>(
+                  builder: (context, dashboardProvider, _) {
+                    final data = dashboardProvider.data;
+                    final summary = data?.todaySummary;
+
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isWide = constraints.maxWidth >= 520;
+
+                        final cards = [
+                          SummaryMetricCard(
+                            label: 'Total Sales Today',
+                            value: summary == null
+                                ? '₹0.00'
+                                : '₹${summary.totalSalesDisplay}',
+                            icon: Icons.payments_outlined,
                           ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: _EmployeeChip(name: employeeName),
-              ),
-            ],
-          ),
+                          SummaryMetricCard(
+                            label: 'Bills Generated',
+                            value: summary?.billsGenerated.toString() ?? '0',
+                            icon: Icons.receipt_long_outlined,
+                          ),
+                          SummaryMetricCard(
+                            label: 'Items Sold',
+                            value: summary?.itemsSold.toString() ?? '0',
+                            icon: Icons.shopping_bag_outlined,
+                          ),
+                        ];
 
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            sliver: SliverToBoxAdapter(
-              child: SectionHeader(
-                title: 'Quick actions',
-                action: Text(
-                  'Tap to start',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          ),
+                        final cardLayout = isWide
+                            ? Row(
+                                children: [
+                                  Expanded(child: cards[0]),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: cards[1]),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: cards[2]),
+                                ],
+                              )
+                            : Column(
+                                children: [
+                                  cards[0],
+                                  const SizedBox(height: 12),
+                                  cards[1],
+                                  const SizedBox(height: 12),
+                                  cards[2],
+                                ],
+                              );
 
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.25,
-              ),
-              delegate: SliverChildListDelegate.fixed([
-                QuickActionCard(
-                  title: 'Start Billing',
-                  icon: Icons.qr_code_scanner,
-                  isPrimary: true,
-                  onTap: () async {
-                    await _openAndRefresh(CustomerFormScreen.route());
-                  },
-                ),
-                QuickActionCard(
-                  title: 'Stock Entry',
-                  icon: Icons.inventory_2_outlined,
-                  onTap: () async {
-                    await _openAndRefresh(StockEntryMainScreen.route());
-                  },
-                ),
-                QuickActionCard(
-                  title: 'View Products',
-                  icon: Icons.list_alt_outlined,
-                  onTap: () async {
-                    await _openAndRefresh(ProductsScreen.route());
-                  },
-                ),
-                QuickActionCard(
-                  title: 'Sales History',
-                  icon: Icons.receipt_long_outlined,
-                  onTap: () async {
-                    await _openAndRefresh(SalesHistoryScreen.route());
-                  },
-                ),
-              ]),
-            ),
-          ),
-
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            sliver: const SliverToBoxAdapter(
-              child: SectionHeader(title: 'Today summary'),
-            ),
-          ),
-
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            sliver: SliverToBoxAdapter(
-              child: Consumer<HomeDashboardProvider>(
-                builder: (context, dashboardProvider, _) {
-                  final data = dashboardProvider.data;
-                  final summary = data?.todaySummary;
-
-                  return LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isWide = constraints.maxWidth >= 520;
-
-                      final cards = [
-                        SummaryMetricCard(
-                          label: 'Total Sales Today',
-                          value: summary == null
-                              ? '₹0.00'
-                              : '₹${summary.totalSalesDisplay}',
-                          icon: Icons.payments_outlined,
-                        ),
-                        SummaryMetricCard(
-                          label: 'Bills Generated',
-                          value:
-                              summary?.billsGenerated.toString() ?? '0',
-                          icon: Icons.receipt_long_outlined,
-                        ),
-                        SummaryMetricCard(
-                          label: 'Items Sold',
-                          value: summary?.itemsSold.toString() ?? '0',
-                          icon: Icons.shopping_bag_outlined,
-                        ),
-                      ];
-
-                      final cardLayout = isWide
-                          ? Row(
-                              children: [
-                                Expanded(child: cards[0]),
-                                const SizedBox(width: 12),
-                                Expanded(child: cards[1]),
-                                const SizedBox(width: 12),
-                                Expanded(child: cards[2]),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                cards[0],
-                                const SizedBox(height: 12),
-                                cards[1],
-                                const SizedBox(height: 12),
-                                cards[2],
-                              ],
-                            );
-
-                      if (dashboardProvider.error != null && data == null) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            cardLayout,
-                            const SizedBox(height: 10),
-                            Text(
-                              dashboardProvider.error!,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.error,
-                                fontWeight: FontWeight.w700,
+                        if (dashboardProvider.error != null && data == null) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              cardLayout,
+                              const SizedBox(height: 10),
+                              Text(
+                                dashboardProvider.error!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.error,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
-                          ],
-                        );
-                      }
+                            ],
+                          );
+                        }
 
-                      return cardLayout;
-                    },
+                        return cardLayout;
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              sliver: const SliverToBoxAdapter(
+                child: SectionHeader(title: 'Recent activity'),
+              ),
+            ),
+
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              sliver: Consumer<HomeDashboardProvider>(
+                builder: (context, dashboardProvider, _) {
+                  final recent =
+                      dashboardProvider.data?.recentActivity ?? const [];
+
+                  if (dashboardProvider.isLoading && recent.isEmpty) {
+                    return const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    );
+                  }
+
+                  if (dashboardProvider.error != null && recent.isEmpty) {
+                    return SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          dashboardProvider.error!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (recent.isEmpty) {
+                    return SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'No recent bills yet',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      childCount: recent.length,
+                      (context, index) {
+                        final bill = recent[index];
+
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            bottom: index == recent.length - 1 ? 0 : 12,
+                          ),
+                          child: RecentBillTile(
+                            billNo: bill.billNumber,
+                            amount: bill.amountDisplay,
+                            method: bill.paymentMethodLabel,
+                            onTap: null,
+                          ),
+                        );
+                      },
+                    ),
                   );
                 },
               ),
             ),
-          ),
-
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            sliver: const SliverToBoxAdapter(
-              child: SectionHeader(title: 'Recent activity'),
-            ),
-          ),
-
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            sliver: Consumer<HomeDashboardProvider>(
-              builder: (context, dashboardProvider, _) {
-                final recent = dashboardProvider.data?.recentActivity ?? const [];
-
-                if (dashboardProvider.isLoading && recent.isEmpty) {
-                  return const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  );
-                }
-
-                if (dashboardProvider.error != null && recent.isEmpty) {
-                  return SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        dashboardProvider.error!,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.error,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                if (recent.isEmpty) {
-                  return SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        'No recent bills yet',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    childCount: recent.length,
-                    (context, index) {
-                      final bill = recent[index];
-
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          bottom: index == recent.length - 1 ? 0 : 12,
-                        ),
-                        child: RecentBillTile(
-                          billNo: bill.billNumber,
-                          amount: bill.amountDisplay,
-                          method: bill.paymentMethodLabel,
-                          onTap: null,
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
 
             const SliverToBoxAdapter(child: SizedBox(height: 96)),
           ],
