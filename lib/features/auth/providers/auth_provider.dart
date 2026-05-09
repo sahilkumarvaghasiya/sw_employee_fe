@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/session_notifier.dart';
 import '../services/token_storage.dart';
 
+enum LoginOutcome {
+  success,
+  forceLoginRequired,
+  blocked,
+  failure,
+}
+
 class AuthProvider extends ChangeNotifier {
+  AuthProvider() {
+    SessionNotifier.register(_handleSessionExpired);
+  }
+
   final AuthService _authService = AuthService();
   final TokenStorage _tokenStorage = TokenStorage();
 
@@ -18,12 +30,22 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
+  bool _isBlocked = false;
+  bool get isBlocked => _isBlocked;
+
+  String? _forceLoginMessage;
+  String? get forceLoginMessage => _forceLoginMessage;
+
+  String? _sessionMessage;
+  String? get sessionMessage => _sessionMessage;
+
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
   Future<void> loadToken() async {
     _isLoading = true;
     _errorMessage = null;
+    _forceLoginMessage = null;
     notifyListeners();
 
     final restored = await _authService.restoreSession();
@@ -51,6 +73,24 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _handleSessionExpired(String message) async {
+    await _tokenStorage.deleteTokens();
+    _isAuthenticated = false;
+    _employeeName = '';
+    _branchName = '';
+    _sessionMessage = message;
+    _errorMessage = null;
+    _forceLoginMessage = null;
+    _isBlocked = false;
+    notifyListeners();
+  }
+
+  void clearSessionMessage() {
+    if (_sessionMessage == null) return;
+    _sessionMessage = null;
+    notifyListeners();
+  }
+
   Future<void> _applyUserInfoMap(Map<String, dynamic> userInfo) async {
     final userName = userInfo['user_name']?.toString().trim() ?? '';
     final shopName = userInfo['shop_name']?.toString().trim() ?? '';
@@ -68,13 +108,31 @@ class AuthProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> login(String email, String password) async {
+  Future<LoginOutcome> login(
+    String email,
+    String password, {
+    bool forceLogin = false,
+  }) async {
     _isLoading = true;
     _errorMessage = null;
+    _forceLoginMessage = null;
+    _sessionMessage = null;
+    _isBlocked = false;
     notifyListeners();
 
     try {
-      final loginData = await _authService.login(email, password);
+      final loginData =
+          await _authService.login(email, password, forceLogin: forceLogin);
+
+      if (loginData['requires_force_login'] == true) {
+        _forceLoginMessage =
+            loginData['message']?.toString() ??
+            'You are already logged in on another device.';
+        _isLoading = false;
+        notifyListeners();
+        return LoginOutcome.forceLoginRequired;
+      }
+
       await _tokenStorage.saveTokens(
         loginData['access']!.toString(),
         loginData['refresh']!.toString(),
@@ -90,14 +148,29 @@ class AuthProvider extends ChangeNotifier {
 
       await _applyUserInfoMap(userInfo);
       _isAuthenticated = true;
+      _isBlocked = false;
+      _forceLoginMessage = null;
+      _sessionMessage = null;
+      _isLoading = false;
+      notifyListeners();
+      return LoginOutcome.success;
     } catch (e) {
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      final message = e.toString().replaceFirst('Exception: ', '');
+      _errorMessage = message;
       _isAuthenticated = false;
       _employeeName = '';
       _branchName = '';
+      if (message.contains('Account blocked') ||
+          message.contains('blocked due to multiple')) {
+        _isBlocked = true;
+        _isLoading = false;
+        notifyListeners();
+        return LoginOutcome.blocked;
+      }
+      _isLoading = false;
+      notifyListeners();
+      return LoginOutcome.failure;
     }
-    _isLoading = false;
-    notifyListeners();
   }
 
   Future<void> logout() async {
@@ -106,6 +179,9 @@ class AuthProvider extends ChangeNotifier {
     _isAuthenticated = false;
     _employeeName = '';
     _branchName = '';
+    _sessionMessage = null;
+    _forceLoginMessage = null;
+    _errorMessage = null;
     notifyListeners();
   }
 

@@ -26,6 +26,19 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final authProvider = Provider.of<AuthProvider>(context);
+    final isBlocked = authProvider.isBlocked;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final message = authProvider.sessionMessage;
+      if (message == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      authProvider.clearSessionMessage();
+    });
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -188,6 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
+                            enabled: !isBlocked,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               labelText: 'Work email',
@@ -223,6 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
+                            enabled: !isBlocked,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
                               labelText: 'Password',
@@ -287,12 +302,56 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                       elevation: 0,
                                     ),
-                                    onPressed: () async {
-                                      await authProvider.login(
-                                        _emailController.text,
-                                        _passwordController.text,
-                                      );
-                                    },
+                                    onPressed: isBlocked
+                                        ? null
+                                        : () async {
+                                            final outcome =
+                                                await authProvider.login(
+                                              _emailController.text,
+                                              _passwordController.text,
+                                            );
+
+                                            if (!mounted) return;
+                                            if (outcome ==
+                                                LoginOutcome.forceLoginRequired) {
+                                              final continueLogin =
+                                                  await showDialog<bool>(
+                                                context: context,
+                                                builder: (context) => AlertDialog(
+                                                  title: const Text(
+                                                    'Already signed in',
+                                                  ),
+                                                  content: Text(
+                                                    authProvider
+                                                            .forceLoginMessage ??
+                                                        'You are already logged in on another device. Do you want to logout other device and continue?',
+                                                  ),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(context)
+                                                              .pop(false),
+                                                      child: const Text('Cancel'),
+                                                    ),
+                                                    ElevatedButton(
+                                                      onPressed: () =>
+                                                          Navigator.of(context)
+                                                              .pop(true),
+                                                      child: const Text('Continue'),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+
+                                              if (continueLogin == true) {
+                                                await authProvider.login(
+                                                  _emailController.text,
+                                                  _passwordController.text,
+                                                  forceLogin: true,
+                                                );
+                                              }
+                                            }
+                                          },
                                     child: const Text(
                                       'Continue',
                                       style: TextStyle(

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import 'session_notifier.dart';
 
 class ApiService {
   ApiService({AuthService? authService})
@@ -23,6 +24,9 @@ class ApiService {
     }
 
     final firstResponse = await sender(_buildHeaders(accessToken));
+    if (await _handleSessionExpiredIfNeeded(firstResponse)) {
+      return firstResponse;
+    }
     if (firstResponse.statusCode != 401) {
       return firstResponse;
     }
@@ -32,7 +36,39 @@ class ApiService {
       return firstResponse;
     }
 
-    return sender(_buildHeaders(refreshedAccessToken));
+    final refreshedResponse =
+        await sender(_buildHeaders(refreshedAccessToken));
+    await _handleSessionExpiredIfNeeded(refreshedResponse);
+    return refreshedResponse;
+  }
+
+  Future<bool> _handleSessionExpiredIfNeeded(
+    http.Response response,
+  ) async {
+    final message = _extractSessionExpiredMessage(response);
+    if (message == null) {
+      return false;
+    }
+
+    await SessionNotifier.notifySessionExpired(message);
+    return true;
+  }
+
+  String? _extractSessionExpiredMessage(http.Response response) {
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        final detail = decoded['detail']?.toString();
+        if (detail == null) return null;
+        if (detail ==
+            'Session expired. Logged in from another device.') {
+          return 'You were logged out because you signed in from another device.';
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
   }
 
   Future<http.Response> get(String url) async {

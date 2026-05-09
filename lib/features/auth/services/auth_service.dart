@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/api_config.dart';
+import 'session_notifier.dart';
 import 'token_storage.dart';
 
 class AuthService {
@@ -31,13 +32,25 @@ class AuthService {
     return Uri.parse('$_accountBaseUrl$normalizedPath');
   }
 
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  Future<Map<String, dynamic>> login(
+    String email,
+    String password, {
+    bool forceLogin = false,
+  }) async {
     try {
+      final payload = <String, dynamic>{
+        'email': email,
+        'password': password,
+      };
+      if (forceLogin) {
+        payload['force_login'] = true;
+      }
+
       final response = await _client
           .post(
             _accountUri('/login/'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'email': email, 'password': password}),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 15));
 
@@ -51,6 +64,13 @@ class AuthService {
         }
 
         return {...data, 'access': access, 'refresh': refresh};
+      }
+
+      if (response.statusCode == 409) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
       }
 
       throw Exception(_errorMessageFromResponse(response));
@@ -188,6 +208,9 @@ class AuthService {
     var response = await send(accessToken);
 
     if (response.statusCode == 401) {
+      if (await _notifySessionExpiredIfNeeded(response)) {
+        throw Exception('Session expired. Please login again.');
+      }
       final refreshedAccess = await refreshAccessToken();
       if (refreshedAccess == null) {
         throw Exception('Session expired. Please login again.');
@@ -231,12 +254,17 @@ class AuthService {
 
     var response = await send(accessToken);
     if (response.statusCode == 401) {
+      if (await _notifySessionExpiredIfNeeded(response)) {
+        throw Exception('Session expired. Please login again.');
+      }
       final refreshedAccess = await refreshAccessToken();
       if (refreshedAccess == null) {
         throw Exception('Session expired. Please login again.');
       }
       response = await send(refreshedAccess);
     }
+
+    await _notifySessionExpiredIfNeeded(response);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
@@ -257,6 +285,27 @@ class AuthService {
     if (exp == null) return true;
     final now = DateTime.now().add(grace).millisecondsSinceEpoch ~/ 1000;
     return exp <= now;
+  }
+
+  Future<bool> _notifySessionExpiredIfNeeded(
+    http.Response response,
+  ) async {
+    try {
+      final parsed = jsonDecode(response.body);
+      if (parsed is Map<String, dynamic>) {
+        final detail = parsed['detail']?.toString();
+        if (detail == 'Session expired. Logged in from another device.') {
+          await SessionNotifier.notifySessionExpired(
+            'You were logged out because you signed in from another device.',
+          );
+          return true;
+        }
+      }
+    } catch (_) {
+      return false;
+    }
+
+    return false;
   }
 
   int? _jwtExp(String token) {
