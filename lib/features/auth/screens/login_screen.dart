@@ -116,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ),
                             child: Icon(
-                              Icons.storefront_outlined,
+                              Icons.receipt_long_rounded,
                               size: 40,
                               color: theme.colorScheme.onPrimary,
                             ),
