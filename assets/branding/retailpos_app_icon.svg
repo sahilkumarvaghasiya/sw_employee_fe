@@ -7,9 +7,6 @@
     </linearGradient>
   </defs>
 
-  <!-- Background -->
-  <rect width="1024" height="1024" rx="220" fill="#F5F5F5"/>
-
   <!-- Bag Body -->
   <rect x="300" y="320" width="424" height="420" rx="70" fill="url(#bagGradient)"/>
 

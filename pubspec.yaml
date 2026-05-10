@@ -50,6 +50,7 @@ dependencies:
   # Barcode rendering + saving
   barcode_widget: ^2.0.4
   path_provider: ^2.1.4
+  flutter_svg: ^2.0.17
 
   # Simple local persistence (custom sizes/colours)
   shared_preferences: ^2.2.3
@@ -58,6 +59,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.14.4
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
@@ -98,27 +99,35 @@ class _LoginScreenState extends State<LoginScreen> {
                       // Logo/Branding section
                       Column(
                         children: [
-                          // App icon
+                          // App logo
                           Container(
-                            width: 80,
-                            height: 80,
+                            width: 96,
+                            height: 96,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: theme.colorScheme.primary,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  theme.colorScheme.primary.withOpacity(0.15),
+                                  theme.colorScheme.primary.withOpacity(0.04),
+                                ],
+                              ),
                               boxShadow: [
                                 BoxShadow(
                                   color: theme.colorScheme.primary.withOpacity(
-                                    0.3,
+                                    0.22,
                                   ),
                                   blurRadius: 20,
                                   offset: const Offset(0, 8),
                                 ),
                               ],
                             ),
-                            child: Icon(
-                              Icons.receipt_long_rounded,
-                              size: 40,
-                              color: theme.colorScheme.onPrimary,
+                            alignment: Alignment.center,
+                            child: SvgPicture.asset(
+                              'assets/branding/retailpos_app_icon.svg',
+                              width: 58,
+                              height: 58,
                             ),
                           ),
                           const SizedBox(height: 24),
