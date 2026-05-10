@@ -51,6 +51,22 @@ class StockEntryProvider extends ChangeNotifier {
 
   bool get hasMore => _historyHasMore;
 
+  void reset() {
+    _vendors.clear();
+    _visibleEntries.clear();
+    _historyPage = 1;
+    _historyHasMore = true;
+    _historyStatus = null;
+    _historyDateRange = null;
+    _historyVendor = null;
+    _isLoadingInitial = false;
+    _isLoadingMore = false;
+    _error = null;
+    _isLoadingVendors = false;
+    _vendorsError = null;
+    notifyListeners();
+  }
+
   Vendor? vendorById(String id) {
     try {
       return _vendors.firstWhere((v) => v.id == id);

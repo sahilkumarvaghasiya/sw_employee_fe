@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../core/navigation/app_navigator.dart';
+import '../../../core/network/http_client_manager.dart';
 import '../services/auth_service.dart';
 import '../services/session_notifier.dart';
 import '../services/token_storage.dart';
@@ -13,6 +16,12 @@ enum LoginOutcome {
 class AuthProvider extends ChangeNotifier {
   AuthProvider() {
     SessionNotifier.register(_handleSessionExpired);
+  }
+
+  @override
+  void dispose() {
+    SessionNotifier.unregister(_handleSessionExpired);
+    super.dispose();
   }
 
   final AuthService _authService = AuthService();
@@ -36,6 +45,9 @@ class AuthProvider extends ChangeNotifier {
   String? _forceLoginMessage;
   String? get forceLoginMessage => _forceLoginMessage;
 
+  int? _remainingAttempts;
+  int? get remainingAttempts => _remainingAttempts;
+
   String? _sessionMessage;
   String? get sessionMessage => _sessionMessage;
 
@@ -46,6 +58,9 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     _forceLoginMessage = null;
+  _remainingAttempts = null;
+    _sessionMessage = null;
+    _isBlocked = false;
     notifyListeners();
 
     final restored = await _authService.restoreSession();
@@ -74,15 +89,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _handleSessionExpired(String message) async {
-    await _tokenStorage.deleteTokens();
-    _isAuthenticated = false;
-    _employeeName = '';
-    _branchName = '';
-    _sessionMessage = message;
-    _errorMessage = null;
-    _forceLoginMessage = null;
-    _isBlocked = false;
-    notifyListeners();
+    await logoutUser(reason: message, showMessage: true);
   }
 
   void clearSessionMessage() {
@@ -128,6 +135,12 @@ class AuthProvider extends ChangeNotifier {
         _forceLoginMessage =
             loginData['message']?.toString() ??
             'You are already logged in on another device.';
+        final attemptsValue = loginData['remaining_attempts'];
+        if (attemptsValue is int) {
+          _remainingAttempts = attemptsValue;
+        } else if (attemptsValue != null) {
+          _remainingAttempts = int.tryParse(attemptsValue.toString());
+        }
         _isLoading = false;
         notifyListeners();
         return LoginOutcome.forceLoginRequired;
@@ -136,6 +149,7 @@ class AuthProvider extends ChangeNotifier {
       await _tokenStorage.saveTokens(
         loginData['access']!.toString(),
         loginData['refresh']!.toString(),
+        tokenVersion: loginData['token_version']?.toString(),
       );
 
       Map<String, dynamic> userInfo;
@@ -150,9 +164,11 @@ class AuthProvider extends ChangeNotifier {
       _isAuthenticated = true;
       _isBlocked = false;
       _forceLoginMessage = null;
+    _remainingAttempts = null;
       _sessionMessage = null;
       _isLoading = false;
       notifyListeners();
+    await AppNavigator.pushToHome();
       return LoginOutcome.success;
     } catch (e) {
       final message = e.toString().replaceFirst('Exception: ', '');
@@ -160,6 +176,7 @@ class AuthProvider extends ChangeNotifier {
       _isAuthenticated = false;
       _employeeName = '';
       _branchName = '';
+  _remainingAttempts = null;
       if (message.contains('Account blocked') ||
           message.contains('blocked due to multiple')) {
         _isBlocked = true;
@@ -174,15 +191,27 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await logoutUser(showMessage: false);
+  }
+
+  Future<void> logoutUser({String? reason, bool showMessage = true}) async {
     await _authService.logoutRemote();
     await _tokenStorage.deleteTokens();
+    HttpClientManager.reset();
     _isAuthenticated = false;
     _employeeName = '';
     _branchName = '';
-    _sessionMessage = null;
+    _sessionMessage = showMessage ? reason : null;
     _forceLoginMessage = null;
     _errorMessage = null;
+    _isBlocked = false;
     notifyListeners();
+
+    await SessionNotifier.notifyLogout(reason);
+
+    await AppNavigator.pushToLogin(
+      message: showMessage ? reason : null,
+    );
   }
 
   Future<void> refreshUserInfo() async {

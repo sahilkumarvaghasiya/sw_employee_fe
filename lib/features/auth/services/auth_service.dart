@@ -4,15 +4,17 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/api_config.dart';
+import '../../../core/network/http_client_manager.dart';
 import 'session_notifier.dart';
 import 'token_storage.dart';
 
 class AuthService {
   AuthService({http.Client? client, TokenStorage? tokenStorage})
-    : _client = client ?? http.Client(),
+    : _clientOverride = client,
       _tokenStorage = tokenStorage ?? TokenStorage();
 
-  final http.Client _client;
+  final http.Client? _clientOverride;
+  http.Client get _client => _clientOverride ?? HttpClientManager.client;
   final TokenStorage _tokenStorage;
 
   static Future<String?>? _refreshInFlight;
@@ -208,7 +210,7 @@ class AuthService {
     var response = await send(accessToken);
 
     if (response.statusCode == 401) {
-      if (await _notifySessionExpiredIfNeeded(response)) {
+      if (await _notifyAuthFailureIfNeeded(response)) {
         throw Exception('Session expired. Please login again.');
       }
       final refreshedAccess = await refreshAccessToken();
@@ -254,7 +256,7 @@ class AuthService {
 
     var response = await send(accessToken);
     if (response.statusCode == 401) {
-      if (await _notifySessionExpiredIfNeeded(response)) {
+      if (await _notifyAuthFailureIfNeeded(response)) {
         throw Exception('Session expired. Please login again.');
       }
       final refreshedAccess = await refreshAccessToken();
@@ -264,7 +266,7 @@ class AuthService {
       response = await send(refreshedAccess);
     }
 
-    await _notifySessionExpiredIfNeeded(response);
+  await _notifyAuthFailureIfNeeded(response);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
@@ -287,25 +289,95 @@ class AuthService {
     return exp <= now;
   }
 
-  Future<bool> _notifySessionExpiredIfNeeded(
-    http.Response response,
-  ) async {
-    try {
-      final parsed = jsonDecode(response.body);
-      if (parsed is Map<String, dynamic>) {
-        final detail = parsed['detail']?.toString();
-        if (detail == 'Session expired. Logged in from another device.') {
-          await SessionNotifier.notifySessionExpired(
-            'You were logged out because you signed in from another device.',
-          );
-          return true;
-        }
-      }
-    } catch (_) {
+  Future<bool> _notifyAuthFailureIfNeeded(http.Response response) async {
+    final message = _extractAuthFailureMessage(response);
+    if (message == null) {
       return false;
     }
 
-    return false;
+    await SessionNotifier.notifySessionExpired(message);
+    return true;
+  }
+
+  String? _extractAuthFailureMessage(http.Response response) {
+    if (response.statusCode == 401) {
+      final detail = _extractDetail(response);
+      if (detail != null) {
+        return detail;
+      }
+      return 'Session expired. Please login again.';
+    }
+
+    final detail = _extractDetail(response);
+    if (detail == null) return null;
+
+    final normalized = detail.toLowerCase();
+    if (normalized.contains('session expired') ||
+        normalized.contains('authentication_failed') ||
+        normalized.contains('token invalid')) {
+      return detail;
+    }
+
+    return null;
+  }
+
+  String? _extractDetail(http.Response response) {
+    try {
+      final parsed = jsonDecode(response.body);
+      if (parsed is Map<String, dynamic>) {
+        final code = parsed['code']?.toString().trim();
+        if (code == 'SESSION_REPLACED') {
+          final message = parsed['message']?.toString().trim();
+          return message != null && message.isNotEmpty
+              ? message
+              : 'You were logged out because you signed in from another device.';
+        }
+        if (code == 'TOKEN_INVALID' ||
+            code == 'token_not_valid' ||
+            code == 'authentication_failed') {
+          final message = parsed['message']?.toString().trim();
+          if (message != null && message.isNotEmpty) {
+            return message;
+          }
+        }
+        final detail = parsed['detail'] ?? parsed['error'] ?? parsed['message'];
+        if (detail is Map) {
+          final nestedCode = detail['code']?.toString().trim();
+          final nestedMessage = detail['message']?.toString().trim();
+          if (nestedCode == 'SESSION_REPLACED') {
+            return nestedMessage != null && nestedMessage.isNotEmpty
+                ? nestedMessage
+                : 'You were logged out because you signed in from another device.';
+          }
+          if (nestedCode == 'TOKEN_INVALID' ||
+              nestedCode == 'token_not_valid' ||
+              nestedCode == 'authentication_failed') {
+            if (nestedMessage != null && nestedMessage.isNotEmpty) {
+              return nestedMessage;
+            }
+          }
+          if (nestedMessage != null && nestedMessage.isNotEmpty) {
+            return nestedMessage;
+          }
+        }
+        if (detail != null) {
+          final text = detail.toString().trim();
+          if (text.isNotEmpty) {
+            if (text ==
+                'Session expired. Logged in from another device.') {
+              return 'You were logged out because you signed in from another device.';
+            }
+            if (text == 'Incorrect authentication credentials.') {
+              return 'Access to your account is currently restricted.  Please contact the administrator.';
+            }
+            return text;
+          }
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
   }
 
   int? _jwtExp(String token) {

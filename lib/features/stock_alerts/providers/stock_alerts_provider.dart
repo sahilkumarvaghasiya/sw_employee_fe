@@ -21,6 +21,14 @@ class StockAlertsProvider extends ChangeNotifier {
   List<StockAlert> _alerts = const [];
   List<StockAlert> get alerts => _alerts;
 
+  void reset() {
+    _unseenCount = 0;
+    _isLoading = false;
+    _error = null;
+    _alerts = const [];
+    notifyListeners();
+  }
+
   /// Lightweight sync when the home dashboard refreshes (no loading spinner).
   Future<void> refreshForHome() async {
     try {

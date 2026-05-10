@@ -17,6 +17,13 @@ class HomeDashboardProvider extends ChangeNotifier {
   String? get error => _error;
   HomeDashboardData? get data => _data;
 
+  void reset() {
+    _isLoading = false;
+    _error = null;
+    _data = null;
+    notifyListeners();
+  }
+
   Future<void> refresh() async {
     if (_isLoading) return;
 
