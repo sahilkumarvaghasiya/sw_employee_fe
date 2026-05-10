@@ -59,6 +59,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   String? _lastBarcode;
   DateTime? _lastBarcodeAt;
   bool _handlingBarcode = false;
+  bool _paymentFlowActive = false;
 
   final BillingService _billingService = BillingService();
 
@@ -566,6 +567,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     int offerMode = 0; // 0: none, 1: price, 2: discount
     bool offerExpanded = false;
     String? offerValueError;
+    bool hasInteractedWithOfferField = false;
     final baseAmount = provider.calculatedFinalAmount;
 
     final confirmed = await showModalBottomSheet<bool>(
@@ -589,28 +591,41 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
             final parsedValue = double.tryParse(rawValue);
             final entered = parsedValue ?? 0.0;
 
-            bool validateOfferValue() {
+            bool validateOfferValue({
+              bool isConfirming = false,
+              String? currentValue,
+              bool showRequiredOnEmpty = true,
+            }) {
+              final effectiveRawValue =
+                  (currentValue ?? adjustmentController.text).trim();
+              final effectiveParsedValue = double.tryParse(effectiveRawValue);
+
               if (offerMode == 0) {
                 offerValueError = null;
                 return true;
               }
 
-              if (rawValue.isEmpty) {
-                offerValueError = 'Required field';
+              if (effectiveRawValue.isEmpty) {
+                if (showRequiredOnEmpty &&
+                    (isConfirming || hasInteractedWithOfferField)) {
+                  offerValueError = 'Required field';
+                } else {
+                  offerValueError = null;
+                }
                 return false;
               }
 
-              if (parsedValue == null || parsedValue <= 0) {
+              if (effectiveParsedValue == null || effectiveParsedValue <= 0) {
                 offerValueError = 'Enter a valid value';
                 return false;
               }
 
-              if (offerMode == 1 && parsedValue >= baseAmount) {
+              if (offerMode == 1 && effectiveParsedValue >= baseAmount) {
                 offerValueError = 'Must be less than total bill';
                 return false;
               }
 
-              if (offerMode == 2 && parsedValue > 100) {
+              if (offerMode == 2 && effectiveParsedValue > 100) {
                 offerValueError = 'Discount must be up to 100%';
                 return false;
               }
@@ -620,11 +635,35 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
             }
 
             void handleConfirm() {
+              final isOfferValueEmpty =
+                  offerMode != 0 && adjustmentController.text.trim().isEmpty;
+
+              if (isOfferValueEmpty) {
+                setModalState(() {
+                  offerMode = 0;
+                  offerValueError = null;
+                  hasInteractedWithOfferField = false;
+                });
+              }
+
               bool isValid = true;
               setModalState(() {
-                isValid = validateOfferValue();
+                isValid = validateOfferValue(isConfirming: true);
               });
               if (!isValid) return;
+
+              if (offerMode != 0 &&
+                  adjustmentController.text.trim().isNotEmpty) {
+                final parsed = double.tryParse(
+                  adjustmentController.text.trim(),
+                );
+                if (parsed == null || parsed <= 0) {
+                  _showSnack('Enter a valid offer value or choose None.');
+                  return;
+                }
+              }
+
+              FocusManager.instance.primaryFocus?.unfocus();
               Navigator.of(sheetContext).pop(true);
             }
 
@@ -703,157 +742,322 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Text('Subtotal: ${_money(provider.subtotal)}'),
-                      const SizedBox(height: 4),
-                      Text('Item discount: ${_money(provider.totalDiscount)}'),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Bill total: ${_money(baseAmount)}',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: colorScheme.outlineVariant),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.receipt_long_rounded,
+                                  color: colorScheme.onSurfaceVariant,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Bill Breakdown',
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Text(
+                                  'Subtotal',
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                                const Spacer(),
+                                Text(
+                                  _money(provider.subtotal),
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Text(
+                                  'Item Discount',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.tertiary,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  '- ${_money(provider.totalDiscount)}',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.tertiary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Divider(
+                              color: colorScheme.outlineVariant,
+                              height: 16,
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  'Bill Total',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  _money(baseAmount),
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Offer on total',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: offerExpanded
-                                ? 'Hide offer options'
-                                : 'Show offer options',
-                            onPressed: () {
-                              setModalState(() {
-                                offerExpanded = !offerExpanded;
-                                if (!offerExpanded) {
-                                  offerMode = 0;
-                                  adjustmentController.clear();
-                                  offerValueError = null;
-                                }
-                              });
-                            },
-                            icon: Icon(
-                              offerExpanded
-                                  ? Icons.keyboard_arrow_up_rounded
-                                  : Icons.keyboard_arrow_down_rounded,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (offerExpanded) ...[
-                        const SizedBox(height: 8),
-                        Row(
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: colorScheme.outlineVariant),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(
-                              flex: 4,
-                              child: SegmentedButton<int>(
-                                segments: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.local_offer_rounded,
+                                  color: colorScheme.onSurfaceVariant,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Add Offer / Adjustment',
+                                    style: theme.textTheme.labelLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: offerExpanded
+                                      ? 'Hide options'
+                                      : 'Show options',
+                                  onPressed: () {
+                                    setModalState(() {
+                                      offerExpanded = !offerExpanded;
+                                      if (!offerExpanded) {
+                                        offerMode = 0;
+                                        adjustmentController.clear();
+                                        offerValueError = null;
+                                      }
+                                    });
+                                  },
+                                  icon: Icon(
+                                    offerExpanded
+                                        ? Icons.keyboard_arrow_up_rounded
+                                        : Icons.keyboard_arrow_down_rounded,
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 36,
+                                    minHeight: 36,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (offerExpanded) ...[
+                              const SizedBox(height: 12),
+                              SegmentedButton<int>(
+                                segments: const [
                                   ButtonSegment<int>(
                                     value: 0,
-                                    label: segmentLabel('None'),
+                                    label: Text('None'),
                                   ),
                                   ButtonSegment<int>(
                                     value: 1,
-                                    label: segmentLabel('Price'),
+                                    label: Text('Price Reduction'),
                                   ),
                                   ButtonSegment<int>(
                                     value: 2,
-                                    label: segmentLabel('Discount'),
+                                    label: Text('Discount %'),
                                   ),
                                 ],
                                 multiSelectionEnabled: false,
                                 emptySelectionAllowed: false,
                                 selected: {offerMode},
                                 showSelectedIcon: false,
-                                style: ButtonStyle(
-                                  padding: WidgetStateProperty.all(
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                  ),
-                                  visualDensity: VisualDensity.compact,
-                                ),
                                 onSelectionChanged: (selection) {
                                   setModalState(() {
                                     offerMode = selection.first;
+                                    hasInteractedWithOfferField = false;
                                     adjustmentController.clear();
                                     offerValueError = null;
                                   });
                                 },
                               ),
-                            ),
-                            if (offerMode != 0) ...[
-                              const SizedBox(width: 10),
-                              Expanded(
-                                flex: 3,
-                                child: TextField(
+                              if (offerMode != 0) ...[
+                                const SizedBox(height: 12),
+                                TextField(
                                   controller: adjustmentController,
                                   keyboardType:
                                       const TextInputType.numberWithOptions(
                                         decimal: true,
                                       ),
-                                  onChanged: (_) {
+                                  autofocus: true,
+                                  onChanged: (value) {
+                                    hasInteractedWithOfferField = true;
                                     setModalState(() {
-                                      validateOfferValue();
+                                      validateOfferValue(
+                                        currentValue: value,
+                                        showRequiredOnEmpty: false,
+                                      );
                                     });
                                   },
                                   decoration: InputDecoration(
                                     isDense: true,
-                                    hintText: 'Value',
-                                    prefixText: offerMode == 1 ? '₹' : null,
-                                    suffixText: offerMode == 2 ? '%' : null,
+                                    labelText: offerMode == 1
+                                        ? 'Reduction Amount'
+                                        : 'Discount Percentage',
+                                    hintText: 'Enter amount',
+                                    prefixText: offerMode == 1 ? '₹ ' : null,
+                                    suffixText: offerMode == 2 ? ' %' : null,
+                                    prefixIcon: Icon(
+                                      offerMode == 1
+                                          ? Icons.trending_down_rounded
+                                          : Icons.percent_rounded,
+                                      size: 18,
+                                    ),
                                     errorText: offerValueError,
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 10,
+                                      horizontal: 12,
+                                      vertical: 11,
                                     ),
                                   ),
                                 ),
-                              ),
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle_rounded,
+                                        color: colorScheme.primary,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'Amount after adjustment',
+                                              style: theme.textTheme.labelSmall
+                                                  ?.copyWith(
+                                                    color: colorScheme
+                                                        .onPrimaryContainer,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              _money(payable),
+                                              style: theme.textTheme.titleSmall
+                                                  ?.copyWith(
+                                                    color: colorScheme.primary,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ] else
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    'No adjustment applied • Payable: ${_money(baseAmount)}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ],
                         ),
-                        const SizedBox(height: 14),
-                      ],
-                      if (!offerExpanded) const SizedBox(height: 6),
-                      Card(
-                        margin: EdgeInsets.zero,
-                        color: colorScheme.primaryContainer,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.receipt_long_rounded),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Payable total',
-                                  style: theme.textTheme.labelLarge?.copyWith(
-                                    fontWeight: FontWeight.w700,
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.done_all_rounded,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Final Payable Amount',
+                                    style: theme.textTheme.labelMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: colorScheme.onPrimaryContainer,
+                                        ),
                                   ),
-                                ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _money(payable),
+                                    style: theme.textTheme.displaySmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w900,
+                                          color: colorScheme.primary,
+                                        ),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                _money(payable),
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                       LayoutBuilder(
                         builder: (context, constraints) {
                           final stacked = constraints.maxWidth < 340;
@@ -862,8 +1066,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 OutlinedButton(
-                                  onPressed: () =>
-                                      Navigator.of(sheetContext).pop(false),
+                                  onPressed: () {
+                                    FocusManager.instance.primaryFocus
+                                        ?.unfocus();
+                                    Navigator.of(sheetContext).pop(false);
+                                  },
                                   child: const Text('Cancel'),
                                 ),
                                 const SizedBox(height: 8),
@@ -879,8 +1086,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             children: [
                               Expanded(
                                 child: OutlinedButton(
-                                  onPressed: () =>
-                                      Navigator.of(sheetContext).pop(false),
+                                  onPressed: () {
+                                    FocusManager.instance.primaryFocus
+                                        ?.unfocus();
+                                    Navigator.of(sheetContext).pop(false);
+                                  },
                                   child: const Text('Cancel'),
                                 ),
                               ),
@@ -905,17 +1115,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       },
     );
 
-    if (confirmed != true) {
-      Future<void>.delayed(const Duration(milliseconds: 350), () {
-        adjustmentController.dispose();
-      });
-      return false;
-    }
-
     final entered = double.tryParse(adjustmentController.text.trim()) ?? 0.0;
-    Future<void>.delayed(const Duration(milliseconds: 350), () {
+    // Delay disposal until after the bottom sheet teardown/IME transition.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       adjustmentController.dispose();
     });
+
+    if (confirmed != true) {
+      return false;
+    }
 
     if (offerMode == 0) {
       provider.setManualFinalAmount(null);
@@ -1295,6 +1503,12 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
     final canContinue = await _reviewBillAndApplyFinalAmount();
     if (!canContinue) return;
+    if (!mounted) return;
+
+    // Let the review sheet fully dismiss before opening the next overlay.
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -1302,12 +1516,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       builder: (context) {
         final theme = Theme.of(context);
         final colorScheme = theme.colorScheme;
+        bool actionInProgress = false;
 
         Widget option({
           required IconData icon,
           required String title,
           required String subtitle,
-          required VoidCallback onTap,
+          required Future<void> Function() onTap,
+          required void Function(void Function()) setModalState,
         }) {
           return Card(
             elevation: 0,
@@ -1325,82 +1541,108 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
               ),
               subtitle: Text(subtitle),
               trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: onTap,
+              onTap: actionInProgress
+                  ? null
+                  : () async {
+                      setModalState(() => actionInProgress = true);
+                      try {
+                        await onTap();
+                      } finally {
+                        if (context.mounted) {
+                          setModalState(() => actionInProgress = false);
+                        }
+                      }
+                    },
             ),
           );
         }
 
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(Icons.payments_outlined, color: colorScheme.primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Payment',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.payments_outlined,
+                          color: colorScheme.primary,
                         ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Payment',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Close',
+                          onPressed: actionInProgress
+                              ? null
+                              : () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'Select a payment option to continue.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Close',
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close_rounded),
+                    const SizedBox(height: 12),
+                    option(
+                      icon: Icons.payments_outlined,
+                      title: 'Cash',
+                      subtitle: 'Confirm cash received',
+                      setModalState: setModalState,
+                      onTap: () async {
+                        await _confirmCashAndGenerateBill(
+                          closePaymentOptionsOnSuccess: true,
+                        );
+                      },
+                    ),
+                    option(
+                      icon: Icons.qr_code_2_rounded,
+                      title: 'QR barcode',
+                      subtitle: 'Select QR and show to customer',
+                      setModalState: setModalState,
+                      onTap: () async {
+                        await _showQrPaymentSheet();
+                      },
+                    ),
+                    option(
+                      icon: Icons.credit_card_outlined,
+                      title: 'Card (Credit/Debit)',
+                      subtitle: 'Confirm card payment received',
+                      setModalState: setModalState,
+                      onTap: () async {
+                        await _confirmCardAndGenerateBill(
+                          closePaymentOptionsOnSuccess: true,
+                        );
+                      },
                     ),
                   ],
                 ),
-                Text(
-                  'Select a payment option to continue.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                option(
-                  icon: Icons.payments_outlined,
-                  title: 'Cash',
-                  subtitle: 'Confirm cash received',
-                  onTap: () async {
-                    await _confirmCashAndGenerateBill(
-                      closePaymentOptionsOnSuccess: true,
-                    );
-                  },
-                ),
-                option(
-                  icon: Icons.qr_code_2_rounded,
-                  title: 'QR barcode',
-                  subtitle: 'Select QR and show to customer',
-                  onTap: () async {
-                    await _showQrPaymentSheet();
-                  },
-                ),
-                option(
-                  icon: Icons.credit_card_outlined,
-                  title: 'Card (Credit/Debit)',
-                  subtitle: 'Confirm card payment received',
-                  onTap: () async {
-                    await _confirmCardAndGenerateBill(
-                      closePaymentOptionsOnSuccess: true,
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
   Future<void> _onPaymentTap() async {
+    if (_paymentFlowActive) return;
+
     try {
+      _paymentFlowActive = true;
       final provider = context.read<BillingProvider>();
       if (provider.items.isEmpty) {
         _showSnack('Add at least one product before payment.');
@@ -1411,6 +1653,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     } catch (_) {
       if (!mounted) return;
       _showSnack('Could not open payment. Please try again.');
+    } finally {
+      _paymentFlowActive = false;
     }
   }
 
@@ -1580,7 +1824,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                   Text(
                     customer == null
                         ? 'Customer not selected'
-                        : '${customer.name} • ${customer.phone}',
+                        : '${customer.name}  |  ${customer.phone}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(

@@ -163,22 +163,95 @@ class BillPreviewScreen extends StatelessWidget {
     final customer = provider.customer;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Bill confirmation')),
+      appBar: AppBar(
+        title: const Text('Bill confirmation'),
+        surfaceTintColor: colorScheme.surfaceTint,
+      ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 132),
         children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primary.withAlpha(26),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.receipt_long_rounded,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Final payable',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        _money(provider.finalAmount),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Chip(
+                  backgroundColor: colorScheme.surface,
+                  side: BorderSide(color: colorScheme.outlineVariant),
+                  label: Text(
+                    _methodLabel(provider.paymentMethod),
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           Card(
+            elevation: 0,
             color: colorScheme.surfaceContainerHigh,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Customer',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.person_outline_rounded,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Customer',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
                   _InfoRow(label: 'Name', value: customer?.name ?? '—'),
@@ -189,52 +262,109 @@ class BillPreviewScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-
-          Text(
-            'Products',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-
           Card(
-            child: Column(
-              children: [
-                for (final item in provider.items) ...[
-                  ListTile(
-                    title: Text(
-                      item.productName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      'Qty ${item.quantity} • Price ${_money(item.unitPrice)} • Disc ${item.discountPercent.toStringAsFixed(0)}%',
-                    ),
-                    trailing: Text(
-                      _money(item.lineTotal),
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(color: colorScheme.outlineVariant),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Products (${provider.items.length})',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  for (final item in provider.items) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.productName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    _ProductStatChip(
+                                      label: 'Qty',
+                                      value: item.quantity.toString(),
+                                    ),
+                                    _ProductStatChip(
+                                      label: 'Unit',
+                                      value: _money(item.unitPrice),
+                                    ),
+                                    _ProductStatChip(
+                                      label: 'Disc',
+                                      value:
+                                          '${item.discountPercent.toStringAsFixed(0)}%',
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            _money(item.lineTotal),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  if (item != provider.items.last) const Divider(height: 0),
+                    if (item != provider.items.last)
+                      Divider(height: 1, color: colorScheme.outlineVariant),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
-
           const SizedBox(height: 12),
           Card(
+            elevation: 0,
             color: colorScheme.surfaceContainerHigh,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Total',
-                    style: theme.textTheme.titleMedium?.copyWith(
+                    'Totals',
+                    style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -246,18 +376,23 @@ class BillPreviewScreen extends StatelessWidget {
                   _InfoRow(label: 'Subtotal', value: _money(provider.subtotal)),
                   _InfoRow(
                     label: 'Discount',
-                    value: _money(provider.totalDiscount),
+                    value: '- ${_money(provider.totalDiscount)}',
                   ),
                   const Divider(height: 24),
-                  _InfoRow(
-                    label: 'Final amount',
-                    value: _money(provider.finalAmount),
-                    valueWeight: FontWeight.w900,
-                  ),
-                  const SizedBox(height: 10),
-                  _InfoRow(
-                    label: 'Payment method',
-                    value: _methodLabel(provider.paymentMethod),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: _InfoRow(
+                      label: 'Final amount',
+                      value: _money(provider.finalAmount),
+                      valueWeight: FontWeight.w900,
+                    ),
                   ),
                 ],
               ),
@@ -269,14 +404,13 @@ class BillPreviewScreen extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () => _confirmAndSendWhatsApp(context),
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 14),
-                child: Text('Done'),
+          child: FilledButton.icon(
+            onPressed: () => _confirmAndSendWhatsApp(context),
+            icon: const Icon(Icons.check_circle_outline),
+            label: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Text(
+                BillingService.whatsAppApiIntegrated ? 'Send & Finish' : 'Done',
               ),
             ),
           ),
@@ -317,6 +451,45 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ProductStatChip extends StatelessWidget {
+  const _ProductStatChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+          children: [
+            TextSpan(text: '$label: '),
+            TextSpan(
+              text: value,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

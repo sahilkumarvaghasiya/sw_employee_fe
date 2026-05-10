@@ -41,39 +41,6 @@ class _BillingScreenState extends State<BillingScreen> {
   DateTime? _lastBarcodeAt;
   bool _handlingBarcode = false;
 
-  final List<BillingProduct> _catalog = const [
-    BillingProduct(
-      id: 'p_001',
-      name: 'Parle-G 250g',
-      unitPrice: 20.0,
-      barcode: '8901719100187',
-    ),
-    BillingProduct(
-      id: 'p_002',
-      name: 'Aashirvaad Atta 5kg',
-      unitPrice: 275.0,
-      barcode: '8906007280015',
-    ),
-    BillingProduct(
-      id: 'p_003',
-      name: 'Coca-Cola 750ml',
-      unitPrice: 40.0,
-      barcode: '5449000131805',
-    ),
-    BillingProduct(
-      id: 'p_004',
-      name: 'Lux Soap',
-      unitPrice: 35.0,
-      barcode: '8901030824037',
-    ),
-    BillingProduct(
-      id: 'p_005',
-      name: 'Colgate Toothpaste 200g',
-      unitPrice: 95.0,
-      barcode: '8901023012218',
-    ),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -89,13 +56,7 @@ class _BillingScreenState extends State<BillingScreen> {
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
   BillingProduct? _findProductByBarcode(String barcode) {
-    final normalized = barcode.trim();
-    if (normalized.isEmpty) return null;
-
-    for (final p in _catalog) {
-      final b = p.barcode?.trim();
-      if (b != null && b.isNotEmpty && b == normalized) return p;
-    }
+    // No local catalog, products come from backend lookup
     return null;
   }
 
@@ -678,7 +639,7 @@ class _BillingScreenState extends State<BillingScreen> {
             Text(
               customer == null
                   ? 'Customer not selected'
-                  : '${customer.name} • ${customer.phone}',
+                  : '${customer.name}  |  ${customer.phone}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(

@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../models/billing_models.dart';
 
-enum _EditMode { price, discount }
-
 class ProductItemWidget extends StatefulWidget {
   const ProductItemWidget({
     super.key,
@@ -32,7 +30,6 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
   final FocusNode _priceFocusNode = FocusNode();
   final FocusNode _discountFocusNode = FocusNode();
 
-  _EditMode _mode = _EditMode.price;
   bool _showOfferEditor = false;
   String? _priceError;
   String? _discountError;
@@ -89,10 +86,8 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
       }
     }
 
-    if (force || (!_priceFocusNode.hasFocus && !_discountFocusNode.hasFocus)) {
-      _mode = discountApplied && !priceOverridden
-          ? _EditMode.discount
-          : _EditMode.price;
+    if (force) {
+      // Mode auto-detection only on force (initial load)
     }
 
     if (!_priceFocusNode.hasFocus) {
@@ -104,25 +99,6 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
   }
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
-
-  void _setMode(_EditMode mode) {
-    final isPriceActive =
-        widget.item.unitPrice != widget.item.originalUnitPrice;
-    final isDiscountActive = widget.item.discountPercent > 0;
-
-    if (mode == _EditMode.discount && isPriceActive) {
-      widget.onPriceChanged(null);
-    }
-    if (mode == _EditMode.price && isDiscountActive) {
-      widget.onDiscountChanged(null);
-    }
-
-    setState(() {
-      _mode = mode;
-      _priceError = null;
-      _discountError = null;
-    });
-  }
 
   void _handlePriceChanged(String value) {
     final trimmed = value.trim();
@@ -190,20 +166,20 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
         isDense: true,
         prefixText: prefixText,
         filled: true,
-        fillColor: colorScheme.surface,
+        fillColor: colorScheme.surfaceContainerLow,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: colorScheme.primary, width: 1.1),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       );
     }
 
@@ -218,7 +194,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: colorScheme.outlineVariant),
         ),
         child: Row(
@@ -251,74 +227,111 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
       );
     }
 
-    Widget modeSelector() {
-      return DecoratedBox(
+    Widget priceDiscountEditor() {
+      return Container(
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: colorScheme.outlineVariant),
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<_EditMode>(
-              value: _mode,
-              isDense: true,
-              borderRadius: BorderRadius.circular(12),
-              items: const [
-                DropdownMenuItem(value: _EditMode.price, child: Text('Price')),
-                DropdownMenuItem(
-                  value: _EditMode.discount,
-                  child: Text('Discount'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Custom Price',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _priceController,
+                        focusNode: _priceFocusNode,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: fieldDecoration(prefixText: '₹').copyWith(
+                          hintText: 'Enter amount',
+                          errorText: _priceError,
+                        ),
+                        onChanged: _handlePriceChanged,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Discount',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _discountController,
+                        focusNode: _discountFocusNode,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: fieldDecoration(prefixText: '%').copyWith(
+                          hintText: 'Enter %',
+                          errorText: _discountError,
+                        ),
+                        onChanged: _handleDiscountChanged,
+                      ),
+                    ],
+                  ),
                 ),
               ],
-              onChanged: (value) {
-                if (value == null) return;
-                _setMode(value);
-              },
             ),
-          ),
-        ),
-      );
-    }
-
-    Widget editorRow() {
-      return Row(
-        children: [
-          SizedBox(width: 84, child: modeSelector()),
-          const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: _mode == _EditMode.price
-                  ? _priceController
-                  : _discountController,
-              focusNode: _mode == _EditMode.price
-                  ? _priceFocusNode
-                  : _discountFocusNode,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration:
-                  fieldDecoration(
-                    prefixText: _mode == _EditMode.price ? '₹' : '%',
-                  ).copyWith(
-                    errorText: _mode == _EditMode.price
-                        ? _priceError
-                        : _discountError,
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonal(
+                    onPressed: () {
+                      widget.onPriceChanged(null);
+                      widget.onDiscountChanged(null);
+                      setState(() => _showOfferEditor = false);
+                    },
+                    child: const Text('Clear'),
                   ),
-              onChanged: _mode == _EditMode.price
-                  ? _handlePriceChanged
-                  : _handleDiscountChanged,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () {
+                      setState(() => _showOfferEditor = false);
+                    },
+                    child: const Text('Done'),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
     Widget offerSummary() {
       if (!hasOffer) {
         return Text(
-          'Tap to edit',
+          'No offer applied • Tap to add price or discount',
           style: theme.textTheme.bodySmall?.copyWith(
             color: colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w600,
@@ -326,8 +339,19 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
         );
       }
 
+      final parts = <String>[];
+      if (discountApplied) {
+        parts.add(
+          'Discount ${widget.item.discountPercent.toStringAsFixed(0)}%',
+        );
+      }
+      if (priceOverridden) {
+        final reduction = widget.item.originalUnitPrice - widget.item.unitPrice;
+        parts.add('Price reduced by ${_money(reduction)} each');
+      }
+
       return Text(
-        'Offer applied',
+        parts.join(' • '),
         style: theme.textTheme.bodySmall?.copyWith(
           color: colorScheme.onSurfaceVariant,
           fontWeight: FontWeight.w600,
@@ -335,15 +359,50 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
       );
     }
 
+    Widget amountBox({
+      required String value,
+      required Color backgroundColor,
+      required Color borderColor,
+      required Color valueColor,
+      bool strike = false,
+    }) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  decoration: strike ? TextDecoration.lineThrough : null,
+                  color: strike ? valueColor.withAlpha(190) : valueColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Card(
       elevation: 0,
       color: colorScheme.surfaceContainerHighest,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       clipBehavior: Clip.antiAlias,
       child: Material(
         color: Colors.transparent,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -351,7 +410,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
-                    radius: 18,
+                    radius: 16,
                     backgroundColor: colorScheme.primary.withOpacity(0.12),
                     child: Text(
                       widget.item.quantity.toString(),
@@ -364,46 +423,41 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: Stack(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.only(right: 30),
-                                child: Text(
-                                  widget.item.productName,
-                                  style: theme.textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                widget.item.productName,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w900,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              Positioned(
-                                top: 0,
-                                right: 0,
-                                child: TextButton(
-                                  onPressed: widget.onRemove,
-                                  style: TextButton.styleFrom(
-                                    visualDensity: VisualDensity.compact,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 0,
-                                    ),
-                                    minimumSize: const Size(0, 24),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  child: const Text('Cancel'),
-                                ),
+                            ),
+                            IconButton(
+                              tooltip: 'Remove item',
+                              onPressed: widget.onRemove,
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 30,
+                                minHeight: 30,
                               ),
-                            ],
-                          ),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                size: 18,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
                         if (sizeText.isNotEmpty) ...[
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           _Chip(
                             icon: Icons.straighten_rounded,
                             label: sizeText,
@@ -415,31 +469,6 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                 ],
               ),
               const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.topRight,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      _money(widget.item.lineTotal),
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if (showPreviousAmount) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        _money(previousAmount),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          decoration: TextDecoration.lineThrough,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
               InkWell(
                 borderRadius: BorderRadius.circular(12),
                 onTap: () {
@@ -448,14 +477,57 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 2,
-                    vertical: 2,
+                    vertical: 0,
                   ),
                   child: Row(
                     children: [
                       quantityStepper(),
-                      const SizedBox(width: 10),
-                      Expanded(child: offerSummary()),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            offerSummary(),
+                            const SizedBox(height: 6),
+                            if (showPreviousAmount)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: amountBox(
+                                      value: _money(widget.item.lineTotal),
+                                      backgroundColor: Colors.green.withAlpha(
+                                        28,
+                                      ),
+                                      borderColor: Colors.green.withAlpha(120),
+                                      valueColor: Colors.green.shade800,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: amountBox(
+                                      value: _money(previousAmount),
+                                      backgroundColor: Colors.lightBlue
+                                          .withAlpha(28),
+                                      borderColor: Colors.lightBlue.withAlpha(
+                                        120,
+                                      ),
+                                      valueColor: Colors.lightBlue.shade800,
+                                      strike: true,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            else
+                              amountBox(
+                                value: _money(widget.item.lineTotal),
+                                backgroundColor: Colors.green.withAlpha(28),
+                                borderColor: Colors.green.withAlpha(120),
+                                valueColor: Colors.green.shade800,
+                              ),
+                          ],
+                        ),
+                      ),
                       Icon(
                         _showOfferEditor
                             ? Icons.keyboard_arrow_up_rounded
@@ -468,7 +540,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
               ),
               if (_showOfferEditor) ...[
                 const SizedBox(height: 10),
-                editorRow(),
+                priceDiscountEditor(),
               ],
             ],
           ),
