@@ -209,9 +209,7 @@ class AuthProvider extends ChangeNotifier {
 
     await SessionNotifier.notifyLogout(reason);
 
-    await AppNavigator.pushToLogin(
-      message: showMessage ? reason : null,
-    );
+    await AppNavigator.pushToLogin();
   }
 
   Future<void> refreshUserInfo() async {

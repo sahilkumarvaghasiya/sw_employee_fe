@@ -10,7 +10,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Welcome back'), findsOneWidget);
-    expect(find.text('Login to your account'), findsOneWidget);
+  expect(find.text('Sign in'), findsOneWidget);
+  expect(find.text('Enter your credentials'), findsOneWidget);
   });
 }

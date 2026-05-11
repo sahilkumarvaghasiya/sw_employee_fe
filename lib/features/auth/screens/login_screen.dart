@@ -375,36 +375,48 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 final continueLogin =
                                                     await showDialog<bool>(
                                                       context: context,
-                                                      builder: (context) => AlertDialog(
-                                                        title: const Text(
-                                                          'Already signed in',
-                                                        ),
-                                                        content: Text(
-                                                          authProvider
-                                                                  .forceLoginMessage ??
-                                                              'You are already logged in on another device. Do you want to logout other device and continue?',
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed: () =>
-                                                                Navigator.of(
-                                                                  context,
-                                                                ).pop(false),
-                                                            child: const Text(
-                                                              'Cancel',
-                                                            ),
+                                                      builder: (context) {
+                                                        final attempts =
+                                                            authProvider
+                                                                .remainingAttempts;
+                                                        final contentLines = <String>[];
+                                                        final msg = authProvider
+                                                                .forceLoginMessage ??
+                                                            'You are already logged in on another device. Do you want to logout other device and continue?';
+                                                        contentLines.add(msg);
+                                                        if (attempts != null) {
+                                                          contentLines.add(
+                                                              '\nRemaining attempts: ${attempts.toString()}');
+                                                        }
+                                                        return AlertDialog(
+                                                          title: const Text(
+                                                            'Already signed in',
                                                           ),
-                                                          ElevatedButton(
-                                                            onPressed: () =>
-                                                                Navigator.of(
-                                                                  context,
-                                                                ).pop(true),
-                                                            child: const Text(
-                                                              'Continue',
-                                                            ),
+                                                          content: Text(
+                                                            contentLines.join('\n'),
                                                           ),
-                                                        ],
-                                                      ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
+                                                                    context,
+                                                                  ).pop(false),
+                                                              child: const Text(
+                                                                'Cancel',
+                                                              ),
+                                                            ),
+                                                            ElevatedButton(
+                                                              onPressed: () =>
+                                                                  Navigator.of(
+                                                                    context,
+                                                                  ).pop(true),
+                                                              child: const Text(
+                                                                'Continue',
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        );
+                                                      },
                                                     );
 
                                                 if (continueLogin == true) {
