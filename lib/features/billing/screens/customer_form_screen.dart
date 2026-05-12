@@ -220,11 +220,41 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _handlingBarcode = true;
 
     final provider = context.read<BillingProvider>();
+    final normalizedBarcode = barcode.trim();
 
     try {
+      if (normalizedBarcode.isEmpty) return;
+
+      final alreadyScanned = provider.scannedBarcodes.contains(
+        normalizedBarcode,
+      );
+      final knownIsMultiple = provider.isMultipleForBarcode(normalizedBarcode);
+
+      // For single-product barcodes, repeated scans should behave like the first
+      // scan result (same item visible) while incrementing quantity locally.
+      // We must avoid calling the backend again for repeats because the backend
+      // correctly validates "already scanned" for single-product barcodes.
+      if (alreadyScanned && knownIsMultiple == false) {
+        final productId = provider.primaryProductIdForBarcode(
+          normalizedBarcode,
+        );
+        if (productId != null) {
+          provider.incrementItemQuantity(productId);
+          BillingLineItem? item;
+          for (final i in provider.items) {
+            if (i.id == productId) {
+              item = i;
+              break;
+            }
+          }
+          _showSnack('${item?.productName ?? 'Product'} quantity increased');
+          return;
+        }
+      }
+
       final lookup = await _billingService.fetchBarcodeLookup(
-        barcode,
-        scannedBarcodes: provider.buildScannedBarcodesForLookup(barcode),
+        normalizedBarcode,
+        scannedBarcodes: provider.buildScannedBarcodesForLookup(),
       );
       final products = lookup.products;
       if (!mounted) return;
@@ -237,7 +267,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       if (!lookup.isMultiple) {
         final selected = products.first;
         provider.addOrIncrementProduct(selected);
-        provider.registerScannedBarcode(barcode);
+        provider.rememberSingleBarcodeProduct(
+          barcode: normalizedBarcode,
+          productId: selected.id,
+        );
+        provider.registerScannedBarcode(normalizedBarcode);
         _showSnack('${selected.name} added');
         return;
       }
@@ -248,7 +282,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       }
 
       final selected = await _pickProductFromMatches(
-        barcode: barcode,
+        barcode: normalizedBarcode,
         products: products,
       );
       if (!mounted) return;
@@ -261,10 +295,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       }
 
       provider.syncMultiBarcodeSelection(
-        barcode: barcode,
+        barcode: normalizedBarcode,
         selectedProducts: selected,
       );
-      provider.registerScannedBarcode(barcode);
+      provider.registerScannedBarcode(normalizedBarcode);
       _showSnack('${selected.length} product(s) added');
 
       if (shouldRestartScanner && mounted) {

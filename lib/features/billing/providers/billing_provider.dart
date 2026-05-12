@@ -23,6 +23,7 @@ class BillingProvider extends ChangeNotifier {
 
   final List<String> _scannedBarcodes = [];
   final Map<String, Set<String>> _selectedProductIdsByBarcode = {};
+  final Map<String, bool> _isMultipleByBarcode = {};
 
   late final List<BillingCustomer> _knownCustomers;
 
@@ -38,13 +39,36 @@ class BillingProvider extends ChangeNotifier {
 
   List<BillingLineItem> get items => List.unmodifiable(_items);
 
-  List<String> buildScannedBarcodesForLookup(String barcode) {
+  List<String> buildScannedBarcodesForLookup() {
+    // IMPORTANT: This must be the *history* of scanned barcodes only.
+    // Do NOT include the current barcode being looked up, otherwise the
+    // backend will treat the very first scan as an "already scanned" repeat.
+    return List<String>.from(_scannedBarcodes);
+  }
+
+  bool? isMultipleForBarcode(String barcode) {
     final normalized = barcode.trim();
-    final values = List<String>.from(_scannedBarcodes);
-    if (normalized.isNotEmpty) {
-      values.add(normalized);
-    }
-    return values;
+    if (normalized.isEmpty) return null;
+    return _isMultipleByBarcode[normalized];
+  }
+
+  String? primaryProductIdForBarcode(String barcode) {
+    final normalized = barcode.trim();
+    if (normalized.isEmpty) return null;
+    final selected = _selectedProductIdsByBarcode[normalized];
+    if (selected == null || selected.isEmpty) return null;
+    return selected.first;
+  }
+
+  void rememberSingleBarcodeProduct({
+    required String barcode,
+    required String productId,
+  }) {
+    final normalizedBarcode = barcode.trim();
+    final normalizedProductId = productId.trim();
+    if (normalizedBarcode.isEmpty || normalizedProductId.isEmpty) return;
+    _selectedProductIdsByBarcode[normalizedBarcode] = {normalizedProductId};
+    _isMultipleByBarcode[normalizedBarcode] = false;
   }
 
   Set<String> selectedProductIdsForBarcode(String barcode) {
@@ -66,6 +90,8 @@ class BillingProvider extends ChangeNotifier {
     final normalized = barcode.trim();
     if (normalized.isEmpty) return;
 
+    _isMultipleByBarcode[normalized] = true;
+
     final previousSelectedIds =
         _selectedProductIdsByBarcode[normalized] ?? <String>{};
     final nextSelectedIds = selectedProducts.map((p) => p.id).toSet();
@@ -81,6 +107,7 @@ class BillingProvider extends ChangeNotifier {
 
     if (nextSelectedIds.isEmpty) {
       _selectedProductIdsByBarcode.remove(normalized);
+      _isMultipleByBarcode.remove(normalized);
     } else {
       _selectedProductIdsByBarcode[normalized] = nextSelectedIds;
     }
@@ -135,6 +162,7 @@ class BillingProvider extends ChangeNotifier {
     _items.clear();
     _scannedBarcodes.clear();
     _selectedProductIdsByBarcode.clear();
+    _isMultipleByBarcode.clear();
     notifyListeners();
   }
 
