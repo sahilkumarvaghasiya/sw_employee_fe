@@ -54,6 +54,9 @@ class AuthProvider extends ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
+  DateTime? _lastUserInfoAt;
+  bool _isUserInfoLoading = false;
+
   Future<void> loadToken() async {
     _isLoading = true;
     _errorMessage = null;
@@ -71,10 +74,14 @@ class AuthProvider extends ChangeNotifier {
 
       if (_employeeName.isEmpty || _branchName.isEmpty) {
         try {
+          _isUserInfoLoading = true;
           final userInfo = await _authService.fetchUserInfo();
           await _applyUserInfoMap(userInfo);
+          _lastUserInfoAt = DateTime.now();
         } catch (_) {
           // Keep session; home screen refresh will retry userinfo.
+        } finally {
+          _isUserInfoLoading = false;
         }
       }
     } else {
@@ -152,15 +159,6 @@ class AuthProvider extends ChangeNotifier {
         tokenVersion: loginData['token_version']?.toString(),
       );
 
-      Map<String, dynamic> userInfo;
-      try {
-        userInfo = await _authService.fetchUserInfo();
-      } catch (e) {
-        await _tokenStorage.deleteTokens();
-        rethrow;
-      }
-
-      await _applyUserInfoMap(userInfo);
       _isAuthenticated = true;
       _isBlocked = false;
       _forceLoginMessage = null;
@@ -168,7 +166,7 @@ class AuthProvider extends ChangeNotifier {
       _sessionMessage = null;
       _isLoading = false;
       notifyListeners();
-    await AppNavigator.pushToHome();
+      await AppNavigator.pushToHome();
       return LoginOutcome.success;
     } catch (e) {
       final message = e.toString().replaceFirst('Exception: ', '');
@@ -215,12 +213,23 @@ class AuthProvider extends ChangeNotifier {
   Future<void> refreshUserInfo() async {
     if (!_isAuthenticated) return;
 
+    if (_isUserInfoLoading) return;
+    if (_lastUserInfoAt != null &&
+        DateTime.now().difference(_lastUserInfoAt!) <=
+            const Duration(seconds: 2)) {
+      return;
+    }
+
     try {
+      _isUserInfoLoading = true;
       final userInfo = await _authService.fetchUserInfo();
       await _applyUserInfoMap(userInfo);
+      _lastUserInfoAt = DateTime.now();
       notifyListeners();
     } catch (_) {
       // Ignore errors to avoid blocking the home UI.
+    } finally {
+      _isUserInfoLoading = false;
     }
   }
 

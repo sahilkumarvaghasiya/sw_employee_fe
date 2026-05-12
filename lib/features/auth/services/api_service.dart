@@ -27,14 +27,7 @@ class ApiService {
     }
 
     final firstResponse = await sender(_buildHeaders(accessToken));
-    if (await _handleSessionExpiredIfNeeded(firstResponse)) {
-      return firstResponse;
-    }
-    if (firstResponse.statusCode == 401) {
-      await _handleSessionExpiredIfNeeded(firstResponse);
-      return firstResponse;
-    }
-
+    await _handleSessionExpiredIfNeeded(firstResponse);
     return firstResponse;
   }
 

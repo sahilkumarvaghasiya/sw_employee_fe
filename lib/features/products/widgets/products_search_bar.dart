@@ -22,6 +22,16 @@ class ProductsSearchBar extends StatelessWidget {
       decoration: InputDecoration(
         hintText: 'Search products by name or brand name',
         prefixIcon: const Icon(Icons.search),
+        suffixIcon: controller.text.trim().isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear search',
+                onPressed: () {
+                  controller.clear();
+                  onChanged('');
+                },
+                icon: const Icon(Icons.clear),
+              ),
         filled: true,
         fillColor: colorScheme.surfaceContainerHigh,
         border: OutlineInputBorder(
