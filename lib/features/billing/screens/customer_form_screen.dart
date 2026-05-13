@@ -61,6 +61,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   bool _handlingBarcode = false;
   bool _paymentFlowActive = false;
 
+  final Map<String, GlobalKey> _lineItemKeys = <String, GlobalKey>{};
+
   final BillingService _billingService = BillingService();
 
   @override
@@ -87,6 +89,19 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _revealLineItem(String id) async {
+    final key = _lineItemKeys[id];
+    final itemContext = key?.currentContext;
+    if (itemContext == null) return;
+
+    await Scrollable.ensureVisible(
+      itemContext,
+      alignment: 0.12,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   String _barcodeErrorMessage(Object error) {
@@ -231,25 +246,18 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       final knownIsMultiple = provider.isMultipleForBarcode(normalizedBarcode);
 
       // For single-product barcodes, repeated scans should behave like the first
-      // scan result (same item visible) while incrementing quantity locally.
+      // scan result (same item visible) without auto-incrementing.
       // We must avoid calling the backend again for repeats because the backend
       // correctly validates "already scanned" for single-product barcodes.
       if (alreadyScanned && knownIsMultiple == false) {
         final productId = provider.primaryProductIdForBarcode(
           normalizedBarcode,
         );
+        _showSnack('Already scanned. Please increase quantity.');
         if (productId != null) {
-          provider.incrementItemQuantity(productId);
-          BillingLineItem? item;
-          for (final i in provider.items) {
-            if (i.id == productId) {
-              item = i;
-              break;
-            }
-          }
-          _showSnack('${item?.productName ?? 'Product'} quantity increased');
-          return;
+          await _revealLineItem(productId);
         }
+        return;
       }
 
       final lookup = await _billingService.fetchBarcodeLookup(
@@ -2236,7 +2244,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             itemBuilder: (context, index) {
                               final item = provider.items[index];
                               return ProductItemWidget(
-                                key: ValueKey(item.id),
+                                key: _lineItemKeys.putIfAbsent(
+                                  item.id,
+                                  () => GlobalKey(),
+                                ),
                                 item: item,
                                 onPriceChanged: (double? v) {
                                   context
@@ -2262,6 +2273,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                   context.read<BillingProvider>().removeItem(
                                     item.id,
                                   );
+                                  _lineItemKeys.remove(item.id);
                                   _showSnack('Removed ${item.productName}');
                                 },
                               );
