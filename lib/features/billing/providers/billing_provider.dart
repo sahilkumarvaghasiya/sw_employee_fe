@@ -80,6 +80,10 @@ class BillingProvider extends ChangeNotifier {
   void registerScannedBarcode(String barcode) {
     final normalized = barcode.trim();
     if (normalized.isEmpty) return;
+
+    // Treat this as temporary state for the current billing session.
+    // Keep it unique so `contains()` checks behave predictably.
+    if (_scannedBarcodes.contains(normalized)) return;
     _scannedBarcodes.add(normalized);
   }
 
@@ -108,6 +112,10 @@ class BillingProvider extends ChangeNotifier {
     if (nextSelectedIds.isEmpty) {
       _selectedProductIdsByBarcode.remove(normalized);
       _isMultipleByBarcode.remove(normalized);
+
+      // If user removed all variants for this barcode, treat it as not scanned
+      // anymore so the next scan starts fresh.
+      _scannedBarcodes.removeWhere((value) => value == normalized);
     } else {
       _selectedProductIdsByBarcode[normalized] = nextSelectedIds;
     }
@@ -305,6 +313,28 @@ class BillingProvider extends ChangeNotifier {
 
   void removeItem(String id) {
     _items.removeWhere((i) => i.id == id);
+
+    // If this item came from a barcode lookup, also remove it from the
+    // barcode-selection cache. When nothing remains for that barcode, remove
+    // the barcode from the temporary scanned storage so it can be scanned fresh.
+    final barcodesToClear = <String>[];
+    for (final entry in _selectedProductIdsByBarcode.entries.toList()) {
+      if (!entry.value.contains(id)) continue;
+
+      final nextSelected = Set<String>.from(entry.value)..remove(id);
+      if (nextSelected.isEmpty) {
+        barcodesToClear.add(entry.key);
+        _selectedProductIdsByBarcode.remove(entry.key);
+        _isMultipleByBarcode.remove(entry.key);
+      } else {
+        _selectedProductIdsByBarcode[entry.key] = nextSelected;
+      }
+    }
+
+    for (final barcode in barcodesToClear) {
+      _scannedBarcodes.removeWhere((value) => value == barcode);
+    }
+
     _manualFinalAmount = null;
     notifyListeners();
   }
