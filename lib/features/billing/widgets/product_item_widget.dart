@@ -480,6 +480,7 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                     vertical: 0,
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       quantityStepper(),
                       const SizedBox(width: 8),

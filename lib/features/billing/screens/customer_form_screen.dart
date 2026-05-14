@@ -30,6 +30,8 @@ class CustomerFormScreen extends StatefulWidget {
 }
 
 class _CustomerFormScreenState extends State<CustomerFormScreen> {
+  // static const bool _useDummyEntryOnStartBilling = true;
+
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   final TextEditingController _nameController = TextEditingController();
@@ -1747,6 +1749,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
     final provider = context.read<BillingProvider>();
     provider.setCustomer(customer);
+
+    // if (_useDummyEntryOnStartBilling && provider.items.isEmpty) {
+    //   provider.addManualProduct(name: 'Dummy item', unitPrice: 10);
+    // }
 
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
