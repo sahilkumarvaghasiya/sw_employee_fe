@@ -801,8 +801,11 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
     setState(() {
       _draftRow.sizeSelection = raw;
-      _draftRow.sizeController.clear();
     });
+
+    // Match Item Type behavior: close dropdown after successful add,
+    // and keep the entered text visible when reopening.
+    _sizeMenuController.close();
   }
 
   Future<void> _addNewColourFromField() async {
@@ -823,8 +826,11 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
     setState(() {
       _draftRow.colourSelection = raw;
-      _draftRow.colourController.clear();
     });
+
+    // Match Item Type behavior: close dropdown after successful add,
+    // and keep the entered text visible when reopening.
+    _colourMenuController.close();
   }
 
   void _startEditEntry(int index) {
@@ -836,10 +842,16 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _editingIndex = index;
 
       _draftRow.sizeSelection = entry.size;
-      _draftRow.sizeController.text = '';
+      // If this was a custom/manual size (no id), also show it in the
+      // "Add new size" field when reopening the dropdown.
+      _draftRow.sizeController.text = entry.sizeId == null ? entry.size : '';
 
       _draftRow.colourSelection = entry.colour;
-      _draftRow.colourController.text = '';
+      // If this was a custom/manual colour (no id), also show it in the
+      // "Add new colour" field when reopening the dropdown.
+      _draftRow.colourController.text = entry.colourId == null
+          ? entry.colour
+          : '';
 
       _draftRow.qtyController.text = entry.qty.toString();
 

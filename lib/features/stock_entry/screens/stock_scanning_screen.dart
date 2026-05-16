@@ -799,14 +799,14 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
         )
         .toList(growable: false);
 
-    final invoiceNumber = await StockEntryService().createStockEntry(
+    final stknumber = await StockEntryService().createStockEntry(
       vendor: widget.vendor,
       payload: _buildSavePayload(),
     );
 
     final entry = StockEntry(
       id: 'se_${DateTime.now().millisecondsSinceEpoch}',
-      invoiceNumber: invoiceNumber,
+      stknumber: stknumber,
       backendStatus: null,
       vendor: widget.vendor,
       createdAt: DateTime.now(),

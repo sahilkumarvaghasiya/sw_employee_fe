@@ -108,7 +108,7 @@ class StockEntryService {
   }
 
   // From curl:
-  // /api/vendors/stock/history/details/?invoice_number=...
+  // /api/vendors/stock/history/details/?stk_number=...
   static const String stockEntryDetailPath = '/vendors/stock/history/details/';
 
   // From curl:
@@ -175,7 +175,7 @@ class StockEntryService {
     Vendor vendor,
   ) {
     final invoice =
-        (json['invoice_number'] ?? json['invoiceNo'] ?? json['invoice'])
+        (json['stk_number'] ?? json['invoiceNo'] ?? json['invoice'])
             ?.toString();
 
     final created = _parseBestEffortDate(
@@ -204,7 +204,7 @@ class StockEntryService {
     return StockEntry(
       id: (json['id'] ?? invoice ?? 'se_${created.millisecondsSinceEpoch}')
           .toString(),
-      invoiceNumber: invoice?.trim().isEmpty ?? true ? null : invoice?.trim(),
+      stknumber: invoice?.trim().isEmpty ?? true ? null : invoice?.trim(),
       backendStatus: _parseBackendStatus(json['status']),
       vendor: vendor,
       createdAt: created,
@@ -734,7 +734,7 @@ class StockEntryService {
         final decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
           Object? invoice =
-              decoded['invoice_number'] ??
+              decoded['stk_number'] ??
               decoded['invoiceNo'] ??
               decoded['invoice'];
 
@@ -742,7 +742,7 @@ class StockEntryService {
           if ((invoice == null || invoice.toString().trim().isEmpty) &&
               data is Map<String, dynamic>) {
             invoice =
-                data['invoice_number'] ?? data['invoiceNo'] ?? data['invoice'];
+                data['stk_number'] ?? data['invoiceNo'] ?? data['invoice'];
           }
 
           final value = invoice?.toString().trim();
@@ -772,12 +772,12 @@ class StockEntryService {
   }
 
   Future<StockEntryDetail> fetchStockEntryDetail({
-    required String invoiceNumber,
+    required String stknumber,
   }) async {
     final response = await _apiService.get(
       _url(
         stockEntryDetailPath,
-        queryParameters: {'invoice_number': invoiceNumber},
+        queryParameters: {'stk_number': stknumber},
       ).toString(),
     );
 

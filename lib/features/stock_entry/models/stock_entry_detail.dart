@@ -121,7 +121,7 @@ class StockEntryDetailProduct {
 @immutable
 class StockEntryDetail {
   const StockEntryDetail({
-    required this.invoiceNumber,
+    required this.stknumber,
     required this.createdDate,
     required this.vendorName,
     required this.totalAmount,
@@ -132,7 +132,7 @@ class StockEntryDetail {
     required this.products,
   });
 
-  final String invoiceNumber;
+  final String stknumber;
   final DateTime createdDate;
   final String vendorName;
 
@@ -159,7 +159,7 @@ class StockEntryDetail {
     }
 
     return StockEntryDetail(
-      invoiceNumber: (json['invoice_number'] ?? '').toString(),
+      stknumber: (json['stk_number'] ?? '').toString(),
       createdDate: created,
       vendorName: (json['vendor_name'] ?? '').toString(),
       totalAmount: _toDouble(json['total_amount']),

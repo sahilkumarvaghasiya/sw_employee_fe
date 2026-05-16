@@ -77,7 +77,7 @@ class StockEntryPayment {
 class StockEntry {
   const StockEntry({
     required this.id,
-    this.invoiceNumber,
+    this.stknumber,
     this.backendStatus,
     required this.vendor,
     required this.createdAt,
@@ -86,7 +86,7 @@ class StockEntry {
   });
 
   final String id;
-  final String? invoiceNumber;
+  final String? stknumber;
 
   /// Raw backend status for history list/details.
   /// Expected values: paid | unpaid | partial (older: half_paid)

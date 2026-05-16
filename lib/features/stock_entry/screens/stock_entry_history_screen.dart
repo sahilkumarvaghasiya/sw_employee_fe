@@ -822,7 +822,7 @@ class _HistoryRow extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final invoiceNo = entry.invoiceNumber?.trim();
+    final invoiceNo = entry.stknumber?.trim();
 
     String ddMMyyyy(DateTime d) {
       final dd = d.day.toString().padLeft(2, '0');

@@ -31,12 +31,12 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final invoice = widget.entry.invoiceNumber?.trim();
+    final invoice = widget.entry.stknumber?.trim();
     if (invoice == null || invoice.isEmpty) {
       _detailsFuture = Future<StockEntryDetail?>.value(null);
     } else {
       _detailsFuture = StockEntryService().fetchStockEntryDetail(
-        invoiceNumber: invoice,
+        stknumber: invoice,
       );
     }
   }
@@ -180,10 +180,10 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                       child: InkWell(
                                         borderRadius: BorderRadius.circular(6),
                                         onTap: () => _showInvoiceToast(
-                                          details.invoiceNumber,
+                                          details.stknumber,
                                         ),
                                         child: Text(
-                                          details.invoiceNumber,
+                                          details.stknumber,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: theme.textTheme.titleLarge
@@ -198,11 +198,11 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                                       onPressed: () async {
                                         await Clipboard.setData(
                                           ClipboardData(
-                                            text: details.invoiceNumber,
+                                            text: details.stknumber,
                                           ),
                                         );
                                         if (!mounted) return;
-                                        _showCopyToast(details.invoiceNumber);
+                                        _showCopyToast(details.stknumber);
                                       },
                                       icon: const Icon(
                                         Icons.copy_rounded,
@@ -709,17 +709,17 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (entry.invoiceNumber != null &&
-                    entry.invoiceNumber!.trim().isNotEmpty) ...[
+                if (entry.stknumber != null &&
+                    entry.stknumber!.trim().isNotEmpty) ...[
                   Row(
                     children: [
                       Expanded(
                         child: InkWell(
                           borderRadius: BorderRadius.circular(6),
                           onTap: () =>
-                              _showInvoiceToast(entry.invoiceNumber!.trim()),
+                              _showInvoiceToast(entry.stknumber!.trim()),
                           child: Text(
-                            entry.invoiceNumber!.trim(),
+                            entry.stknumber!.trim(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.titleLarge?.copyWith(
@@ -732,10 +732,10 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                         tooltip: 'Copy invoice number',
                         onPressed: () async {
                           await Clipboard.setData(
-                            ClipboardData(text: entry.invoiceNumber!.trim()),
+                            ClipboardData(text: entry.stknumber!.trim()),
                           );
                           if (!mounted) return;
-                          _showCopyToast(entry.invoiceNumber!.trim());
+                          _showCopyToast(entry.stknumber!.trim());
                         },
                         icon: const Icon(Icons.copy_rounded, size: 18),
                       ),
