@@ -1,6 +1,6 @@
 {
-    "name": "sw_billing_employee_fe",
-    "short_name": "sw_billing_employee_fe",
+    "name": "RetailPilot",
+    "short_name": "RetailPilot",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
