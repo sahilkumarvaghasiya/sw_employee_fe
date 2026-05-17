@@ -64,12 +64,14 @@ class ProductsProvider extends ChangeNotifier {
   int? get selectedColorId => _selectedColor?.id;
 
   bool get hasActiveFilters {
-    return _selectedGenders.isNotEmpty ||
+      return _searchQuery.trim().isNotEmpty ||
+        _selectedGenders.isNotEmpty ||
         _selectedDateRange != null ||
         _selectedSize != null ||
+        _selectedColor != null ||
         _selectedPriceRange.start != _priceBounds.$1 ||
         _selectedPriceRange.end != _priceBounds.$2;
-  }
+    }
 
   @override
   void dispose() {
@@ -147,6 +149,7 @@ class ProductsProvider extends ChangeNotifier {
     _selectedDateRange = null;
     _selectedPriceRange = RangeValues(_priceBounds.$1, _priceBounds.$2);
     _selectedSize = null;
+    _selectedColor = null;
     _refetch();
   }
 

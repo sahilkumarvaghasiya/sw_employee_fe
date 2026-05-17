@@ -4,6 +4,44 @@ import 'package:intl/intl.dart';
 import '../../billing/models/billing_models.dart';
 
 @immutable
+class SalesLineItem {
+  const SalesLineItem({
+    required this.id,
+    required this.productName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.lineTotal,
+    required this.discountAmount,
+    required this.enteredDiscountPercent,
+  });
+
+  final String id;
+  final String productName;
+  final int quantity;
+
+  /// Unit price used for displaying in sales-history details.
+  ///
+  /// Note: This is derived from backend values and should be treated as
+  /// informational only.
+  final double unitPrice;
+
+  /// Amount for this line as returned by the API.
+  final double lineTotal;
+
+  /// Discount amount for this line as returned by the API.
+  ///
+  /// This represents the explicit amount reduction (e.g., custom price flow)
+  /// or the backend-calculated discount amount.
+  final double discountAmount;
+
+  /// Discount percentage *only when the API explicitly provides it*.
+  ///
+  /// We intentionally do NOT derive a percentage from amounts, because that
+  /// would create a “fake” value that the user never entered.
+  final double? enteredDiscountPercent;
+}
+
+@immutable
 class SalesBill {
   const SalesBill({
     required this.id,
@@ -22,7 +60,7 @@ class SalesBill {
   final String billNo;
   final DateTime createdAt;
   final BillingCustomer customer;
-  final List<BillingLineItem> items;
+  final List<SalesLineItem> items;
   final BillingPaymentMethod paymentMethod;
   final double? listAmount;
   final double? subtotalAmount;
@@ -50,7 +88,7 @@ class SalesBill {
         name: (json['customer_name'] ?? '-').toString(),
         phone: (json['phone_number'] ?? '-').toString(),
       ),
-      items: const <BillingLineItem>[],
+      items: const <SalesLineItem>[],
       paymentMethod: _paymentMethodFromRaw(json['payment_method']),
       listAmount: _parseNullableDouble(json['amount']),
       totalAmount: _parseNullableDouble(json['amount']),
@@ -84,41 +122,64 @@ class SalesBill {
     );
   }
 
-  static List<BillingLineItem> _parseItems(Object? rawItems) {
-    if (rawItems is! List) return const <BillingLineItem>[];
+  static List<SalesLineItem> _parseItems(Object? rawItems) {
+    if (rawItems is! List) return const <SalesLineItem>[];
 
     return rawItems
-        .whereType<Map>()
-        .map((row) {
-          final item = row.cast<String, dynamic>();
+      .whereType<Map>()
+      .map((row) {
+        final item = row.cast<String, dynamic>();
 
-          final quantityRaw = item['quantity'];
-          final quantity = quantityRaw is int
-              ? quantityRaw
-              : int.tryParse(quantityRaw?.toString() ?? '') ?? 0;
-          final safeQuantity = quantity <= 0 ? 1 : quantity;
+        final quantityRaw = item['quantity'];
+        final quantity = quantityRaw is int
+          ? quantityRaw
+          : int.tryParse(quantityRaw?.toString() ?? '') ?? 0;
+        final safeQuantity = quantity <= 0 ? 1 : quantity;
 
-          final lineSubtotal = _parseNullableDouble(item['amount']) ?? 0;
-          final lineDiscount = _parseNullableDouble(item['discount']) ?? 0;
-
-          final unitPrice = safeQuantity == 0
-              ? lineSubtotal
-              : lineSubtotal / safeQuantity;
-
-          final discountPercent = lineSubtotal <= 0
-              ? 0.0
-              : ((lineDiscount / lineSubtotal) * 100).clamp(0, 100).toDouble();
-
-          return BillingLineItem(
-            id: (item['id'] ?? item['type_name'] ?? '').toString(),
-            productName: (item['type_name'] ?? '-').toString(),
-            quantity: safeQuantity,
-            originalUnitPrice: unitPrice,
-            unitPrice: unitPrice,
-            discountPercent: discountPercent,
+          final rawUnitPrice = _parseNullableDouble(
+            item['amount'] ?? item['unit_price'] ?? item['rate'],
           );
-        })
-        .toList(growable: false);
+
+          final lineTotal = _parseNullableDouble(
+                item['total_amount'] ?? item['line_total'],
+              ) ??
+              0;
+
+          final discountAmount = _parseNullableDouble(
+                item['discount_amount'] ??
+                    item['discount_rs'] ??
+                    item['discount'],
+              ) ??
+              0;
+
+        final rawDiscountPercent = _parseNullableDouble(
+        item['discount_percent'] ??
+          item['discountPercent'] ??
+          item['discount_percentage'] ??
+          item['discountPercentage'],
+        );
+
+        final enteredDiscountPercent =
+          (rawDiscountPercent == null || rawDiscountPercent <= 0)
+            ? null
+            : rawDiscountPercent.clamp(0, 100).toDouble();
+
+          final unitPrice = rawUnitPrice ??
+            (safeQuantity <= 0
+              ? lineTotal
+              : (lineTotal / safeQuantity).toDouble());
+
+        return SalesLineItem(
+        id: (item['id'] ?? item['type_name'] ?? '').toString(),
+        productName: (item['type_name'] ?? '-').toString(),
+        quantity: safeQuantity,
+        unitPrice: unitPrice,
+        lineTotal: lineTotal,
+        discountAmount: discountAmount.clamp(0, double.infinity).toDouble(),
+        enteredDiscountPercent: enteredDiscountPercent,
+        );
+      })
+      .toList(growable: false);
   }
 
   static DateTime _parseCreatedTime(Object? value) {
@@ -158,11 +219,12 @@ class SalesBill {
 
   int get itemsCount => items.fold<int>(0, (sum, i) => sum + i.quantity);
 
-  double get subtotal =>
-      subtotalAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineSubtotal);
+    double get subtotal =>
+      subtotalAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineTotal);
 
-  double get totalDiscount =>
-      discountAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineDiscount);
+    double get totalDiscount =>
+      discountAmount ??
+      items.fold<double>(0, (sum, i) => sum + i.discountAmount);
 
   double get total {
     if (totalAmount != null) return totalAmount!;

@@ -1008,7 +1008,8 @@ class _BillDetailsSheet extends StatelessWidget {
                                                 fontWeight: FontWeight.w600,
                                               ),
                                         ),
-                                        if (item.discountPercent > 0) ...[
+                                        if ((item.enteredDiscountPercent ?? 0) >
+                                            0) ...[
                                           const SizedBox(width: 8),
                                           Container(
                                             padding: const EdgeInsets.symmetric(
@@ -1025,7 +1026,33 @@ class _BillDetailsSheet extends StatelessWidget {
                                               ),
                                             ),
                                             child: Text(
-                                              '${item.discountPercent.toStringAsFixed(0)}% off',
+                                              '${item.enteredDiscountPercent!.toStringAsFixed(0)}% off',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: colorScheme
+                                                        .onSurfaceVariant,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                            ),
+                                          ),
+                                        ] else if (item.discountAmount > 0) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: colorScheme.surface,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color:
+                                                    colorScheme.outlineVariant,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              '${money(item.discountAmount)} off',
                                               style: theme.textTheme.bodySmall
                                                   ?.copyWith(
                                                     color: colorScheme

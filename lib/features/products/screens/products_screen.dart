@@ -183,7 +183,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ? () {
                     _searchController.clear();
                     _sizeController.clear();
-                    provider.setSearchQuery('');
                     provider.resetFilters();
                   }
                 : null,
