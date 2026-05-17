@@ -242,31 +242,17 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     try {
       if (normalizedBarcode.isEmpty) return;
 
-      final alreadyScanned = provider.scannedBarcodes.contains(
-        normalizedBarcode,
-      );
-      final knownIsMultiple = provider.isMultipleForBarcode(normalizedBarcode);
-
-      // For single-product barcodes, repeated scans should behave like the first
-      // scan result (same item visible) without auto-incrementing.
-      // We must avoid calling the backend again for repeats because the backend
-      // correctly validates "already scanned" for single-product barcodes.
-      if (alreadyScanned && knownIsMultiple == false) {
-        final productId = provider.primaryProductIdForBarcode(
-          normalizedBarcode,
-        );
-        _showSnack('Already scanned. Please increase quantity.');
-        if (productId != null) {
-          await _revealLineItem(productId);
-        }
-        return;
-      }
-
       final lookup = await _billingService.fetchBarcodeLookup(
         normalizedBarcode,
         scannedBarcodes: provider.buildScannedBarcodesForLookup(),
       );
-      final products = lookup.products;
+    final products = lookup.products
+      .where(
+      (product) =>
+        product.availableQuantity == null ||
+        product.availableQuantity! > 0,
+      )
+      .toList(growable: false);
       if (!mounted) return;
 
       if (products.isEmpty) {

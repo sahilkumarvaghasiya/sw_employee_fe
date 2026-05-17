@@ -87,6 +87,7 @@ class PaymentSection extends StatelessWidget {
                   child: TextFormField(
                     controller: totalPaymentController,
                     readOnly: !totalPaymentEditable,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     keyboardType: totalPaymentEditable
                         ? const TextInputType.numberWithOptions(decimal: true)
                         : null,
@@ -105,7 +106,7 @@ class PaymentSection extends StatelessWidget {
                       }
                       final parsed = double.tryParse(v.trim());
                       if (parsed == null) return 'Enter a valid amount';
-                      if (parsed < 0) return 'Amount cannot be negative';
+                      if (parsed <= 0) return 'Enter a valid amount';
                       return null;
                     },
                   ),

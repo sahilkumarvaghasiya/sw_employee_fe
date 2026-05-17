@@ -540,6 +540,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final formKey = GlobalKey<FormState>();
+
     bool isSaving = false;
 
     return showGeneralDialog<bool>(
@@ -555,6 +557,12 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
           builder: (context, setModalState) {
             Future<void> onSave() async {
               if (isSaving) return;
+
+              final isFormValid = formKey.currentState?.validate() ?? true;
+              if (!isFormValid) {
+                setModalState(() {});
+                return;
+              }
 
               if (_remainingAmount > 0 && _deadline == null) {
                 setState(() => _showDeadlineValidation = true);
@@ -608,109 +616,115 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                 16,
                                 16,
                               ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          'Payment details',
-                                          style: theme.textTheme.titleLarge
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w900,
-                                              ),
+                              child: Form(
+                                key: formKey,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            'Payment details',
+                                            style: theme.textTheme.titleLarge
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                          ),
                                         ),
-                                      ),
-                                      IconButton(
-                                        tooltip: 'Close',
-                                        onPressed: isSaving
-                                            ? null
-                                            : () => Navigator.of(
-                                                dialogContext,
-                                              ).pop(false),
-                                        icon: const Icon(Icons.close_rounded),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Vendor: ${widget.vendor.name}',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  PaymentSection(
-                                    totalPaymentController:
-                                        _totalPaymentController,
-                                    paidAmountController: _paidAmountController,
-                                    remainingAmount: _remainingAmount,
-                                    deadline: _deadline,
-                                    onPickDeadline: () async {
-                                      await _pickDeadline();
-                                      setModalState(() {});
-                                    },
-                                    totalPaymentEditable: true,
-                                    onTotalPaymentChanged: (_) {
-                                      _syncTotalsFromControllers();
-                                      setModalState(() {});
-                                    },
-                                    onPaidAmountChanged: (_) {
-                                      _syncTotalsFromControllers();
-                                      setModalState(() {});
-                                    },
-                                    deadlineErrorText:
-                                        _showDeadlineValidation &&
-                                            _remainingAmount > 0 &&
-                                            _deadline == null
-                                        ? 'Required field'
-                                        : null,
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: OutlinedButton.icon(
+                                        IconButton(
+                                          tooltip: 'Close',
                                           onPressed: isSaving
                                               ? null
                                               : () => Navigator.of(
                                                   dialogContext,
                                                 ).pop(false),
-                                          icon: const Icon(
-                                            Icons.cancel_outlined,
-                                          ),
-                                          label: const Text('Cancel'),
+                                          icon: const Icon(Icons.close_rounded),
                                         ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: FilledButton.icon(
-                                          onPressed: isSaving ? null : onSave,
-                                          icon: isSaving
-                                              ? const SizedBox(
-                                                  width: 18,
-                                                  height: 18,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2.4,
-                                                      ),
-                                                )
-                                              : const Icon(
-                                                  Icons.check_circle_outline,
-                                                ),
-                                          label: Text(
-                                            isSaving
-                                                ? 'Saving…'
-                                                : 'Confirm & Save',
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Vendor: ${widget.vendor.name}',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    PaymentSection(
+                                      totalPaymentController:
+                                          _totalPaymentController,
+                                      paidAmountController:
+                                          _paidAmountController,
+                                      remainingAmount: _remainingAmount,
+                                      deadline: _deadline,
+                                      onPickDeadline: () async {
+                                        await _pickDeadline();
+                                        setModalState(() {});
+                                      },
+                                      totalPaymentEditable: true,
+                                      onTotalPaymentChanged: (_) {
+                                        _syncTotalsFromControllers();
+                                        setModalState(() {});
+                                      },
+                                      onPaidAmountChanged: (_) {
+                                        _syncTotalsFromControllers();
+                                        setModalState(() {});
+                                      },
+                                      deadlineErrorText:
+                                          _showDeadlineValidation &&
+                                              _remainingAmount > 0 &&
+                                              _deadline == null
+                                          ? 'Required field'
+                                          : null,
+                                    ),
+                                    const SizedBox(height: 14),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: isSaving
+                                                ? null
+                                                : () => Navigator.of(
+                                                    dialogContext,
+                                                  ).pop(false),
+                                            icon: const Icon(
+                                              Icons.cancel_outlined,
+                                            ),
+                                            label: const Text('Cancel'),
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: FilledButton.icon(
+                                            onPressed: isSaving ? null : onSave,
+                                            icon: isSaving
+                                                ? const SizedBox(
+                                                    width: 18,
+                                                    height: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2.4,
+                                                        ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.check_circle_outline,
+                                                  ),
+                                            label: Text(
+                                              isSaving
+                                                  ? 'Saving…'
+                                                  : 'Confirm & Save',
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
