@@ -1,0 +1,27 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bagGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#005F4B"/>
+      <stop offset="65%" stop-color="#00C6D7"/>
+      <stop offset="100%" stop-color="#A8EFFF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="220" fill="#F5F5F5"/>
+
+  <!-- Bag Body -->
+  <rect x="300" y="320" width="424" height="420" rx="70" fill="url(#bagGradient)"/>
+
+  <!-- Handle -->
+  <path d="M400 320 C400 220, 624 220, 624 320" 
+        stroke="#005F4B" 
+        stroke-width="40" 
+        fill="none" 
+        stroke-linecap="round"/>
+
+  <!-- Analytics Bars -->
+  <rect x="430" y="560" width="45" height="80" rx="18" fill="white"/>
+  <rect x="510" y="500" width="45" height="140" rx="18" fill="white"/>
+  <rect x="590" y="430" width="45" height="210" rx="18" fill="white"/>
+</svg>
