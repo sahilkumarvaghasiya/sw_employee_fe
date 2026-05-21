@@ -11,6 +11,7 @@ class ProductItemWidget extends StatefulWidget {
     required this.onIncrement,
     required this.onDecrement,
     required this.onRemove,
+    this.priceEntryAsUnitPrice = false,
   });
 
   final BillingLineItem item;
@@ -19,6 +20,7 @@ class ProductItemWidget extends StatefulWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final VoidCallback onRemove;
+  final bool priceEntryAsUnitPrice;
 
   @override
   State<ProductItemWidget> createState() => _ProductItemWidgetState();
@@ -67,7 +69,9 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
     final discountApplied = widget.item.discountPercent > 0;
 
     if (force || !_priceFocusNode.hasFocus) {
-      final priceText = priceOverridden
+      final priceText = widget.priceEntryAsUnitPrice
+          ? (priceOverridden ? widget.item.unitPrice.toStringAsFixed(2) : '')
+          : priceOverridden
           ? ((widget.item.originalUnitPrice - widget.item.unitPrice) *
                     widget.item.quantity)
                 .toStringAsFixed(2)
@@ -111,6 +115,12 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
     final parsed = double.tryParse(trimmed);
     if (parsed == null || parsed <= 0) {
       setState(() => _priceError = 'Invalid entry');
+      return;
+    }
+
+    if (widget.priceEntryAsUnitPrice) {
+      setState(() => _priceError = null);
+      widget.onPriceChanged(parsed);
       return;
     }
 
@@ -347,7 +357,11 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
       }
       if (priceOverridden) {
         final reduction = widget.item.originalUnitPrice - widget.item.unitPrice;
-        parts.add('Price reduced by ${_money(reduction)} each');
+        parts.add(
+          widget.priceEntryAsUnitPrice
+              ? 'Custom price ${_money(widget.item.unitPrice)} each'
+              : 'Price reduced by ${_money(reduction)} each',
+        );
       }
 
       return Text(

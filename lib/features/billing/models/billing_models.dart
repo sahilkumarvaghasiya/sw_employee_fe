@@ -43,6 +43,7 @@ class BillingLineItem {
     required this.originalUnitPrice,
     required this.unitPrice,
     required this.discountPercent,
+    required this.isUnitPriceOverride,
     this.availableQuantity,
     this.size,
   });
@@ -53,6 +54,7 @@ class BillingLineItem {
   final double originalUnitPrice;
   final double unitPrice;
   final double discountPercent;
+  final bool isUnitPriceOverride;
   final int? availableQuantity;
   final String? size;
 
@@ -71,6 +73,7 @@ class BillingLineItem {
     double? originalUnitPrice,
     double? unitPrice,
     double? discountPercent,
+    bool? isUnitPriceOverride,
     int? availableQuantity,
     String? size,
   }) {
@@ -81,6 +84,7 @@ class BillingLineItem {
       originalUnitPrice: originalUnitPrice ?? this.originalUnitPrice,
       unitPrice: unitPrice ?? this.unitPrice,
       discountPercent: discountPercent ?? this.discountPercent,
+      isUnitPriceOverride: isUnitPriceOverride ?? this.isUnitPriceOverride,
       availableQuantity: availableQuantity ?? this.availableQuantity,
       size: size ?? this.size,
     );
