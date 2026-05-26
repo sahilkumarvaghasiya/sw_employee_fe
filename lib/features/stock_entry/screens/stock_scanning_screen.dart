@@ -397,6 +397,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
               'colour': it.draft.colourId ?? it.draft.colour,
               'pieces': it.quantity,
               'sellprice': moneyString(it.sellingPrice),
+              'purchase_price': moneyString(it.costPrice),
             },
         ],
       });

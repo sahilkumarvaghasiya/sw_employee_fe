@@ -17,9 +17,14 @@ class VendorFormValues {
 }
 
 class VendorForm extends StatefulWidget {
-  const VendorForm({super.key, required this.onStartStockEntry});
+  const VendorForm({
+    super.key,
+    required this.onStartStockEntry,
+    this.isSubmitting = false,
+  });
 
   final ValueChanged<VendorFormValues> onStartStockEntry;
+  final bool isSubmitting;
 
   @override
   State<VendorForm> createState() => _VendorFormState();
@@ -223,7 +228,7 @@ class _VendorFormState extends State<VendorForm> {
             ),
             validator: (v) {
               final value = v?.trim() ?? '';
-              if (value.isEmpty) return 'GST is required';
+              if (value.isEmpty) return null;
               if (value.length < 5) return 'Enter a valid GST';
               return null;
             },
@@ -231,13 +236,21 @@ class _VendorFormState extends State<VendorForm> {
           const SizedBox(height: 16),
 
           FilledButton.icon(
-            onPressed: _submit,
+            onPressed: widget.isSubmitting ? null : _submit,
             style: FilledButton.styleFrom(
               shape: const StadiumBorder(),
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Start Stock Entry'),
+            icon: widget.isSubmitting
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_arrow_rounded),
+            label: Text(
+              widget.isSubmitting ? 'Checking vendor…' : 'Start Stock Entry',
+            ),
           ),
         ],
       ),

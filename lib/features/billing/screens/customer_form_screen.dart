@@ -1784,9 +1784,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     final provider = context.read<BillingProvider>();
     provider.setCustomer(customer);
 
-    if (_useDummyEntryOnStartBilling && provider.items.isEmpty) {
-      provider.addManualProduct(name: 'Dummy item', unitPrice: 10);
-    }
+    // if (_useDummyEntryOnStartBilling && provider.items.isEmpty) {
+    //   provider.addManualProduct(name: 'Dummy item', unitPrice: 10);
+    // }
 
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {

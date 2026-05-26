@@ -96,7 +96,7 @@ class ProductsService {
     }
 
     final response = await _apiService.get(
-      _url('/products/details/$safeProductId').toString(),
+      _url('/products/details/$safeProductId/').toString(),
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {

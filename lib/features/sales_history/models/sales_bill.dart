@@ -145,12 +145,13 @@ class SalesBill {
               ) ??
               0;
 
-          final discountAmount = _parseNullableDouble(
-                item['discount_amount'] ??
-                    item['discount_rs'] ??
-                    item['discount'],
-              ) ??
-              0;
+      final discountAmount = _parseNullableDouble(
+        item['custom_amount'] ??
+        item['discount_amount'] ??
+        item['discount_rs'] ??
+        item['discount'],
+      ) ??
+      0;
 
         final rawDiscountPercent = _parseNullableDouble(
         item['discount_percent'] ??
@@ -222,9 +223,13 @@ class SalesBill {
     double get subtotal =>
       subtotalAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineTotal);
 
-    double get totalDiscount =>
-      discountAmount ??
-      items.fold<double>(0, (sum, i) => sum + i.discountAmount);
+    double get totalDiscount {
+      if (subtotalAmount != null && totalAmount != null) {
+        return (subtotalAmount! - totalAmount!).clamp(0, double.infinity);
+      }
+      if (discountAmount != null) return discountAmount!;
+      return items.fold<double>(0, (sum, i) => sum + i.discountAmount);
+    }
 
   double get total {
     if (totalAmount != null) return totalAmount!;
