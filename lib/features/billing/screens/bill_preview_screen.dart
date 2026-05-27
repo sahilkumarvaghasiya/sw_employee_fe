@@ -323,13 +323,48 @@ class BillPreviewScreen extends StatelessWidget {
                                       label: 'Unit',
                                       value: _money(item.unitPrice),
                                     ),
-                                    _ProductStatChip(
-                                      label: 'Disc',
-                                      value:
-                                          '${item.discountPercent.toStringAsFixed(0)}%',
-                                    ),
+                                    if (item.discountPercent > 0)
+                                      _ProductStatChip(
+                                        label: 'Disc',
+                                        value:
+                                            '${item.discountPercent.toStringAsFixed(0)}%',
+                                      )
+                                    else if (item.isUnitPriceOverride &&
+                                        (item.unitPrice -
+                                                    item.originalUnitPrice)
+                                                .abs() >
+                                            0.0001)
+                                      _ProductStatChip(
+                                        label: 'Original',
+                                        value: _money(item.originalUnitPrice),
+                                      ),
                                   ],
                                 ),
+                                if (item.discountPercent > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Text(
+                                      'Discount applied from ${_money(item.originalUnitPrice)} each',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  )
+                                else if (item.isUnitPriceOverride &&
+                                    (item.unitPrice - item.originalUnitPrice)
+                                            .abs() >
+                                        0.0001)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Text(
+                                      'Original price: ${_money(item.originalUnitPrice)} each',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -374,6 +409,16 @@ class BillPreviewScreen extends StatelessWidget {
                     value: provider.totalItems.toString(),
                   ),
                   _InfoRow(label: 'Subtotal', value: _money(provider.subtotal)),
+                  if (provider.hasCustomPriceAdjustment) ...[
+                    _InfoRow(
+                      label: 'Original subtotal',
+                      value: _money(provider.originalSubtotal),
+                    ),
+                    _InfoRow(
+                      label: 'Price reduction',
+                      value: '- ${_money(provider.customPriceAdjustment)}',
+                    ),
+                  ],
                   _InfoRow(
                     label: 'Discount',
                     value: '- ${_money(provider.totalDiscount)}',

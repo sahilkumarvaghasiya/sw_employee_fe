@@ -55,6 +55,9 @@ dependencies:
   # Simple local persistence (custom sizes/colours)
   shared_preferences: ^2.2.3
   intl: ^0.20.2
+  printing: ^5.14.3
+  pdf: ^3.12.0
+  barcode: ^2.2.9
 
 dev_dependencies:
   flutter_test:
