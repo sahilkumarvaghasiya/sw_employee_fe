@@ -32,7 +32,7 @@ class CustomerFormScreen extends StatefulWidget {
 }
 
 class _CustomerFormScreenState extends State<CustomerFormScreen> {
-  static const bool _useDummyEntryOnStartBilling = true;
+  static const bool _useDummyEntryOnStartBilling = false;
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
