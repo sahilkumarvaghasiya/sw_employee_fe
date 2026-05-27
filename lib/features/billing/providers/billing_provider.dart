@@ -143,8 +143,26 @@ class BillingProvider extends ChangeNotifier {
   double get subtotal =>
       _items.fold<double>(0, (sum, i) => sum + i.lineSubtotal);
 
+  double get originalSubtotal => _items.fold<double>(
+    0,
+    (sum, i) => sum + (i.originalUnitPrice * i.quantity),
+  );
+
   double get totalDiscount =>
       _items.fold<double>(0, (sum, i) => sum + i.lineDiscount);
+
+  double get customPriceAdjustment => _items.fold<double>(0, (sum, i) {
+    if (!i.isUnitPriceOverride &&
+        (i.unitPrice - i.originalUnitPrice).abs() <= 0.0001) {
+      return sum;
+    }
+
+    final reduction = (i.originalUnitPrice - i.unitPrice) * i.quantity;
+    if (reduction <= 0) return sum;
+    return sum + reduction;
+  });
+
+  bool get hasCustomPriceAdjustment => customPriceAdjustment > 0;
 
   double get calculatedFinalAmount =>
       (subtotal - totalDiscount).clamp(0, double.infinity);

@@ -5,6 +5,10 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../../core/printing/barcode_label_data.dart';
+import '../../../core/printing/barcode_label_layout.dart';
+import '../../../core/printing/pdf_printer_service.dart';
+import '../../../core/widgets/barcode_action_buttons.dart';
 import '../../../core/utils/barcode_saver.dart';
 import '../../../core/utils/inr_format.dart';
 
@@ -21,7 +25,9 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final GlobalKey _barcodeBoundaryKey = GlobalKey();
+  final PdfPrinterService _printerService = PdfPrinterService();
   bool _isDownloading = false;
+  bool _isPrinting = false;
 
   String _safeFileName(String input) {
     final cleaned = input.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
@@ -65,6 +71,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ).showSnackBar(SnackBar(content: Text('Could not download barcode: $e')));
     } finally {
       if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  BarcodeLabelData _buildLabelData() {
+    final product = widget.product;
+
+    return BarcodeLabelData(
+      itemName: product.name,
+      barcode: product.barcode,
+      price: formatInr(product.price, decimalDigits: 2),
+      subtitleLines: <String>[
+        if (product.companyName.isNotEmpty) product.companyName,
+        if (product.size.isNotEmpty) 'Size: ${product.size}',
+        if (product.color.isNotEmpty) 'Colour: ${product.color}',
+      ],
+    );
+  }
+
+  Future<void> _printBarcode() async {
+    if (_isPrinting) return;
+    setState(() => _isPrinting = true);
+
+    try {
+      await _printerService.printBarcodeLabel(
+        data: _buildLabelData(),
+        layout: const BarcodeLabelLayout(),
+        jobName: 'barcode_${_safeFileName(widget.product.barcode)}',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text('Could not print barcode: $e')));
+    } finally {
+      if (mounted) setState(() => _isPrinting = false);
     }
   }
 
@@ -264,21 +305,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: _isDownloading ? null : _downloadBarcode,
-                      icon: _isDownloading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.download_rounded),
-                      label: Text(
-                        _isDownloading ? 'Downloading...' : 'Download barcode',
-                      ),
-                    ),
+                  BarcodeActionButtons(
+                    isDownloading: _isDownloading,
+                    isPrinting: _isPrinting,
+                    onDownload: _downloadBarcode,
+                    onPrint: _printBarcode,
+                    downloadLabel: 'Download barcode',
+                    printLabel: 'Print Barcode',
                   ),
                   const SizedBox(height: 18),
                   _DetailRow(

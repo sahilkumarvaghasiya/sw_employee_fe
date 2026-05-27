@@ -5,6 +5,10 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../../core/printing/barcode_label_data.dart';
+import '../../../core/printing/barcode_label_layout.dart';
+import '../../../core/printing/pdf_printer_service.dart';
+import '../../../core/widgets/barcode_action_buttons.dart';
 import '../../../core/utils/barcode_saver.dart';
 
 class BarcodePreviewScreen extends StatefulWidget {
@@ -40,7 +44,9 @@ class BarcodePreviewScreen extends StatefulWidget {
 
 class _BarcodePreviewScreenState extends State<BarcodePreviewScreen> {
   final GlobalKey _barcodeBoundaryKey = GlobalKey();
+  final PdfPrinterService _printerService = PdfPrinterService();
   bool _isDownloading = false;
+  bool _isPrinting = false;
 
   String _safeFileName(String input) {
     final cleaned = input.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
@@ -89,12 +95,38 @@ class _BarcodePreviewScreenState extends State<BarcodePreviewScreen> {
     }
   }
 
-  void _printBarcode() {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(content: Text('Print option will be connected later.')),
+  BarcodeLabelData _buildLabelData() {
+    final headerLines = widget.headerLines;
+    final itemName = headerLines.isNotEmpty ? headerLines.first : 'Barcode';
+    final subtitleLines = headerLines.length > 1
+        ? headerLines.sublist(1)
+        : const <String>[];
+
+    return BarcodeLabelData(
+      itemName: itemName,
+      barcode: widget.barcode,
+      subtitleLines: subtitleLines,
+    );
+  }
+
+  Future<void> _printBarcode() async {
+    if (_isPrinting) return;
+    setState(() => _isPrinting = true);
+
+    try {
+      await _printerService.printBarcodeLabel(
+        data: _buildLabelData(),
+        layout: const BarcodeLabelLayout(),
+        jobName: 'barcode_${_safeFileName(widget.barcode)}',
       );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text('Could not print barcode: $e')));
+    } finally {
+      if (mounted) setState(() => _isPrinting = false);
+    }
   }
 
   @override
@@ -226,30 +258,13 @@ class _BarcodePreviewScreenState extends State<BarcodePreviewScreen> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isDownloading ? null : _downloadBarcode,
-                  icon: _isDownloading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.download_rounded),
-                  label: Text(_isDownloading ? 'Downloading...' : 'Download'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _printBarcode,
-                  icon: const Icon(Icons.print_outlined),
-                  label: const Text('Print'),
-                ),
-              ),
-            ],
+          child: BarcodeActionButtons(
+            isDownloading: _isDownloading,
+            isPrinting: _isPrinting,
+            onDownload: _downloadBarcode,
+            onPrint: _printBarcode,
+            downloadLabel: 'Download',
+            printLabel: 'Print Barcode',
           ),
         ),
       ),

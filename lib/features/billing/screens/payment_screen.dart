@@ -373,10 +373,29 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   ),
                   const SizedBox(height: 12),
                   _SummaryRow(
-                    label: 'Total amount',
-                    value: _money(provider.finalAmount),
+                    label: 'Total items',
+                    value: provider.totalItems.toString(),
                   ),
                   const SizedBox(height: 10),
+                  _SummaryRow(
+                    label: 'Subtotal',
+                    value: _money(provider.originalSubtotal),
+                  ),
+                  const SizedBox(height: 10),
+                  if (provider.customPriceAdjustment + provider.totalDiscount >
+                      0) ...[
+                    const SizedBox(height: 10),
+                    _SummaryRow(
+                      label: 'Discount',
+                      value:
+                          '- ${_money(provider.customPriceAdjustment + provider.totalDiscount)}',
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  _SummaryRow(
+                    label: 'Final amount',
+                    value: _money(provider.finalAmount),
+                  ),
                   TextFormField(
                     controller: _paidController,
                     keyboardType: const TextInputType.numberWithOptions(
