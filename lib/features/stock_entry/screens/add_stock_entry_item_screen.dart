@@ -70,6 +70,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   final FocusNode _sellFocusNode = FocusNode();
   bool _programmaticSellTextUpdate = false;
   double? _sellUnitPrice;
+  double? _purchaseUnitPrice;
 
   int? _editingIndex;
 
@@ -582,7 +583,11 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     }
 
     _sellUnitPrice = double.tryParse(_draftRow.sellController.text.trim());
+    _purchaseUnitPrice = double.tryParse(
+      _draftRow.purchaseController.text.trim(),
+    );
     _draftRow.sellController.addListener(_onSellTextChanged);
+    _draftRow.purchaseController.addListener(_onPurchaseTextChanged);
     _draftRow.qtyController.addListener(_onQtyChanged);
     _sellFocusNode.addListener(_onSellFocusChanged);
     _attachOptionScrollListeners();
@@ -618,6 +623,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
             colourId: d.colourId,
             colour: d.colour,
             qty: d.quantity,
+            purchaseUnit: d.costPrice,
             sellUnit: d.sellingPrice,
           ),
         ),
@@ -633,6 +639,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     _brandController.dispose();
     _itemTypeController.dispose();
     _draftRow.sellController.removeListener(_onSellTextChanged);
+    _draftRow.purchaseController.removeListener(_onPurchaseTextChanged);
     _draftRow.qtyController.removeListener(_onQtyChanged);
     _sellFocusNode.removeListener(_onSellFocusChanged);
     _sellFocusNode.dispose();
@@ -680,6 +687,23 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
     setState(() {
       _sellUnitPrice = parsed;
+    });
+  }
+
+  void _onPurchaseTextChanged() {
+    if (!mounted) return;
+
+    final raw = _draftRow.purchaseController.text.trim();
+    if (raw.isEmpty) {
+      setState(() => _purchaseUnitPrice = null);
+      return;
+    }
+    final parsed = double.tryParse(raw);
+    if (parsed == null) return;
+    if (_purchaseUnitPrice == parsed) return;
+
+    setState(() {
+      _purchaseUnitPrice = parsed;
     });
   }
 
@@ -739,6 +763,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     final size = _draftRow.resolvedSize.trim();
     final colour = _draftRow.resolvedColour.trim();
     final qty = _draftRow.qty;
+    final purchase = _purchaseUnitPrice;
     final sell = _sellUnitPrice;
 
     if (size.isEmpty) {
@@ -748,6 +773,12 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       return false;
     }
     if (qty <= 0) {
+      return false;
+    }
+    if (purchase == null) {
+      return false;
+    }
+    if (purchase <= 0) {
       return false;
     }
     if (sell == null) {
@@ -764,6 +795,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         colourId: _colourIdByName[colour.toLowerCase()],
         colour: colour,
         qty: qty,
+        purchaseUnit: purchase,
         sellUnit: sell,
       );
       final index = _editingIndex;
@@ -776,6 +808,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
 
       _draftRow.reset();
       _sellUnitPrice = 0;
+      _purchaseUnitPrice = 0;
+      _draftRow.purchaseController.text = '0';
       _setSellText('0');
       _showItemFieldErrors = false;
     });
@@ -856,6 +890,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _draftRow.qtyController.text = entry.qty.toString();
 
       _sellUnitPrice = entry.sellUnit;
+    _purchaseUnitPrice = entry.purchaseUnit;
+    _draftRow.purchaseController.text =
+      _formatPriceValue(entry.purchaseUnit);
 
       // Not focused here; show total.
       final total = entry.sellUnit * entry.qty;
@@ -868,6 +905,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _showItemFieldErrors = false;
       _editingIndex = null;
       _draftRow.reset();
+      _sellUnitPrice = 0;
+      _purchaseUnitPrice = 0;
+      _setSellText('0');
+      _draftRow.purchaseController.text = '0';
     });
   }
 
@@ -947,6 +988,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
             'size': e.size,
             'colour': e.colour,
             'pieces': e.qty,
+            'purchase_price': e.purchaseUnit.toStringAsFixed(2),
             'sellprice': e.sellUnit.toStringAsFixed(2),
           },
         )
@@ -1063,8 +1105,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       return;
     }
 
-    const cost = 0.0;
-
     // Barcode handling: one barcode for the whole group.
     var finalBarcode = _barcodeController.text.trim();
     if (widget.enableBarcodeGeneration) {
@@ -1119,7 +1159,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
           itemType1: itemType,
           itemType2: null,
           quantity: row.qty,
-          costPrice: cost,
+          costPrice: row.purchaseUnit,
           sellingPrice: row.sellUnit,
         ),
       );
@@ -1969,7 +2009,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                 icon: Icons.view_list_outlined,
                 title: 'Items',
                 subtitle:
-                    'Add one or more variants (size, colour, pieces, selling price).',
+          'Add one or more variants (size, colour, pieces, purchase price, selling price).',
                 expanded: _itemsExpanded,
                 onToggle: () =>
                     setState(() => _itemsExpanded = !_itemsExpanded),
@@ -2055,27 +2095,29 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                       Widget piecesStepper() {
                         return SizedBox(
                           height: gridHeight,
-                          child: DecoratedBox(
-                            decoration: ShapeDecoration(
-                              color: colorScheme.surfaceContainerHighest,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                side: BorderSide(
-                                  color: colorScheme.outlineVariant,
+                          child: InputDecorator(
+                            isEmpty: false,
+                            decoration:
+                                gridDecoration(
+                                  icon: Icons.confirmation_number_outlined,
+                                  hint: '1',
+                                ).copyWith(
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 8,
+                                  ),
                                 ),
-                              ),
-                            ),
                             child: Row(
                               children: [
-                                const SizedBox(width: 2),
                                 IconButton(
                                   tooltip: 'Decrease',
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints.tightFor(
-                                    width: 40,
-                                    height: 40,
+                                    width: 32,
+                                    height: 32,
                                   ),
+                                  iconSize: 18,
                                   onPressed: () {
                                     final current =
                                         int.tryParse(
@@ -2097,9 +2139,12 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                       FilteringTextInputFormatter.digitsOnly,
                                     ],
                                     textAlign: TextAlign.center,
+                                    textAlignVertical: TextAlignVertical.center,
                                     decoration: const InputDecoration(
+                                      isDense: true,
                                       border: InputBorder.none,
                                       hintText: '1',
+                                      contentPadding: EdgeInsets.zero,
                                     ),
                                   ),
                                 ),
@@ -2108,9 +2153,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints.tightFor(
-                                    width: 40,
-                                    height: 40,
+                                    width: 32,
+                                    height: 32,
                                   ),
+                                  iconSize: 18,
                                   onPressed: () {
                                     final current =
                                         int.tryParse(
@@ -2125,7 +2171,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                   },
                                   icon: const Icon(Icons.add_rounded),
                                 ),
-                                const SizedBox(width: 2),
                               ],
                             ),
                           ),
@@ -2360,6 +2405,14 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                           _showItemFieldErrors && _draftRow.qty <= 0
                           ? 'Required field'
                           : null;
+                      final purchaseError = (() {
+                        if (!_showItemFieldErrors) return null;
+                        final purchase = _purchaseUnitPrice;
+                        if (purchase == null || purchase <= 0) {
+                          return 'Required field';
+                        }
+                        return null;
+                      })();
                       final sellError = (() {
                         if (!_showItemFieldErrors) return null;
                         final sell = _sellUnitPrice;
@@ -2455,6 +2508,24 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 label: 'Pieces',
                                 errorText: qtyError,
                                 child: piecesStepper(),
+                              ),
+                              gridField(
+                                label: 'Purchase Price',
+                                errorText: purchaseError,
+                                child: SizedBox(
+                                  height: gridHeight,
+                                  child: TextFormField(
+                                    controller: _draftRow.purchaseController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    decoration: gridDecoration(
+                                      icon: Icons.payments_outlined,
+                                      hint: '0',
+                                    ),
+                                  ),
+                                ),
                               ),
                               gridField(
                                 label: 'Sell Price',
@@ -3023,6 +3094,16 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                         ),
                                       ],
                                     ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Buy: ₹${_formatPriceValue(e.purchaseUnit)} · Sell: ₹${_formatPriceValue(e.sellUnit)}',
+                                      style: theme.textTheme.labelMedium
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -3116,8 +3197,11 @@ class _VariantDraftRow {
   String? colourSelection;
 
   final TextEditingController qtyController;
+  TextEditingController? _purchaseController;
   TextEditingController? _sellController;
 
+  TextEditingController get purchaseController =>
+    _purchaseController ??= TextEditingController(text: '0');
   TextEditingController get sellController =>
       _sellController ??= TextEditingController(text: '0');
   final TextEditingController sizeController;
@@ -3127,6 +3211,12 @@ class _VariantDraftRow {
 
   double? get sell {
     final raw = sellController.text.trim();
+    if (raw.isEmpty) return null;
+    return double.tryParse(raw);
+  }
+
+  double? get purchase {
+    final raw = purchaseController.text.trim();
     if (raw.isEmpty) return null;
     return double.tryParse(raw);
   }
@@ -3153,11 +3243,13 @@ class _VariantDraftRow {
     sizeController.text = '';
     colourController.text = '';
     qtyController.text = '1';
+    purchaseController.text = '0';
     sellController.text = '0';
   }
 
   void dispose() {
     qtyController.dispose();
+    _purchaseController?.dispose();
     _sellController?.dispose();
     sizeController.dispose();
     colourController.dispose();
@@ -3223,6 +3315,7 @@ class _VariantEntry {
     this.colourId,
     required this.colour,
     required this.qty,
+    required this.purchaseUnit,
     required this.sellUnit,
   });
 
@@ -3231,5 +3324,6 @@ class _VariantEntry {
   final int? colourId;
   final String colour;
   final int qty;
+  final double purchaseUnit;
   final double sellUnit;
 }

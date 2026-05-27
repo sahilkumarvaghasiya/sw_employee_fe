@@ -206,6 +206,7 @@ class BillingProvider extends ChangeNotifier {
         originalUnitPrice: product.unitPrice,
         unitPrice: product.unitPrice,
         discountPercent: 0,
+        isUnitPriceOverride: false,
         availableQuantity: product.availableQuantity,
         size: product.size,
       ),
@@ -229,6 +230,7 @@ class BillingProvider extends ChangeNotifier {
         originalUnitPrice: unitPrice,
         unitPrice: unitPrice,
         discountPercent: 0,
+        isUnitPriceOverride: false,
       ),
     );
     _manualFinalAmount = null;
@@ -243,6 +245,35 @@ class BillingProvider extends ChangeNotifier {
     _items[index] = _items[index].copyWith(
       unitPrice: unitPrice ?? item.originalUnitPrice,
       discountPercent: 0,
+      isUnitPriceOverride: false,
+    );
+    _manualFinalAmount = null;
+    notifyListeners();
+  }
+
+  void updateItemUnitPrice(String id, double? unitPrice) {
+    final index = _items.indexWhere((i) => i.id == id);
+    if (index < 0) return;
+    final item = _items[index];
+    final nextUnitPrice = unitPrice ?? item.originalUnitPrice;
+    _items[index] = _items[index].copyWith(
+      unitPrice: nextUnitPrice,
+      discountPercent: 0,
+      isUnitPriceOverride: unitPrice != null,
+    );
+    _manualFinalAmount = null;
+    notifyListeners();
+  }
+
+  void updateItemBasePrice(String id, double? unitPrice) {
+    final index = _items.indexWhere((i) => i.id == id);
+    if (index < 0) return;
+    final item = _items[index];
+    final nextUnitPrice = unitPrice ?? item.originalUnitPrice;
+    _items[index] = _items[index].copyWith(
+      originalUnitPrice: nextUnitPrice,
+      unitPrice: nextUnitPrice,
+      discountPercent: 0,
     );
     _manualFinalAmount = null;
     notifyListeners();
@@ -255,6 +286,7 @@ class BillingProvider extends ChangeNotifier {
     _items[index] = _items[index].copyWith(
       unitPrice: item.originalUnitPrice,
       discountPercent: percent == null ? 0 : percent.clamp(0, 100),
+      isUnitPriceOverride: false,
     );
     _manualFinalAmount = null;
     notifyListeners();
@@ -299,6 +331,10 @@ class BillingProvider extends ChangeNotifier {
     // when quantity changes. Do not alter discount mode behavior.
     final priceOverridden = item.unitPrice != item.originalUnitPrice;
     final discountApplied = item.discountPercent > 0;
+
+    if (item.isUnitPriceOverride == true) {
+      return item.unitPrice;
+    }
 
     if (!priceOverridden || discountApplied || nextQuantity <= 0) {
       return item.unitPrice;

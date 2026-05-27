@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../models/vendor.dart';
+import '../services/stock_entry_service.dart';
 import '../widgets/vendor_form.dart';
 import 'stock_scanning_screen.dart';
 
-class NewVendorEntryScreen extends StatelessWidget {
+class NewVendorEntryScreen extends StatefulWidget {
   const NewVendorEntryScreen({super.key});
 
   static const String routeName = '/stock-entry/new-vendor';
@@ -14,6 +15,59 @@ class NewVendorEntryScreen extends StatelessWidget {
       settings: const RouteSettings(name: routeName),
       builder: (_) => const NewVendorEntryScreen(),
     );
+  }
+
+  @override
+  State<NewVendorEntryScreen> createState() => _NewVendorEntryScreenState();
+}
+
+class _NewVendorEntryScreenState extends State<NewVendorEntryScreen> {
+  final StockEntryService _stockEntryService = StockEntryService();
+  bool _isSubmitting = false;
+
+  Future<void> _handleStartStockEntry(
+    BuildContext context,
+    VendorFormValues values,
+  ) async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
+    try {
+      await _stockEntryService.validateVendor(
+        name: values.name,
+        phone: values.phone,
+        email: values.email,
+        gst: values.gst,
+      );
+
+      final vendor = Vendor(
+        id: 'v_${DateTime.now().millisecondsSinceEpoch}',
+        name: values.name,
+        phone: values.phone,
+        email: values.email,
+        address: values.address,
+        gst: values.gst,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        StockScanningScreen.route(vendor: vendor),
+      );
+    } catch (error) {
+      if (!mounted) return;
+    var message = error.toString();
+    message = message
+      .replaceFirst('Exception: ', '')
+      .replaceFirst('ClientException: ', '')
+      .replaceFirst(RegExp(r'^Client\s*', caseSensitive: false), '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override
@@ -65,19 +119,9 @@ class NewVendorEntryScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: VendorForm(
+                  isSubmitting: _isSubmitting,
                   onStartStockEntry: (values) {
-                    final vendor = Vendor(
-                      id: 'v_${DateTime.now().millisecondsSinceEpoch}',
-                      name: values.name,
-                      phone: values.phone,
-                      email: values.email,
-                      address: values.address,
-                      gst: values.gst,
-                    );
-
-                    Navigator.of(context).pushReplacement(
-                      StockScanningScreen.route(vendor: vendor),
-                    );
+                    _handleStartStockEntry(context, values);
                   },
                 ),
               ),

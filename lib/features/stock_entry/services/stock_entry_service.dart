@@ -102,6 +102,7 @@ class StockEntryService {
   // POST /api/vendors/stock/create/                (new vendor)
   // POST /api/vendors/existing/<int:id>/stock/create/ (existing vendor)
   static const String createNewVendorStockEntryPath = '/vendors/stock/create/';
+  static const String validateVendorPath = '/vendors/validate/';
   static String createExistingVendorStockEntryPath(String vendorId) {
     final safeId = Uri.encodeComponent(vendorId);
     return '/vendors/existing/$safeId/stock/create/';
@@ -760,6 +761,45 @@ class StockEntryService {
       if (decoded is Map<String, dynamic>) {
         final value =
             decoded['error'] ?? decoded['detail'] ?? decoded['message'];
+        if (value != null) {
+          message = value.toString();
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    throw http.ClientException(message);
+  }
+
+  Future<void> validateVendor({
+    required String name,
+    required String phone,
+    String? email,
+    String? gst,
+  }) async {
+    final response = await _apiService.post(
+      _url(validateVendorPath).toString(),
+      body: <String, dynamic>{
+        'vendor_name': name.trim(),
+        'phone': phone.trim(),
+        if (email != null && email.trim().isNotEmpty)
+          'email': email.trim(),
+        if (gst != null && gst.trim().isNotEmpty) 'gst_number': gst.trim(),
+      },
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return;
+    }
+
+    String message =
+        'Failed to validate vendor (${response.statusCode}).';
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        final value =
+            decoded['message'] ?? decoded['detail'] ?? decoded['error'];
         if (value != null) {
           message = value.toString();
         }

@@ -9,6 +9,8 @@ import '../providers/billing_provider.dart';
 import '../services/billing_service.dart';
 import '../widgets/product_item_widget.dart';
 import 'bill_preview_screen.dart';
+import '../../products/models/product.dart';
+import '../../products/services/products_service.dart';
 
 class CustomerFormScreen extends StatefulWidget {
   const CustomerFormScreen({super.key});
@@ -30,7 +32,7 @@ class CustomerFormScreen extends StatefulWidget {
 }
 
 class _CustomerFormScreenState extends State<CustomerFormScreen> {
-  // static const bool _useDummyEntryOnStartBilling = true;
+  static const bool _useDummyEntryOnStartBilling = true;
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
@@ -53,7 +55,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   );
 
   Timer? _phoneLookupDebounce;
+  Timer? _productSearchDebounce;
   int _phoneLookupRequestId = 0;
+  int _productSearchRequestId = 0;
+  TextEditingController? _productSearchController;
+  List<Product> _productSearchResults = <Product>[];
+  final Set<String> _productSearchLoadingIds = <String>{};
+  bool _isProductSearching = false;
+  String? _productSearchError;
   String? _lastAutoFilledPhone;
   String? _lastAutoFilledName;
   String? _lastAutoFilledAddress;
@@ -66,6 +75,45 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   final Map<String, GlobalKey> _lineItemKeys = <String, GlobalKey>{};
 
   final BillingService _billingService = BillingService();
+  final ProductsService _productsService = ProductsService();
+
+  bool _hasBillingDraft(BillingProvider provider) {
+    return _scanMode ||
+        provider.items.isNotEmpty ||
+        provider.customer != null ||
+        _nameController.text.trim().isNotEmpty ||
+        _phoneController.text.trim().isNotEmpty ||
+        _addressController.text.trim().isNotEmpty;
+  }
+
+  Future<bool> _confirmDiscardIfNeeded() async {
+    final provider = context.read<BillingProvider>();
+    if (!_hasBillingDraft(provider)) return true;
+
+    final shouldDiscard = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Discard billing draft?'),
+          content: const Text(
+            'You have unsaved billing details. Do you want to discard them?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('No'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Yes, discard'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return shouldDiscard ?? false;
+  }
 
   @override
   void initState() {
@@ -76,10 +124,12 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   @override
   void dispose() {
     _phoneLookupDebounce?.cancel();
+    _productSearchDebounce?.cancel();
     _phoneController.removeListener(_onPhoneChanged);
     _nameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _productSearchController?.dispose();
     _nameFocusNode.dispose();
     _phoneFocusNode.dispose();
     _addressFocusNode.dispose();
@@ -246,13 +296,13 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         normalizedBarcode,
         scannedBarcodes: provider.buildScannedBarcodesForLookup(),
       );
-    final products = lookup.products
-      .where(
-      (product) =>
-        product.availableQuantity == null ||
-        product.availableQuantity! > 0,
-      )
-      .toList(growable: false);
+      final products = lookup.products
+          .where(
+            (product) =>
+                product.availableQuantity == null ||
+                product.availableQuantity! > 0,
+          )
+          .toList(growable: false);
       if (!mounted) return;
 
       if (products.isEmpty) {
@@ -650,8 +700,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                 return false;
               }
 
-              if (offerMode == 1 && effectiveParsedValue >= baseAmount) {
-                offerValueError = 'Must be less than total bill';
+              if (offerMode == 1 && effectiveParsedValue > baseAmount) {
+                offerValueError = 'Must be up to total bill';
                 return false;
               }
 
@@ -699,7 +749,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
             double payable = baseAmount;
             if (offerMode == 1 && entered > 0) {
-              payable = (baseAmount - entered).clamp(0, double.infinity);
+              payable = entered.clamp(0, baseAmount);
             } else if (offerMode == 2 && entered > 0) {
               final pct = entered.clamp(0, 100);
               payable = (baseAmount * (1 - pct / 100)).clamp(
@@ -962,7 +1012,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                   decoration: InputDecoration(
                                     isDense: true,
                                     labelText: offerMode == 1
-                                        ? 'Reduction Amount'
+                                        ? 'Final Amount'
                                         : 'Discount Percentage',
                                     hintText: 'Enter amount',
                                     prefixText: offerMode == 1 ? '₹ ' : null,
@@ -1161,9 +1211,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     }
 
     if (offerMode == 1) {
-      provider.setManualFinalAmount(
-        (baseAmount - entered).clamp(0, double.infinity),
-      );
+      provider.setManualFinalAmount(entered.clamp(0, baseAmount));
       return true;
     }
 
@@ -1794,6 +1842,156 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     setState(() => _scanMode = false);
   }
 
+  TextEditingController _ensureProductSearchController() {
+    return _productSearchController ??= TextEditingController();
+  }
+
+  void _scheduleProductSearchClear() {
+    final controller = _productSearchController;
+    if (controller == null) return;
+    final queryAtTap = controller.text;
+
+    Future<void>.delayed(const Duration(milliseconds: 6000), () {
+      if (!mounted) return;
+      if (_productSearchController?.text != queryAtTap) return;
+
+      _productSearchDebounce?.cancel();
+      _productSearchController?.clear();
+      setState(() {
+        _productSearchResults = <Product>[];
+        _isProductSearching = false;
+        _productSearchError = null;
+      });
+    });
+  }
+
+  BillingProduct _billingProductFromProduct(
+    Product product, {
+    bool preserveZeroQuantity = false,
+  }) {
+    final size = product.size.trim();
+    final company = product.companyName.trim();
+    final availableQty = preserveZeroQuantity
+        ? product.quantityInStock
+        : product.quantityInStock > 0
+        ? product.quantityInStock
+        : null;
+
+    return BillingProduct(
+      id: product.id,
+      name: product.name,
+      unitPrice: product.price,
+      barcode: product.barcode.isEmpty ? null : product.barcode,
+      size: size.isEmpty || size == '—' ? null : size,
+      companyName: company.isEmpty ? null : company,
+      availableQuantity: availableQty,
+    );
+  }
+
+  Future<void> _addProductFromSearch(Product product) async {
+    if (_productSearchLoadingIds.contains(product.id)) return;
+
+    setState(() {
+      _productSearchLoadingIds.add(product.id);
+    });
+
+    Product resolved = product;
+    try {
+      resolved = await _productsService.fetchProductDetails(
+        productId: product.id,
+      );
+    } catch (_) {
+      // Fall back to list response when details are unavailable.
+    }
+
+    if (!mounted) return;
+
+    final provider = context.read<BillingProvider>();
+    final added = provider.addOrIncrementProduct(
+      _billingProductFromProduct(
+        resolved,
+        preserveZeroQuantity: resolved != product,
+      ),
+    );
+    _showSnack('Added ${added.productName}');
+    _scheduleProductSearchClear();
+    unawaited(_revealLineItem(added.id));
+
+    if (!mounted) return;
+    setState(() {
+      _productSearchLoadingIds.remove(product.id);
+    });
+  }
+
+  Future<void> _runProductSearch(String query) async {
+    if (!mounted) return;
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _productSearchResults = <Product>[];
+        _isProductSearching = false;
+        _productSearchError = null;
+      });
+      return;
+    }
+
+    final currentRequest = ++_productSearchRequestId;
+    setState(() {
+      _isProductSearching = true;
+      _productSearchError = null;
+    });
+
+    Future<List<Product>> fetchProducts(String q) async {
+      final filters = <String, String>{};
+      if (q.isNotEmpty) {
+        filters['search'] = q;
+      }
+
+      try {
+        final page = await _productsService.fetchProductVariants(
+          page: 1,
+          pageSize: 30,
+          filters: filters,
+        );
+        return page.items;
+      } catch (_) {
+        if (filters.isEmpty) rethrow;
+        final page = await _productsService.fetchProductVariants(
+          page: 1,
+          pageSize: 30,
+          filters: const <String, String>{},
+        );
+        return page.items;
+      }
+    }
+
+    bool matchesQuery(Product product, String q) {
+      final needle = q.toLowerCase();
+      return product.name.toLowerCase().contains(needle) ||
+          product.companyName.toLowerCase().contains(needle);
+    }
+
+    try {
+      final items = await fetchProducts(trimmed);
+      if (!mounted || currentRequest != _productSearchRequestId) return;
+      final filtered = items
+          .where((product) => matchesQuery(product, trimmed))
+          .toList(growable: false);
+
+      setState(() {
+        _productSearchResults = filtered;
+        _isProductSearching = false;
+      });
+    } catch (_) {
+      if (!mounted || currentRequest != _productSearchRequestId) return;
+      setState(() {
+        _productSearchResults = <Product>[];
+        _isProductSearching = false;
+        _productSearchError = 'Could not load products. Try again.';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1840,55 +2038,969 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        elevation: 0,
-        scrolledUnderElevation: 1,
-        backgroundColor: colorScheme.surfaceContainerLow.withAlpha(235),
-        surfaceTintColor: colorScheme.surfaceTint,
-        title: _scanMode
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Billing',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  Text(
-                    customer == null
-                        ? 'Customer not selected'
-                        : '${customer.name}  |  ${customer.phone}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                      height: 1.05,
+    return WillPopScope(
+      onWillPop: _confirmDiscardIfNeeded,
+      child: Scaffold(
+        appBar: AppBar(
+          elevation: 0,
+          scrolledUnderElevation: 1,
+          backgroundColor: colorScheme.surfaceContainerLow.withAlpha(235),
+          surfaceTintColor: colorScheme.surfaceTint,
+          title: _scanMode
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Billing',
+                      style: TextStyle(fontWeight: FontWeight.w800),
                     ),
-                  ),
-                ],
-              )
-            : const Text(
-                'Start billing',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-        actions: _scanMode
-            ? [
-                IconButton(
-                  tooltip: 'Edit customer',
-                  onPressed: _editCustomer,
-                  icon: const Icon(Icons.edit_outlined),
+                    Text(
+                      customer == null
+                          ? 'Customer not selected'
+                          : '${customer.name}  |  ${customer.phone}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        height: 1.05,
+                      ),
+                    ),
+                  ],
+                )
+              : const Text(
+                  'Start billing',
+                  style: TextStyle(fontWeight: FontWeight.w800),
                 ),
-              ]
-            : null,
-      ),
-      body: SafeArea(
-        bottom: false,
-        child: _scanMode
-            ? Builder(
-                builder: (context) {
-                  final totals = Card(
+          actions: _scanMode
+              ? [
+                  IconButton(
+                    tooltip: 'Edit customer',
+                    onPressed: _editCustomer,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ]
+              : null,
+        ),
+        body: SafeArea(
+          bottom: false,
+          child: _scanMode
+              ? Builder(
+                  builder: (context) {
+                    final productSearchController =
+                        _ensureProductSearchController();
+                    return CustomScrollView(
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                          sliver: SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                TextField(
+                                  controller: productSearchController,
+                                  onChanged: (value) {
+                                    _productSearchDebounce?.cancel();
+                                    _productSearchDebounce = Timer(
+                                      const Duration(milliseconds: 350),
+                                      () => unawaited(_runProductSearch(value)),
+                                    );
+                                    setState(() {});
+                                  },
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    hintText: 'Search products or brand name',
+                                    prefixIcon: const Icon(
+                                      Icons.search_rounded,
+                                    ),
+                                    filled: true,
+                                    fillColor:
+                                        colorScheme.surfaceContainerHighest,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                  ),
+                                ),
+                                if (_isProductSearching)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Row(
+                                      children: [
+                                        const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Searching products...',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else if (_productSearchError != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      _productSearchError!,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.error,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  )
+                                else if (productSearchController
+                                        .text
+                                        .isNotEmpty &&
+                                    _productSearchResults.isEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      'No products match your search.',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ),
+                                if (_productSearchResults.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxHeight:
+                                            MediaQuery.sizeOf(context).height *
+                                            0.35,
+                                      ),
+                                      child: ListView.separated(
+                                        shrinkWrap: true,
+                                        itemCount: _productSearchResults.length,
+                                        separatorBuilder: (_, _) =>
+                                            const SizedBox(height: 8),
+                                        itemBuilder: (context, index) {
+                                          final product =
+                                              _productSearchResults[index];
+                                          final isLoading =
+                                              _productSearchLoadingIds.contains(
+                                                product.id,
+                                              );
+                                          final infoChips = <Widget>[];
+                                          final companyName = product
+                                              .companyName
+                                              .trim();
+                                          final size = product.size.trim();
+
+                                          if (companyName.isNotEmpty) {
+                                            infoChips.add(
+                                              _SearchInfoChip(
+                                                text: companyName,
+                                              ),
+                                            );
+                                          }
+                                          if (size.isNotEmpty && size != '—') {
+                                            infoChips.add(
+                                              _SearchInfoChip(
+                                                text: 'Size $size',
+                                              ),
+                                            );
+                                          }
+
+                                          return Material(
+                                            color: colorScheme
+                                                .surfaceContainerHighest,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            child: InkWell(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              onTap: isLoading
+                                                  ? null
+                                                  : () => unawaited(
+                                                      _addProductFromSearch(
+                                                        product,
+                                                      ),
+                                                    ),
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(
+                                                    color: colorScheme
+                                                        .outlineVariant,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Text(
+                                                            product.name,
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style: theme
+                                                                .textTheme
+                                                                .labelLarge
+                                                                ?.copyWith(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                ),
+                                                          ),
+                                                          if (infoChips
+                                                              .isNotEmpty)
+                                                            Padding(
+                                                              padding:
+                                                                  const EdgeInsets.only(
+                                                                    top: 2,
+                                                                  ),
+                                                              child: Wrap(
+                                                                spacing: 6,
+                                                                runSpacing: 6,
+                                                                children:
+                                                                    infoChips,
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .end,
+                                                      children: [
+                                                        Text(
+                                                          _money(product.price),
+                                                          style: theme
+                                                              .textTheme
+                                                              .labelLarge
+                                                              ?.copyWith(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w800,
+                                                              ),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 4,
+                                                        ),
+                                                        if (isLoading)
+                                                          const SizedBox(
+                                                            width: 16,
+                                                            height: 16,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                ),
+                                                          )
+                                                        else
+                                                          Icon(
+                                                            Icons
+                                                                .add_circle_outline,
+                                                            size: 18,
+                                                            color: colorScheme
+                                                                .primary,
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          sliver: SliverToBoxAdapter(
+                            child: Card(
+                              elevation: 0,
+                              color: colorScheme.surfaceContainerHighest,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(22),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Stack(
+                                children: [
+                                  AspectRatio(
+                                    aspectRatio: 16 / 9,
+                                    child: _scannerActive
+                                        ? MobileScanner(
+                                            controller: _scannerController,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, child) {
+                                              return Container(
+                                                color: colorScheme
+                                                    .surfaceContainerHighest,
+                                                padding:
+                                                    const EdgeInsets.fromLTRB(
+                                                      16,
+                                                      16,
+                                                      16,
+                                                      16,
+                                                    ),
+                                                child: Center(
+                                                  child: Column(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        Icons
+                                                            .camera_alt_outlined,
+                                                        color: colorScheme
+                                                            .onSurfaceVariant,
+                                                        size: 28,
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 10,
+                                                      ),
+                                                      Text(
+                                                        'Camera unavailable',
+                                                        style: theme
+                                                            .textTheme
+                                                            .titleMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w900,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        'This emulator/device may not support camera scanning.',
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        style: theme
+                                                            .textTheme
+                                                            .bodySmall
+                                                            ?.copyWith(
+                                                              color: colorScheme
+                                                                  .onSurfaceVariant,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 12,
+                                                      ),
+                                                      FilledButton.icon(
+                                                        onPressed: () {
+                                                          unawaited(
+                                                            _stopScanner(),
+                                                          );
+                                                        },
+                                                        icon: const Icon(
+                                                          Icons.close_rounded,
+                                                        ),
+                                                        label: const Text(
+                                                          'Close scanner',
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            onDetect: (capture) {
+                                              final barcodes = capture.barcodes;
+                                              if (barcodes.isEmpty) return;
+
+                                              final raw =
+                                                  barcodes.first.rawValue;
+                                              final value = raw?.trim();
+                                              if (value == null ||
+                                                  value.isEmpty) {
+                                                return;
+                                              }
+
+                                              final now = DateTime.now();
+                                              final last = _lastBarcodeAt;
+                                              final same =
+                                                  _lastBarcode == value;
+                                              final tooSoon =
+                                                  last != null &&
+                                                  now.difference(last) <
+                                                      const Duration(
+                                                        milliseconds: 1200,
+                                                      );
+                                              if (same && tooSoon) return;
+
+                                              _lastBarcode = value;
+                                              _lastBarcodeAt = now;
+
+                                              unawaited(_handleBarcode(value));
+                                            },
+                                          )
+                                        : Container(
+                                            color: colorScheme
+                                                .surfaceContainerHighest,
+                                            padding: const EdgeInsets.fromLTRB(
+                                              16,
+                                              16,
+                                              16,
+                                              16,
+                                            ),
+                                            child: Center(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Container(
+                                                    height: 44,
+                                                    width: 44,
+                                                    decoration: BoxDecoration(
+                                                      color: colorScheme.primary
+                                                          .withOpacity(0.12),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            16,
+                                                          ),
+                                                    ),
+                                                    child: Icon(
+                                                      Icons
+                                                          .qr_code_scanner_rounded,
+                                                      color:
+                                                          colorScheme.primary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 10),
+                                                  Text(
+                                                    'Camera scanning is off',
+                                                    style: theme
+                                                        .textTheme
+                                                        .titleMedium
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                        ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Start scanning to add products faster.',
+                                                    textAlign: TextAlign.center,
+                                                    style: theme
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          color: colorScheme
+                                                              .onSurfaceVariant,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  FilledButton.icon(
+                                                    onPressed: _startingScanner
+                                                        ? null
+                                                        : () {
+                                                            unawaited(
+                                                              _startScanner(),
+                                                            );
+                                                          },
+                                                    icon: _startingScanner
+                                                        ? const SizedBox(
+                                                            width: 18,
+                                                            height: 18,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                ),
+                                                          )
+                                                        : const Icon(
+                                                            Icons
+                                                                .camera_alt_rounded,
+                                                          ),
+                                                    label: Text(
+                                                      _startingScanner
+                                                          ? 'Starting…'
+                                                          : 'Start scanning',
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                  ),
+                                  Positioned(
+                                    left: 12,
+                                    right: 12,
+                                    bottom: 12,
+                                    child: Container(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        12,
+                                        10,
+                                        12,
+                                        10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surfaceContainerLow
+                                            .withAlpha(235),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.qr_code_scanner),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              _scannerActive
+                                                  ? 'Keep scanning products one by one. The bill updates automatically.'
+                                                  : 'Tap “Start scanning” to use camera. You can also add products manually.',
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          sliver: SliverToBoxAdapter(
+                            child: Text(
+                              'Scanned items (${provider.items.length})',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        if (provider.items.isEmpty)
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 220),
+                            sliver: SliverToBoxAdapter(
+                              child: Card(
+                                elevation: 0,
+                                color: colorScheme.surfaceContainerHigh,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Text(
+                                    'No products yet. Point the camera at a barcode to scan.',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 220),
+                            sliver: SliverList.separated(
+                              itemCount: provider.items.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final item = provider.items[index];
+                                return ProductItemWidget(
+                                  key: _lineItemKeys.putIfAbsent(
+                                    item.id,
+                                    () => GlobalKey(),
+                                  ),
+                                  item: item,
+                                  priceEntryAsUnitPrice: true,
+                                  onPriceChanged: (double? v) {
+                                    context
+                                        .read<BillingProvider>()
+                                        .updateItemUnitPrice(item.id, v);
+                                  },
+                                  onDiscountChanged: (double? v) {
+                                    context
+                                        .read<BillingProvider>()
+                                        .updateItemDiscountPercent(item.id, v);
+                                  },
+                                  onIncrement: () {
+                                    context
+                                        .read<BillingProvider>()
+                                        .incrementItemQuantity(item.id);
+                                  },
+                                  onDecrement: () {
+                                    context
+                                        .read<BillingProvider>()
+                                        .decrementItemQuantity(item.id);
+                                  },
+                                  onRemove: () {
+                                    context.read<BillingProvider>().removeItem(
+                                      item.id,
+                                    );
+                                    _lineItemKeys.remove(item.id);
+                                    _showSnack('Removed ${item.productName}');
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final header = Card(
+                      elevation: 0,
+                      color: colorScheme.surfaceContainerHigh,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    colorScheme.primary.withOpacity(0.14),
+                                    colorScheme.primary.withOpacity(0.06),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Icon(
+                                Icons.account_circle_outlined,
+                                color: colorScheme.primary,
+                                size: 30,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Customer details',
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 18,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Basic info to start a new bill',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Chip(
+                              label: Text(
+                                'Step 1 of 2',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              backgroundColor:
+                                  colorScheme.surfaceContainerHighest,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+
+                    final formCard = Card(
+                      elevation: 0,
+                      color: colorScheme.surfaceContainerHigh,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                        child: Form(
+                          key: _formKey,
+                          autovalidateMode: AutovalidateMode.onUserInteraction,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Customer',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'We’ll use this for bills and history.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: _phoneController,
+                                focusNode: _phoneFocusNode,
+                                keyboardType: TextInputType.phone,
+                                textInputAction: TextInputAction.next,
+                                decoration: fieldDecoration(
+                                  label: 'Phone number',
+                                  icon: Icons.phone_outlined,
+                                  helper:
+                                      'Indian format: 10 digits (optional +91 or 0 prefix)',
+                                ),
+                                validator: _validatePhone,
+                                onFieldSubmitted: (_) {
+                                  FocusScope.of(
+                                    context,
+                                  ).requestFocus(_nameFocusNode);
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _nameController,
+                                focusNode: _nameFocusNode,
+                                textInputAction: TextInputAction.next,
+                                decoration: fieldDecoration(
+                                  label: 'Customer name',
+                                  icon: Icons.person_outline,
+                                ),
+                                validator: (v) => _validateRequired(
+                                  v,
+                                  label: 'Customer name',
+                                ),
+                                onFieldSubmitted: (_) {
+                                  FocusScope.of(
+                                    context,
+                                  ).requestFocus(_addressFocusNode);
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _addressController,
+                                focusNode: _addressFocusNode,
+                                keyboardType: TextInputType.streetAddress,
+                                textInputAction: TextInputAction.done,
+                                decoration: fieldDecoration(
+                                  label: 'Address (optional)',
+                                  icon: Icons.location_on_outlined,
+                                ),
+                                minLines: 1,
+                                maxLines: 3,
+                                onFieldSubmitted: (_) => _start(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+
+                    final sidePanel = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_showHowBillingWorks)
+                          Card(
+                            elevation: 0,
+                            color: colorScheme.surfaceContainerHigh,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 10, 8, 14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'How billing works',
+                                          style: theme.textTheme.titleSmall
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Close',
+                                        onPressed: () {
+                                          setState(
+                                            () => _showHowBillingWorks = false,
+                                          );
+                                        },
+                                        icon: const Icon(Icons.close_rounded),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: colorScheme.primary
+                                          .withOpacity(0.12),
+                                      child: Text(
+                                        '1',
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                              color: colorScheme.primary,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ),
+                                    title: const Text('Enter customer'),
+                                    subtitle: const Text(
+                                      'Phone number, name and address',
+                                    ),
+                                  ),
+                                  ListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: colorScheme.primary
+                                          .withOpacity(0.12),
+                                      child: Text(
+                                        '2',
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                              color: colorScheme.primary,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ),
+                                    title: const Text('Scan products'),
+                                    subtitle: const Text(
+                                      'Add items to the bill',
+                                    ),
+                                  ),
+                                  ListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: colorScheme.primary
+                                          .withOpacity(0.12),
+                                      child: Text(
+                                        '3',
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                              color: colorScheme.primary,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ),
+                                    title: const Text('Take payment'),
+                                    subtitle: const Text('QR / Cash / Card'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 12),
+                        Card(
+                          elevation: 0,
+                          color: colorScheme.surfaceContainerHigh,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.privacy_tip_outlined,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'Customer details are only used for billing and invoice reference.',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+
+                    return CustomScrollView(
+                      slivers: [
+                        const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverToBoxAdapter(child: header),
+                        ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverToBoxAdapter(child: formCard),
+                        ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverToBoxAdapter(child: sidePanel),
+                        ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 140)),
+                      ],
+                    );
+                  },
+                ),
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: _scanMode
+                ? Card(
                     elevation: 0,
                     color: colorScheme.surfaceContainerHigh,
                     shape: RoundedRectangleBorder(
@@ -1898,32 +3010,20 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                       child: Row(
                         children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary.withAlpha(20),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Icon(
-                              Icons.receipt_long_outlined,
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'Total',
+                                  'Items ${provider.totalItems}',
                                   style: theme.textTheme.labelLarge?.copyWith(
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Items ${provider.totalItems} • Subtotal ${_money(provider.subtotal)} • Discount ${_money(provider.totalDiscount)}',
+                                  'Subtotal ${_money(provider.subtotal)} • Discount ${_money(provider.totalDiscount)}',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: colorScheme.onSurfaceVariant,
                                     fontWeight: FontWeight.w600,
@@ -1932,734 +3032,67 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               ],
                             ),
                           ),
-                          Text(
-                            _money(provider.finalAmount),
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
+                          const SizedBox(width: 10),
+                          FilledButton.icon(
+                            onPressed: _onPaymentTap,
+                            icon: const Icon(Icons.payments_outlined),
+                            label: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 14),
+                              child: Text('Payment'),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  );
-
-                  return CustomScrollView(
-                    slivers: [
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                        sliver: SliverToBoxAdapter(
-                          child: Card(
-                            elevation: 0,
-                            color: colorScheme.surfaceContainerHighest,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(22),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: Stack(
-                              children: [
-                                AspectRatio(
-                                  aspectRatio: 16 / 9,
-                                  child: _scannerActive
-                                      ? MobileScanner(
-                                          controller: _scannerController,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, child) {
-                                            return Container(
-                                              color: colorScheme
-                                                  .surfaceContainerHighest,
-                                              padding:
-                                                  const EdgeInsets.fromLTRB(
-                                                    16,
-                                                    16,
-                                                    16,
-                                                    16,
-                                                  ),
-                                              child: Center(
-                                                child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Icon(
-                                                      Icons.camera_alt_outlined,
-                                                      color: colorScheme
-                                                          .onSurfaceVariant,
-                                                      size: 28,
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    Text(
-                                                      'Camera unavailable',
-                                                      style: theme
-                                                          .textTheme
-                                                          .titleMedium
-                                                          ?.copyWith(
-                                                            fontWeight:
-                                                                FontWeight.w900,
-                                                          ),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      'This emulator/device may not support camera scanning.',
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                      style: theme
-                                                          .textTheme
-                                                          .bodySmall
-                                                          ?.copyWith(
-                                                            color: colorScheme
-                                                                .onSurfaceVariant,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                    ),
-                                                    const SizedBox(height: 12),
-                                                    FilledButton.icon(
-                                                      onPressed: () {
-                                                        unawaited(
-                                                          _stopScanner(),
-                                                        );
-                                                      },
-                                                      icon: const Icon(
-                                                        Icons.close_rounded,
-                                                      ),
-                                                      label: const Text(
-                                                        'Close scanner',
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          onDetect: (capture) {
-                                            final barcodes = capture.barcodes;
-                                            if (barcodes.isEmpty) return;
-
-                                            final raw = barcodes.first.rawValue;
-                                            final value = raw?.trim();
-                                            if (value == null ||
-                                                value.isEmpty) {
-                                              return;
-                                            }
-
-                                            final now = DateTime.now();
-                                            final last = _lastBarcodeAt;
-                                            final same = _lastBarcode == value;
-                                            final tooSoon =
-                                                last != null &&
-                                                now.difference(last) <
-                                                    const Duration(
-                                                      milliseconds: 1200,
-                                                    );
-                                            if (same && tooSoon) return;
-
-                                            _lastBarcode = value;
-                                            _lastBarcodeAt = now;
-
-                                            unawaited(_handleBarcode(value));
-                                          },
-                                        )
-                                      : Container(
-                                          color: colorScheme
-                                              .surfaceContainerHighest,
-                                          padding: const EdgeInsets.fromLTRB(
-                                            16,
-                                            16,
-                                            16,
-                                            16,
-                                          ),
-                                          child: Center(
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Container(
-                                                  height: 44,
-                                                  width: 44,
-                                                  decoration: BoxDecoration(
-                                                    color: colorScheme.primary
-                                                        .withOpacity(0.12),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          16,
-                                                        ),
-                                                  ),
-                                                  child: Icon(
-                                                    Icons
-                                                        .qr_code_scanner_rounded,
-                                                    color: colorScheme.primary,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 10),
-                                                Text(
-                                                  'Camera scanning is off',
-                                                  style: theme
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w900,
-                                                      ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  'Start scanning to add products faster.',
-                                                  textAlign: TextAlign.center,
-                                                  style: theme
-                                                      .textTheme
-                                                      .bodySmall
-                                                      ?.copyWith(
-                                                        color: colorScheme
-                                                            .onSurfaceVariant,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                ),
-                                                const SizedBox(height: 12),
-                                                FilledButton.icon(
-                                                  onPressed: _startingScanner
-                                                      ? null
-                                                      : () {
-                                                          unawaited(
-                                                            _startScanner(),
-                                                          );
-                                                        },
-                                                  icon: _startingScanner
-                                                      ? const SizedBox(
-                                                          width: 18,
-                                                          height: 18,
-                                                          child:
-                                                              CircularProgressIndicator(
-                                                                strokeWidth: 2,
-                                                              ),
-                                                        )
-                                                      : const Icon(
-                                                          Icons
-                                                              .camera_alt_rounded,
-                                                        ),
-                                                  label: Text(
-                                                    _startingScanner
-                                                        ? 'Starting…'
-                                                        : 'Start scanning',
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                ),
-                                Positioned(
-                                  left: 12,
-                                  right: 12,
-                                  bottom: 12,
-                                  child: Container(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      12,
-                                      10,
-                                      12,
-                                      10,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: colorScheme.surfaceContainerLow
-                                          .withAlpha(235),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(Icons.qr_code_scanner),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            _scannerActive
-                                                ? 'Keep scanning products one by one. The bill updates automatically.'
-                                                : 'Tap “Start scanning” to use camera. You can also add products manually.',
-                                            style: theme.textTheme.bodyMedium
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                        sliver: SliverToBoxAdapter(child: totals),
-                      ),
-
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        sliver: SliverToBoxAdapter(
-                          child: Text(
-                            'Scanned items (${provider.items.length})',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      if (provider.items.isEmpty)
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 220),
-                          sliver: SliverToBoxAdapter(
-                            child: Card(
-                              elevation: 0,
-                              color: colorScheme.surfaceContainerHigh,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Text(
-                                  'No products yet. Point the camera at a barcode to scan.',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 220),
-                          sliver: SliverList.separated(
-                            itemCount: provider.items.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final item = provider.items[index];
-                              return ProductItemWidget(
-                                key: _lineItemKeys.putIfAbsent(
-                                  item.id,
-                                  () => GlobalKey(),
-                                ),
-                                item: item,
-                                onPriceChanged: (double? v) {
-                                  context
-                                      .read<BillingProvider>()
-                                      .updateItemPrice(item.id, v);
-                                },
-                                onDiscountChanged: (double? v) {
-                                  context
-                                      .read<BillingProvider>()
-                                      .updateItemDiscountPercent(item.id, v);
-                                },
-                                onIncrement: () {
-                                  context
-                                      .read<BillingProvider>()
-                                      .incrementItemQuantity(item.id);
-                                },
-                                onDecrement: () {
-                                  context
-                                      .read<BillingProvider>()
-                                      .decrementItemQuantity(item.id);
-                                },
-                                onRemove: () {
-                                  context.read<BillingProvider>().removeItem(
-                                    item.id,
-                                  );
-                                  _lineItemKeys.remove(item.id);
-                                  _showSnack('Removed ${item.productName}');
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              )
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  final header = Card(
+                  )
+                : Card(
                     elevation: 0,
                     color: colorScheme.surfaceContainerHigh,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(22),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  colorScheme.primary.withOpacity(0.14),
-                                  colorScheme.primary.withOpacity(0.06),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Icon(
-                              Icons.account_circle_outlined,
-                              color: colorScheme.primary,
-                              size: 30,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Customer details',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Basic info to start a new bill',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Chip(
-                            label: Text(
-                              'Step 1 of 2',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            backgroundColor:
-                                colorScheme.surfaceContainerHighest,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-
-                  final formCard = Card(
-                    elevation: 0,
-                    color: colorScheme.surfaceContainerHigh,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-                      child: Form(
-                        key: _formKey,
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Customer',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'We’ll use this for bills and history.',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            TextFormField(
-                              controller: _phoneController,
-                              focusNode: _phoneFocusNode,
-                              keyboardType: TextInputType.phone,
-                              textInputAction: TextInputAction.next,
-                              decoration: fieldDecoration(
-                                label: 'Phone number',
-                                icon: Icons.phone_outlined,
-                                helper:
-                                    'Indian format: 10 digits (optional +91 or 0 prefix)',
-                              ),
-                              validator: _validatePhone,
-                              onFieldSubmitted: (_) {
-                                FocusScope.of(
-                                  context,
-                                ).requestFocus(_nameFocusNode);
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _nameController,
-                              focusNode: _nameFocusNode,
-                              textInputAction: TextInputAction.next,
-                              decoration: fieldDecoration(
-                                label: 'Customer name',
-                                icon: Icons.person_outline,
-                              ),
-                              validator: (v) =>
-                                  _validateRequired(v, label: 'Customer name'),
-                              onFieldSubmitted: (_) {
-                                FocusScope.of(
-                                  context,
-                                ).requestFocus(_addressFocusNode);
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _addressController,
-                              focusNode: _addressFocusNode,
-                              keyboardType: TextInputType.streetAddress,
-                              textInputAction: TextInputAction.done,
-                              decoration: fieldDecoration(
-                                label: 'Address (optional)',
-                                icon: Icons.location_on_outlined,
-                              ),
-                              minLines: 1,
-                              maxLines: 3,
-                              onFieldSubmitted: (_) => _start(),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-
-                  final sidePanel = Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_showHowBillingWorks)
-                        Card(
-                          elevation: 0,
-                          color: colorScheme.surfaceContainerHigh,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(22),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 10, 8, 14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        'How billing works',
-                                        style: theme.textTheme.titleSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Close',
-                                      onPressed: () {
-                                        setState(
-                                          () => _showHowBillingWorks = false,
-                                        );
-                                      },
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: colorScheme.primary
-                                        .withOpacity(0.12),
-                                    child: Text(
-                                      '1',
-                                      style: theme.textTheme.labelLarge
-                                          ?.copyWith(
-                                            color: colorScheme.primary,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                  ),
-                                  title: const Text('Enter customer'),
-                                  subtitle: const Text(
-                                    'Phone number, name and address',
-                                  ),
-                                ),
-                                ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: colorScheme.primary
-                                        .withOpacity(0.12),
-                                    child: Text(
-                                      '2',
-                                      style: theme.textTheme.labelLarge
-                                          ?.copyWith(
-                                            color: colorScheme.primary,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                  ),
-                                  title: const Text('Scan products'),
-                                  subtitle: const Text('Add items to the bill'),
-                                ),
-                                ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: colorScheme.primary
-                                        .withOpacity(0.12),
-                                    child: Text(
-                                      '3',
-                                      style: theme.textTheme.labelLarge
-                                          ?.copyWith(
-                                            color: colorScheme.primary,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-                                  ),
-                                  title: const Text('Take payment'),
-                                  subtitle: const Text('QR / Cash / Card'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-                      Card(
-                        elevation: 0,
-                        color: colorScheme.surfaceContainerHigh,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.privacy_tip_outlined,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Customer details are only used for billing and invoice reference.',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-
-                  return CustomScrollView(
-                    slivers: [
-                      const SliverToBoxAdapter(child: SizedBox(height: 16)),
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        sliver: SliverToBoxAdapter(child: header),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 14)),
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        sliver: SliverToBoxAdapter(child: formCard),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        sliver: SliverToBoxAdapter(child: sidePanel),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 140)),
-                    ],
-                  );
-                },
-              ),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: _scanMode
-              ? Card(
-                  elevation: 0,
-                  color: colorScheme.surfaceContainerHigh,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Items ${provider.totalItems}',
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Subtotal ${_money(provider.subtotal)} • Discount ${_money(provider.totalDiscount)}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        FilledButton.icon(
-                          onPressed: _onPaymentTap,
-                          icon: const Icon(Icons.payments_outlined),
+                      padding: const EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _start,
+                          icon: const Icon(Icons.qr_code_scanner),
                           label: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Text('Payment'),
+                            child: Text('Continue to Scan'),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : Card(
-                  elevation: 0,
-                  color: colorScheme.surfaceContainerHigh,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: _start,
-                        icon: const Icon(Icons.qr_code_scanner),
-                        label: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 14),
-                          child: Text('Continue to Scan'),
                         ),
                       ),
                     ),
                   ),
-                ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchInfoChip extends StatelessWidget {
+  const _SearchInfoChip({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

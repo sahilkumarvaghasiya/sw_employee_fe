@@ -141,22 +141,21 @@ class BillingService {
 
       if (item.discountPercent > 0) {
         row['discount_percent'] = money(item.discountPercent);
-      } else {
-        final perUnitReduction = item.originalUnitPrice - item.unitPrice;
-        final discountAmount = (perUnitReduction * item.quantity)
+      } else if (item.isUnitPriceOverride || item.unitPrice != item.originalUnitPrice) {
+        final customAmount = (item.unitPrice * item.quantity)
             .clamp(0, double.infinity)
             .toDouble();
-        if (discountAmount > 0.0001) {
-          row['discount_amount'] = money(discountAmount);
+        if (customAmount > 0.0001) {
+          row['custom_amount'] = money(customAmount);
         }
       }
 
       lineItems.add(row);
     }
 
-    final billDiscount = (calculatedFinalAmount - finalAmount)
-        .clamp(0, double.infinity)
-        .toDouble();
+  final customBillAmount = (finalAmount - calculatedFinalAmount).abs() > 0.0001
+    ? finalAmount.clamp(0, double.infinity).toDouble()
+    : 0.0;
 
     final paymentMethodValue = switch (paymentMethod) {
       BillingPaymentMethod.cash => 'cash',
@@ -173,7 +172,7 @@ class BillingService {
         'phone': customer.phone,
         'address': customer.address,
         'items': lineItems,
-        'bill_discount_amount': money(billDiscount),
+  'bill_custom_amount': money(customBillAmount),
         'selected_payment_config_id': paymentMethod == BillingPaymentMethod.qr
             ? selectedQrConfigId
             : null,
