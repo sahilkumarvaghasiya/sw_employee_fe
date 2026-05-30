@@ -33,7 +33,7 @@ class _AppLifecycleManagerState extends State<AppLifecycleManager>
     final authProvider = context.read<AuthProvider>();
     if (authProvider.isAuthenticated) {
       authProvider.refreshUserInfo();
-    } else {
+    } else if (!authProvider.hasPendingForceLogin) {
       authProvider.loadToken();
     }
   }
