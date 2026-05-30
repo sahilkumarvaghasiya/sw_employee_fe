@@ -340,31 +340,6 @@ class BillPreviewScreen extends StatelessWidget {
                                       ),
                                   ],
                                 ),
-                                if (item.discountPercent > 0)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Text(
-                                      'Discount applied from ${_money(item.originalUnitPrice)} each',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  )
-                                else if (item.isUnitPriceOverride &&
-                                    (item.unitPrice - item.originalUnitPrice)
-                                            .abs() >
-                                        0.0001)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Text(
-                                      'Original price: ${_money(item.originalUnitPrice)} each',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ),
                               ],
                             ),
                           ),
@@ -405,24 +380,22 @@ class BillPreviewScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   _InfoRow(
-                    label: 'Total items',
-                    value: provider.totalItems.toString(),
+                    label: 'Original total',
+                    value: _money(provider.originalSubtotal),
                   ),
-                  _InfoRow(label: 'Subtotal', value: _money(provider.subtotal)),
-                  if (provider.hasCustomPriceAdjustment) ...[
-                    _InfoRow(
-                      label: 'Original subtotal',
-                      value: _money(provider.originalSubtotal),
-                    ),
-                    _InfoRow(
-                      label: 'Price reduction',
-                      value: '- ${_money(provider.customPriceAdjustment)}',
-                    ),
-                  ],
                   _InfoRow(
-                    label: 'Discount',
-                    value: '- ${_money(provider.totalDiscount)}',
+                    label: 'Subtotal',
+                    value: _money(provider.calculatedFinalAmount),
                   ),
+                  if (provider.hasBillLevelSavings)
+                    _InfoRow(
+                      label: 'Discount',
+                      value: BillingProvider.formatDiscountSummary(
+                        provider.billLevelSavings,
+                        provider.billLevelSavingsPercent,
+                      ),
+                      valueColor: colorScheme.tertiary,
+                    ),
                   const Divider(height: 24),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -434,7 +407,7 @@ class BillPreviewScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: _InfoRow(
-                      label: 'Final amount',
+                      label: 'Total',
                       value: _money(provider.finalAmount),
                       valueWeight: FontWeight.w900,
                     ),
@@ -466,11 +439,17 @@ class BillPreviewScreen extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value, this.valueWeight});
+  const _InfoRow({
+    required this.label,
+    required this.value,
+    this.valueWeight,
+    this.valueColor,
+  });
 
   final String label;
   final String value;
   final FontWeight? valueWeight;
+  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
@@ -493,6 +472,7 @@ class _InfoRow extends StatelessWidget {
             value,
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: valueWeight ?? FontWeight.w800,
+              color: valueColor,
             ),
           ),
         ],

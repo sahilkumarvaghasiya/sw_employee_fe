@@ -753,6 +753,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
               );
             }
 
+            final breakdownDiscount = provider.billSavingsForPayable(payable);
+            final breakdownDiscountPercent =
+                provider.billSavingsPercentForPayable(payable);
+
             return SafeArea(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -848,43 +852,32 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             Row(
                               children: [
                                 Text(
-                                  'Subtotal',
+                                  'Original subtotal',
                                   style: theme.textTheme.bodyMedium,
                                 ),
                                 const Spacer(),
                                 Text(
-                                  _money(provider.subtotal),
+                                  _money(provider.originalSubtotal),
                                   style: theme.textTheme.bodyMedium,
                                 ),
                               ],
                             ),
-                            if (provider.hasCustomPriceAdjustment) ...[
+                            if (breakdownDiscount > 0.0001) ...[
                               const SizedBox(height: 8),
                               Row(
                                 children: [
                                   Text(
-                                    'Original subtotal',
-                                    style: theme.textTheme.bodyMedium,
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    _money(provider.originalSubtotal),
-                                    style: theme.textTheme.bodyMedium,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Text(
-                                    'Custom price adjustment',
+                                    'Discount',
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: colorScheme.tertiary,
                                     ),
                                   ),
                                   const Spacer(),
                                   Text(
-                                    '- ${_money(provider.customPriceAdjustment)}',
+                                    BillingProvider.formatDiscountSummary(
+                                      breakdownDiscount,
+                                      breakdownDiscountPercent,
+                                    ),
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: colorScheme.tertiary,
                                     ),
@@ -892,24 +885,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                 ],
                               ),
                             ],
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Text(
-                                  'Item Discount',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.tertiary,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  '- ${_money(provider.totalDiscount)}',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: colorScheme.tertiary,
-                                  ),
-                                ),
-                              ],
-                            ),
                             Divider(
                               color: colorScheme.outlineVariant,
                               height: 16,
@@ -917,14 +892,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             Row(
                               children: [
                                 Text(
-                                  'Net subtotal',
+                                  'Subtotal',
                                   style: theme.textTheme.titleSmall?.copyWith(
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
                                 const Spacer(),
                                 Text(
-                                  _money(provider.calculatedFinalAmount),
+                                  _money(payable),
                                   style: theme.textTheme.titleSmall?.copyWith(
                                     fontWeight: FontWeight.w900,
                                   ),
