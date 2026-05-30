@@ -11,16 +11,101 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _forceLoginDialogOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreForceLoginDialogIfNeeded();
+    });
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _restoreForceLoginDialogIfNeeded();
+      });
+    }
+  }
+
+  void _restoreForceLoginDialogIfNeeded() {
+    if (!mounted || _forceLoginDialogOpen) return;
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.hasPendingForceLogin) return;
+    _showForceLoginDialog();
+  }
+
+  Future<void> _showForceLoginDialog() async {
+    if (!mounted || _forceLoginDialogOpen) return;
+
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.hasPendingForceLogin) return;
+
+    _forceLoginDialogOpen = true;
+    final continueLogin = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        final auth = dialogContext.watch<AuthProvider>();
+        final contentLines = <String>[];
+        final msg =
+            auth.forceLoginMessage ??
+            'You are already logged in on another device. Do you want to logout other device and continue?';
+        contentLines.add(msg);
+        final attempts = auth.remainingAttempts;
+        if (attempts != null) {
+          contentLines.add('\nRemaining attempts: ${attempts.toString()}');
+        }
+        return AlertDialog(
+          title: const Text('Already signed in'),
+          content: Text(contentLines.join('\n')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+    _forceLoginDialogOpen = false;
+
+    if (!mounted) return;
+
+    if (continueLogin != true) {
+      authProvider.clearPendingForceLogin();
+      return;
+    }
+
+    final outcome = await authProvider.login(
+      _emailController.text,
+      _passwordController.text,
+      forceLogin: true,
+    );
+
+    if (!mounted) return;
+    if (outcome == LoginOutcome.forceLoginRequired) {
+      await _showForceLoginDialog();
+    }
   }
 
   @override
@@ -372,60 +457,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                               if (outcome ==
                                                   LoginOutcome
                                                       .forceLoginRequired) {
-                                                final continueLogin =
-                                                    await showDialog<bool>(
-                                                      context: context,
-                                                      builder: (context) {
-                                                        final attempts =
-                                                            authProvider
-                                                                .remainingAttempts;
-                                                        final contentLines = <String>[];
-                                                        final msg = authProvider
-                                                                .forceLoginMessage ??
-                                                            'You are already logged in on another device. Do you want to logout other device and continue?';
-                                                        contentLines.add(msg);
-                                                        if (attempts != null) {
-                                                          contentLines.add(
-                                                              '\nRemaining attempts: ${attempts.toString()}');
-                                                        }
-                                                        return AlertDialog(
-                                                          title: const Text(
-                                                            'Already signed in',
-                                                          ),
-                                                          content: Text(
-                                                            contentLines.join('\n'),
-                                                          ),
-                                                          actions: [
-                                                            TextButton(
-                                                              onPressed: () =>
-                                                                  Navigator.of(
-                                                                    context,
-                                                                  ).pop(false),
-                                                              child: const Text(
-                                                                'Cancel',
-                                                              ),
-                                                            ),
-                                                            ElevatedButton(
-                                                              onPressed: () =>
-                                                                  Navigator.of(
-                                                                    context,
-                                                                  ).pop(true),
-                                                              child: const Text(
-                                                                'Continue',
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        );
-                                                      },
-                                                    );
-
-                                                if (continueLogin == true) {
-                                                  await authProvider.login(
-                                                    _emailController.text,
-                                                    _passwordController.text,
-                                                    forceLogin: true,
-                                                  );
-                                                }
+                                                await _showForceLoginDialog();
                                               }
                                             },
                                       child: Text(

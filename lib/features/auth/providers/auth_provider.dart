@@ -48,6 +48,10 @@ class AuthProvider extends ChangeNotifier {
   int? _remainingAttempts;
   int? get remainingAttempts => _remainingAttempts;
 
+  /// True when the user must confirm force-login before signing in.
+  bool get hasPendingForceLogin =>
+      !_isAuthenticated && _forceLoginMessage != null;
+
   String? _sessionMessage;
   String? get sessionMessage => _sessionMessage;
 
@@ -57,11 +61,24 @@ class AuthProvider extends ChangeNotifier {
   DateTime? _lastUserInfoAt;
   bool _isUserInfoLoading = false;
 
+  void clearPendingForceLogin() {
+    if (_forceLoginMessage == null && _remainingAttempts == null) return;
+    _forceLoginMessage = null;
+    _remainingAttempts = null;
+    notifyListeners();
+  }
+
   Future<void> loadToken() async {
+    final preserveForceLoginPending = hasPendingForceLogin;
+    final savedForceLoginMessage = _forceLoginMessage;
+    final savedRemainingAttempts = _remainingAttempts;
+
     _isLoading = true;
     _errorMessage = null;
-    _forceLoginMessage = null;
-  _remainingAttempts = null;
+    if (!preserveForceLoginPending) {
+      _forceLoginMessage = null;
+      _remainingAttempts = null;
+    }
     _sessionMessage = null;
     _isBlocked = false;
     notifyListeners();
@@ -89,6 +106,11 @@ class AuthProvider extends ChangeNotifier {
       _isAuthenticated = false;
       _employeeName = '';
       _branchName = '';
+    }
+
+    if (preserveForceLoginPending && !_isAuthenticated) {
+      _forceLoginMessage = savedForceLoginMessage;
+      _remainingAttempts = savedRemainingAttempts;
     }
 
     _isLoading = false;
@@ -200,7 +222,7 @@ class AuthProvider extends ChangeNotifier {
     _employeeName = '';
     _branchName = '';
     _sessionMessage = showMessage ? reason : null;
-    _forceLoginMessage = null;
+    clearPendingForceLogin();
     _errorMessage = null;
     _isBlocked = false;
     notifyListeners();
