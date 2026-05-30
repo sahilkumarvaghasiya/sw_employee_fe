@@ -164,6 +164,57 @@ class BillingProvider extends ChangeNotifier {
 
   bool get hasCustomPriceAdjustment => customPriceAdjustment > 0;
 
+  double _lineSavings(BillingLineItem item) {
+    final originalLine = item.originalUnitPrice * item.quantity;
+    return (originalLine - item.lineTotal).clamp(0, double.infinity);
+  }
+
+  /// Per-item savings from custom price reductions and percent discounts.
+  /// Price increases on individual items are excluded.
+  double get totalItemSavings =>
+      _items.fold<double>(0, (sum, item) => sum + _lineSavings(item));
+
+  double get totalItemSavingsPercent => originalSubtotal > 0
+      ? (totalItemSavings / originalSubtotal) * 100
+      : 0;
+
+  /// Additional savings applied in the payment popup (price / discount offer).
+  double get billLevelSavings =>
+      (calculatedFinalAmount - finalAmount).clamp(0, double.infinity);
+
+  double get billLevelSavingsPercent => calculatedFinalAmount > 0
+      ? (billLevelSavings / calculatedFinalAmount) * 100
+      : 0;
+
+  bool get hasBillLevelSavings => billLevelSavings > 0.0001;
+
+  /// Total savings from original list price to the final payable amount.
+  double get totalBillSavings => totalItemSavings + billLevelSavings;
+
+  double get totalBillSavingsPercent => originalSubtotal > 0
+      ? (totalBillSavings / originalSubtotal) * 100
+      : 0;
+
+  static String formatDiscountPercent(double percent) {
+    if (percent.abs() < 0.05) return '0%';
+    final rounded = (percent * 10).roundToDouble() / 10;
+    if ((rounded - rounded.roundToDouble()).abs() < 0.05) {
+      return '${rounded.round()}%';
+    }
+    return '${rounded.toStringAsFixed(1)}%';
+  }
+
+  static String formatDiscountSummary(double amount, double percent) =>
+      '- ₹${amount.toStringAsFixed(2)} (${formatDiscountPercent(percent)})';
+
+  double billSavingsForPayable(double payable) =>
+      totalItemSavings +
+      (calculatedFinalAmount - payable).clamp(0, double.infinity);
+
+  double billSavingsPercentForPayable(double payable) => originalSubtotal > 0
+      ? (billSavingsForPayable(payable) / originalSubtotal) * 100
+      : 0;
+
   double get calculatedFinalAmount =>
       (subtotal - totalDiscount).clamp(0, double.infinity);
 
