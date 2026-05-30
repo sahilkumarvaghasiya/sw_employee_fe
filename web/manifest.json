@@ -1,11 +1,11 @@
 {
-    "name": "sw_billing_employee_fe",
-    "short_name": "sw_billing_employee_fe",
+    "name": "RetailPilot",
+    "short_name": "RetailPilot",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F5F5F5",
+    "theme_color": "#005F4B",
+    "description": "Smart Billing & Inventory",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
