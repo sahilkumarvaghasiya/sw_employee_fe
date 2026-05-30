@@ -36402,7 +36402,7 @@ s=r+1}r=B.m.fR(a,b)
 while(r!==-1){q=r===0?0:B.m.Ho(a,"\n",r-1)+1
 if(c===r-q)return q
 r=B.m.hG(a,b,r+1)}return null},
-qB(){return"http://localhost:8000/api/"},
+qB(){return"https://swbillingemployeebe-production.up.railway.app/api/"},
 b0_(a,b){var s=0,r=A.q(t.N),q,p,o,n,m
 var $async$b0_=A.r(function(c,d){if(c===1)return A.n(d,r)
 for(;;)switch(s){case 0:m=(self.URL||self.webkitURL).createObjectURL(A.bhR(A.b([a],t.jl),"image/png"))
