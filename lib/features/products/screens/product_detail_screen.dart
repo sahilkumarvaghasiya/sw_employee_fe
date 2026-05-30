@@ -116,6 +116,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     final product = widget.product;
     final priceLabel = formatInr(product.price, decimalDigits: 2);
+    final purchasePriceLabel = formatInr(
+      product.purchasePrice,
+      decimalDigits: 2,
+    );
     final genderText = product.gender?.label;
 
     return Scaffold(
@@ -222,22 +226,46 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       color: colorScheme.primary.withAlpha(8),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Row(
+                    child: Column(
                       children: [
-                        Text(
-                          'Price',
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              'Price',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              priceLabel,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
                         ),
-                        const Spacer(),
-                        Text(
-                          priceLabel,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: colorScheme.primary,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text(
+                              'Purchase Price',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              purchasePriceLabel,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -310,8 +338,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     isPrinting: _isPrinting,
                     onDownload: _downloadBarcode,
                     onPrint: _printBarcode,
-                    downloadLabel: 'Download barcode',
-                    printLabel: 'Print Barcode',
+                    downloadLabel: 'Download',
+                    printLabel: 'Print',
                   ),
                   const SizedBox(height: 18),
                   _DetailRow(

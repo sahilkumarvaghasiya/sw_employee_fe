@@ -78,12 +78,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   final ProductsService _productsService = ProductsService();
 
   bool _hasBillingDraft(BillingProvider provider) {
-    return _scanMode ||
-        provider.items.isNotEmpty ||
-        provider.customer != null ||
-        _nameController.text.trim().isNotEmpty ||
-        _phoneController.text.trim().isNotEmpty ||
-        _addressController.text.trim().isNotEmpty;
+    return provider.items.isNotEmpty;
   }
 
   Future<bool> _confirmDiscardIfNeeded() async {

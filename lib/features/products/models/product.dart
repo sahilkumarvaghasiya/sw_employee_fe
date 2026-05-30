@@ -13,6 +13,7 @@ class Product {
     required this.color,
     required this.companyName,
     required this.price,
+    required this.purchasePrice,
     required this.gender,
     required this.createdAt,
   });
@@ -25,6 +26,7 @@ class Product {
   final String color;
   final String companyName;
   final double price;
+  final double purchasePrice;
   final ProductGender? gender;
   final DateTime createdAt;
 
@@ -50,6 +52,9 @@ class Product {
     final rawPrice =
         json['final_price'] ?? json['finalPrice'] ?? json['price'] ?? 0;
     final price = _toDouble(rawPrice);
+    final purchasePrice = _toDouble(
+      json['purchase_price'] ?? json['purchasePrice'] ?? 0,
+    );
 
     // These are not currently returned by the list serializer, so keep safe defaults.
     final barcode = (json['barcode_number'] ?? json['barcode'] ?? id)
@@ -77,6 +82,7 @@ class Product {
       color: colorStr.isEmpty ? '—' : colorStr,
       companyName: companyName,
       price: price,
+      purchasePrice: purchasePrice,
       gender: gender,
       createdAt: createdAt,
     );
@@ -124,6 +130,9 @@ class Product {
         wrapped['sellprice'] ??
         0;
     final price = _toDouble(rawPrice);
+    final purchasePrice = _toDouble(
+      wrapped['purchase_price'] ?? wrapped['purchasePrice'] ?? 0,
+    );
 
     final quantityInStock = _toInt(
       wrapped['quantity'] ??
@@ -152,6 +161,7 @@ class Product {
       color: colorStr.isEmpty ? '—' : colorStr,
       companyName: companyName,
       price: price,
+      purchasePrice: purchasePrice,
       gender: gender,
       createdAt: createdAt,
     );
