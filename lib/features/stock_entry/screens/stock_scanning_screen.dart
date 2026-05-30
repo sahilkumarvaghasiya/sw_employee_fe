@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/utils/inr_format.dart';
 import '../models/stock_entry.dart';
 import '../models/stock_entry_draft_item.dart';
 import '../models/vendor.dart';
@@ -71,7 +73,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     super.dispose();
   }
 
-  String _money(double value) => '₹${value.toStringAsFixed(2)}';
+  String _money(double value) => formatInr(value, decimalDigits: 0);
 
   String _displayName(StockEntryDraftItem item) {
     final types = <String>[item.itemType1];

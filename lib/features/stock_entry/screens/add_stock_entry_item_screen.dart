@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 
 import '../models/stock_entry_draft_item.dart';
 import '../services/stock_entry_service.dart';
@@ -656,6 +657,10 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     return whole ? value.toStringAsFixed(0) : value.toStringAsFixed(2);
   }
 
+  String _formatAmountValue(double value) {
+    return NumberFormat('#,##,##0', 'en_IN').format(value);
+  }
+
   double _currentSellTotal() {
     final qty = _draftRow.qty;
     final unit = _sellUnitPrice ?? 0;
@@ -890,9 +895,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _draftRow.qtyController.text = entry.qty.toString();
 
       _sellUnitPrice = entry.sellUnit;
-    _purchaseUnitPrice = entry.purchaseUnit;
-    _draftRow.purchaseController.text =
-      _formatPriceValue(entry.purchaseUnit);
+      _purchaseUnitPrice = entry.purchaseUnit;
+      _draftRow.purchaseController.text = _formatPriceValue(entry.purchaseUnit);
 
       // Not focused here; show total.
       final total = entry.sellUnit * entry.qty;
@@ -2009,7 +2013,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                 icon: Icons.view_list_outlined,
                 title: 'Items',
                 subtitle:
-          'Add one or more variants (size, colour, pieces, purchase price, selling price).',
+                    'Add one or more variants (size, colour, pieces, purchase price, selling price).',
                 expanded: _itemsExpanded,
                 onToggle: () =>
                     setState(() => _itemsExpanded = !_itemsExpanded),
@@ -2132,19 +2136,30 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                   icon: const Icon(Icons.remove_rounded),
                                 ),
                                 Expanded(
-                                  child: TextFormField(
-                                    controller: _draftRow.qtyController,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                    ],
-                                    textAlign: TextAlign.center,
-                                    textAlignVertical: TextAlignVertical.center,
-                                    decoration: const InputDecoration(
-                                      isDense: true,
-                                      border: InputBorder.none,
-                                      hintText: '1',
-                                      contentPadding: EdgeInsets.zero,
+                                  child: Transform.translate(
+                                    offset: const Offset(-9, -3),
+                                    child: TextFormField(
+                                      controller: _draftRow.qtyController,
+                                      keyboardType: TextInputType.number,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                      ],
+                                      textAlignVertical:
+                                          TextAlignVertical.center,
+                                      style: theme.textTheme.bodyLarge
+                                          ?.copyWith(
+                                            height: 1,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                      decoration: const InputDecoration(
+                                        isDense: true,
+                                        isCollapsed: true,
+                                        border: InputBorder.none,
+                                        hintText: '1',
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -2725,7 +2740,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         final selected =
                             _editingIndex != null && _editingIndex == i;
                         final total = e.sellUnit * e.qty;
-                        final priceStr = total.toStringAsFixed(0);
+                        final priceStr = _formatAmountValue(total);
 
                         final itemTypeName = (_itemType ?? '').trim();
                         final itemName = _barcodeController.text.trim();
@@ -3085,7 +3100,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                             ),
                                           ),
                                           child: Text(
-                                            '₹ $priceStr',
+                                            '₹$priceStr',
                                             style: theme.textTheme.bodyMedium
                                                 ?.copyWith(
                                                   fontWeight: FontWeight.w800,
@@ -3096,7 +3111,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      'Buy: ₹${_formatPriceValue(e.purchaseUnit)} · Sell: ₹${_formatPriceValue(e.sellUnit)}',
+                                      'Buy: ₹${_formatAmountValue(e.purchaseUnit)} · Sell: ₹${_formatAmountValue(e.sellUnit)}',
                                       style: theme.textTheme.labelMedium
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
@@ -3201,7 +3216,7 @@ class _VariantDraftRow {
   TextEditingController? _sellController;
 
   TextEditingController get purchaseController =>
-    _purchaseController ??= TextEditingController(text: '0');
+      _purchaseController ??= TextEditingController(text: '0');
   TextEditingController get sellController =>
       _sellController ??= TextEditingController(text: '0');
   final TextEditingController sizeController;

@@ -134,20 +134,26 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
 
   Widget _buildOptionNode(SearchableDropdownOption<T> option) {
     if (option.children.isEmpty) {
-      return MenuItemButton(
-        onPressed: () {
-          widget.onSelected(option);
-          _closeMenu();
-        },
-        child: Text(option.label, overflow: TextOverflow.ellipsis),
+      return SizedBox(
+        width: widget.width,
+        child: MenuItemButton(
+          onPressed: () {
+            widget.onSelected(option);
+            _closeMenu();
+          },
+          child: Text(option.label, overflow: TextOverflow.ellipsis),
+        ),
       );
     }
 
-    return SubmenuButton(
-      menuChildren: option.children
-          .map(_buildOptionNode)
-          .toList(growable: false),
-      child: Text(option.label, overflow: TextOverflow.ellipsis),
+    return SizedBox(
+      width: widget.width,
+      child: SubmenuButton(
+        menuChildren: option.children
+            .map(_buildOptionNode)
+            .toList(growable: false),
+        child: Text(option.label, overflow: TextOverflow.ellipsis),
+      ),
     );
   }
 
@@ -178,7 +184,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
               ),
               child: Container(
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
+                  color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 padding: const EdgeInsets.symmetric(
@@ -229,16 +235,17 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
       child: MenuAnchor(
         controller: _menuController,
         style: MenuStyle(
-          backgroundColor: WidgetStatePropertyAll(
-            colorScheme.surfaceContainerHigh,
-          ),
+          backgroundColor: WidgetStatePropertyAll(colorScheme.surface),
+          padding: const WidgetStatePropertyAll(EdgeInsets.zero),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           minimumSize: WidgetStatePropertyAll(Size(widget.width, 0)),
           maximumSize: WidgetStatePropertyAll(Size(widget.width, 360)),
         ),
-        menuChildren: menuChildren,
+        menuChildren: menuChildren
+            .map((child) => SizedBox(width: widget.width, child: child))
+            .toList(growable: false),
         builder: (context, controller, child) {
           final text = widget.selectedLabel;
 
@@ -252,7 +259,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
                 decoration: InputDecoration(
                   isDense: true,
                   filled: true,
-                  fillColor: colorScheme.surfaceContainerHigh,
+                  fillColor: colorScheme.surface,
                   prefixIcon: const Icon(Icons.straighten_outlined),
                   prefixIconConstraints: const BoxConstraints(
                     minWidth: 42,

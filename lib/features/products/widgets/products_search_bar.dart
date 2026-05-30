@@ -33,7 +33,7 @@ class ProductsSearchBar extends StatelessWidget {
                 icon: const Icon(Icons.clear),
               ),
         filled: true,
-        fillColor: colorScheme.surfaceContainerHigh,
+        fillColor: colorScheme.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
