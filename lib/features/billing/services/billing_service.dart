@@ -123,6 +123,21 @@ class BillingService {
       throw http.ClientException('No products in the bill');
     }
 
+    for (final item in items) {
+      final maxQuantity = item.availableQuantity;
+      if (maxQuantity == null) continue;
+      if (maxQuantity <= 0) {
+        throw http.ClientException(
+          '"${item.productName}" is out of stock. Add stock before billing.',
+        );
+      }
+      if (item.quantity > maxQuantity) {
+        throw http.ClientException(
+          'Insufficient stock for "${item.productName}". Available: $maxQuantity, requested: ${item.quantity}.',
+        );
+      }
+    }
+
     String money(double value) => value.toStringAsFixed(2);
 
     final lineItems = <Map<String, dynamic>>[];
@@ -163,23 +178,36 @@ class BillingService {
       BillingPaymentMethod.qr => 'qr',
     };
 
-    final paymentStatus = markPaid ? 'paid' : 'unpaid';
+    final paymentStatus = markPaid ? 'paid' : 'failed';
+
+    final body = <String, dynamic>{
+      'customer_name': customer.name,
+      'phone': customer.phone,
+      'items': lineItems,
+      'bill_custom_amount': money(customBillAmount),
+      'payment_method': paymentMethodValue,
+      'payment_status': paymentStatus,
+    };
+
+    final address = customer.address?.trim();
+    if (address != null && address.isNotEmpty) {
+      body['address'] = address;
+    }
+
+    final trimmedNotes = notes?.trim();
+    if (trimmedNotes != null && trimmedNotes.isNotEmpty) {
+      body['notes'] = trimmedNotes;
+    }
+
+    if (paymentMethod == BillingPaymentMethod.qr &&
+        selectedQrConfigId != null &&
+        selectedQrConfigId.trim().isNotEmpty) {
+      body['selected_payment_config_id'] = selectedQrConfigId.trim();
+    }
 
     final response = await _apiService.post(
       _url(_createBillPath).toString(),
-      body: {
-        'customer_name': customer.name,
-        'phone': customer.phone,
-        'address': customer.address,
-        'items': lineItems,
-  'bill_custom_amount': money(customBillAmount),
-        'selected_payment_config_id': paymentMethod == BillingPaymentMethod.qr
-            ? selectedQrConfigId
-            : null,
-        'payment_method': paymentMethodValue,
-        'payment_status': paymentStatus,
-        'notes': notes,
-      },
+      body: body,
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -226,7 +254,13 @@ class BillingService {
         'error',
         'detail',
         'message',
+        'items',
         'quantity',
+        'phone',
+        'address',
+        'bill_custom_amount',
+        'selected_payment_config_id',
+        'payment_status',
         'non_field_errors',
       ];
 
