@@ -71,6 +71,13 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   DateTime? _lastBarcodeAt;
   bool _handlingBarcode = false;
   bool _paymentFlowActive = false;
+  bool _paymentCheckoutStarted = false;
+
+  bool get _canAcceptBarcodeScans =>
+      _scanMode &&
+      _scannerActive &&
+      !_paymentFlowActive &&
+      !_paymentCheckoutStarted;
 
   final Map<String, GlobalKey> _lineItemKeys = <String, GlobalKey>{};
 
@@ -128,6 +135,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _nameFocusNode.dispose();
     _phoneFocusNode.dispose();
     _addressFocusNode.dispose();
+    unawaited(_scannerController.stop());
     _scannerController.dispose();
     super.dispose();
   }
@@ -278,6 +286,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   }
 
   Future<void> _handleBarcode(String barcode) async {
+    if (!_canAcceptBarcodeScans) return;
     if (_handlingBarcode) return;
     _handlingBarcode = true;
 
@@ -1226,6 +1235,18 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     return true;
   }
 
+  Future<void> _navigateToBillPreview() async {
+    _paymentCheckoutStarted = true;
+    await _stopScanner();
+    if (!mounted) return;
+
+    await Navigator.of(context).push(BillPreviewScreen.route(context));
+
+    _paymentCheckoutStarted = false;
+    if (!mounted) return;
+    await _resumeScannerIfScanning();
+  }
+
   Future<void> _confirmCashAndGenerateBill({
     bool closePaymentOptionsOnSuccess = false,
   }) async {
@@ -1239,7 +1260,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     final provider = context.read<BillingProvider>();
     provider.setPaymentMethod(BillingPaymentMethod.cash);
     provider.setMarkPaid(true);
-    Navigator.of(context).push(BillPreviewScreen.route(context));
+    await _navigateToBillPreview();
   }
 
   Future<void> _confirmCardAndGenerateBill({
@@ -1255,7 +1276,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     final provider = context.read<BillingProvider>();
     provider.setPaymentMethod(BillingPaymentMethod.card);
     provider.setMarkPaid(true);
-    Navigator.of(context).push(BillPreviewScreen.route(context));
+    await _navigateToBillPreview();
   }
 
   Future<void> _showQrPaymentSheet() async {
@@ -1556,9 +1577,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                           );
                                           provider.setMarkPaid(true);
                                           Navigator.of(context).pop();
-                                          Navigator.of(context).push(
-                                            BillPreviewScreen.route(context),
-                                          );
+                                          await _navigateToBillPreview();
                                         }
                                       : null,
                                   icon: const Icon(Icons.check_circle_outline),
@@ -1584,7 +1603,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     final provider = context.read<BillingProvider>();
 
     final canContinue = await _reviewBillAndApplyFinalAmount();
-    if (!canContinue) return;
+    if (!canContinue) {
+      await _resumeScannerIfScanning();
+      return;
+    }
     if (!mounted) return;
 
     // Let the review sheet fully dismiss before opening the next overlay.
@@ -1718,23 +1740,31 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         );
       },
     );
+
+    if (!mounted) return;
+    if (!_paymentCheckoutStarted) {
+      await _resumeScannerIfScanning();
+    }
   }
 
   Future<void> _onPaymentTap() async {
     if (_paymentFlowActive) return;
 
-    try {
-      _paymentFlowActive = true;
-      final provider = context.read<BillingProvider>();
-      if (provider.items.isEmpty) {
-        _showSnack('Add at least one product before payment.');
-        return;
-      }
+    final provider = context.read<BillingProvider>();
+    if (provider.items.isEmpty) {
+      _showSnack('Add at least one product before payment.');
+      return;
+    }
 
+    await _stopScanner();
+    _paymentFlowActive = true;
+
+    try {
       await _showPaymentOptions();
     } catch (_) {
       if (!mounted) return;
       _showSnack('Could not open payment. Please try again.');
+      await _resumeScannerIfScanning();
     } finally {
       _paymentFlowActive = false;
     }
@@ -1804,7 +1834,12 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   }
 
   Future<void> _startScanner() async {
-    if (_startingScanner || _scannerActive) return;
+    if (_paymentFlowActive ||
+        _paymentCheckoutStarted ||
+        _startingScanner ||
+        _scannerActive) {
+      return;
+    }
     setState(() => _startingScanner = true);
 
     try {
@@ -1839,6 +1874,17 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       _scannerActive = false;
       _startingScanner = false;
     });
+  }
+
+  Future<void> _resumeScannerIfScanning() async {
+    if (!_scanMode ||
+        _paymentFlowActive ||
+        _paymentCheckoutStarted ||
+        _scannerActive ||
+        _startingScanner) {
+      return;
+    }
+    await _startScanner();
   }
 
   void _editCustomer() {
@@ -2437,6 +2483,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                               );
                                             },
                                             onDetect: (capture) {
+                                              if (!_canAcceptBarcodeScans) {
+                                                return;
+                                              }
+
                                               final barcodes = capture.barcodes;
                                               if (barcodes.isEmpty) return;
 
