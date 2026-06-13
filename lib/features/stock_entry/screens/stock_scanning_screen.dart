@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/inr_format.dart';
 import '../models/stock_entry.dart';
 import '../models/stock_entry_draft_item.dart';
@@ -10,6 +12,7 @@ import '../models/vendor.dart';
 import '../providers/stock_entry_provider.dart';
 import '../services/stock_entry_service.dart';
 import '../widgets/payment_section.dart';
+import '../widgets/stock_entry_ui.dart';
 import 'add_stock_entry_item_screen.dart';
 import 'stock_barcode_scanner_screen.dart';
 import 'stock_entry_history_screen.dart';
@@ -924,15 +927,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     final colorScheme = theme.colorScheme;
 
     Widget buildItemsList() {
-      final blockSurface = Color.alphaBlend(
-        colorScheme.primary.withAlpha(10),
-        colorScheme.surface,
-      );
-      final blockCardSurface = Color.alphaBlend(
-        colorScheme.secondary.withAlpha(8),
-        colorScheme.surface,
-      );
-
       final grouped = <String, List<_EditableDraftItem>>{};
       for (final item in _items) {
         (grouped[item.draft.barcode] ??= <_EditableDraftItem>[]).add(item);
@@ -940,9 +934,19 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       final groups = grouped.entries.toList(growable: false);
 
       return Material(
-        color: blockSurface,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
+        color: theme.brightness == Brightness.dark
+            ? colorScheme.surface
+            : Colors.white,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+            border: Border.all(
+              color: theme.brightness == Brightness.dark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : AppColors.slate200,
+            ),
+          ),
           padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1060,7 +1064,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                   child: Card(
                     margin: EdgeInsets.zero,
                     elevation: 0,
-                    color: blockCardSurface,
+                    color: theme.brightness == Brightness.dark
+                        ? colorScheme.surfaceContainerLow
+                        : AppColors.slate50,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
                       side: BorderSide(color: accent.withAlpha(70)),
@@ -1439,262 +1445,114 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       );
     }
 
-    Widget actionRow({
-      required IconData icon,
-      required String title,
-      required String subtitle,
-      required VoidCallback onTap,
-      required BorderRadius borderRadius,
-    }) {
-      return InkWell(
-        borderRadius: borderRadius,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-          child: Row(
-            children: [
-              Container(
-                height: 44,
-                width: 44,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withAlpha(22),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: colorScheme.primary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
-          elevation: 0,
-          scrolledUnderElevation: 2,
-          backgroundColor: colorScheme.surface.withOpacity(0.94),
           leading: IconButton(
             tooltip: 'Back',
             onPressed: _handleBackPressed,
             icon: const Icon(Icons.arrow_back_rounded),
           ),
-          title: Row(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                height: 34,
-                width: 34,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.inventory_2_outlined,
-                  color: colorScheme.primary,
-                  size: 20,
+              Text(
+                widget.vendor.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Stock Entry',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      (widget.vendor.address == null ||
-                              widget.vendor.address!.trim().isEmpty)
-                          ? widget.vendor.name
-                          : '${widget.vendor.name} • ${widget.vendor.address}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+              Text(
+                'Step 2 · Add items',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
           ),
           actions: [
-            IconButton.filledTonal(
+            IconButton(
               tooltip: 'Vendor history',
               onPressed: () {
-                Navigator.of(
-                  context,
-                ).push(StockEntryHistoryScreen.route(vendor: widget.vendor));
+                Navigator.of(context).push(
+                  StockEntryHistoryScreen.route(vendor: widget.vendor),
+                );
               },
               icon: const Icon(Icons.history_rounded),
             ),
+            const SizedBox(width: 4),
           ],
         ),
         body: ListView(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 140),
           children: [
-            Card(
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          height: 34,
-                          width: 34,
-                          decoration: BoxDecoration(
-                            color: colorScheme.primary.withOpacity(0.10),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.qr_code_scanner_rounded,
-                            color: colorScheme.primary,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Quick actions',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${_items.length} added',
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
+            StockEntryCompactActions(
+              onScan: _scanBarcode,
+              onGenerate: _generateBarcode,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Items in this entry',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 4),
+                  ),
+                ),
+                if (_items.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${_items.length}',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (_items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 40,
+                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
+                    ),
+                    const SizedBox(height: 10),
                     Text(
-                      'Scan an existing barcode or generate a new one.',
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      'No items added yet',
+                      style: theme.textTheme.bodyMedium?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Material(
-                      color: colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(20),
-                      clipBehavior: Clip.antiAlias,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          actionRow(
-                            icon: Icons.document_scanner_outlined,
-                            title: 'Scan barcode',
-                            subtitle: 'Use camera to scan an existing barcode',
-                            onTap: _scanBarcode,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(20),
-                            ),
-                          ),
-                          Divider(
-                            height: 1,
-                            color: colorScheme.outlineVariant.withAlpha(120),
-                          ),
-                          actionRow(
-                            icon: Icons.auto_fix_high_rounded,
-                            title: 'Generate barcode',
-                            subtitle: 'Create a new barcode with item details',
-                            onTap: _generateBarcode,
-                            borderRadius: const BorderRadius.vertical(
-                              bottom: Radius.circular(20),
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tap Scan or New barcode above',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                       ),
                     ),
                   ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            if (_items.isEmpty)
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        height: 54,
-                        width: 54,
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Icon(
-                          Icons.qr_code_2_rounded,
-                          color: colorScheme.primary,
-                          size: 30,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'No items added yet',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Use Quick actions to scan or generate barcodes.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
                 ),
               )
             else ...[
@@ -1703,19 +1561,14 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
             const SizedBox(height: 14),
           ],
         ),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _items.isEmpty ? null : _confirmAndOpenPayment,
-                icon: const Icon(Icons.save),
-                label: const Text('Save'),
-              ),
-            ),
-          ),
+        bottomNavigationBar: StockEntryBottomBar(
+          label: 'Continue to payment',
+          icon: Icons.arrow_forward_rounded,
+          enabled: _items.isNotEmpty,
+          onPressed: _items.isEmpty ? null : _confirmAndOpenPayment,
+          subtitle: _items.isEmpty
+              ? null
+              : '${_items.length} item${_items.length == 1 ? '' : 's'} ready · ${_money(_totalStockValue)}',
         ),
       ),
     );

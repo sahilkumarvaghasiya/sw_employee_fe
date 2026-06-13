@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/product_size_format.dart';
 import '../models/stock_entry_draft_item.dart';
 import '../services/stock_entry_service.dart';
 import 'barcode_preview_screen.dart';
@@ -620,7 +621,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         drafts.map(
           (d) => _VariantEntry(
             sizeId: d.sizeId,
-            size: d.size,
+            size: formatProductSize(d.size),
             colourId: d.colourId,
             colour: d.colour,
             qty: d.quantity,
@@ -765,7 +766,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       _showItemFieldErrors = true;
     });
 
-    final size = _draftRow.resolvedSize.trim();
+    final size = formatProductSize(_draftRow.resolvedSize);
     final colour = _draftRow.resolvedColour.trim();
     final qty = _draftRow.qty;
     final purchase = _purchaseUnitPrice;
@@ -823,7 +824,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   }
 
   Future<void> _addNewSizeFromField() async {
-    final raw = _draftRow.sizeController.text.trim();
+    final raw = formatProductSize(_draftRow.sizeController.text);
     if (raw.isEmpty) {
       _showSnack('Enter a size to add.');
       return;
@@ -2450,7 +2451,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 addController: _draftRow.sizeController,
                                 onAddChanged: (raw) {
                                   setState(() {
-                                    final text = raw.trim();
+                                    final text = formatProductSize(raw);
                                     _draftRow.sizeSelection = text.isEmpty
                                         ? null
                                         : text;
@@ -2476,7 +2477,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 errorText: sizeError,
                                 onSelected: (v) {
                                   setState(() {
-                                    _draftRow.sizeSelection = v;
+                                    _draftRow.sizeSelection = formatProductSize(v);
                                   });
                                 },
                               ),

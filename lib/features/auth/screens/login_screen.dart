@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -79,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancel'),
             ),
-            ElevatedButton(
+            FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Continue'),
             ),
@@ -111,6 +113,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final authProvider = Provider.of<AuthProvider>(context);
     final isBlocked = authProvider.isBlocked;
 
@@ -118,259 +122,187 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
       final message = authProvider.sessionMessage;
       if (message == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+        SnackBar(content: Text(message), backgroundColor: AppColors.error),
       );
       authProvider.clearSessionMessage();
     });
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
       body: Stack(
         children: [
-          // Animated gradient background
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  theme.colorScheme.primary.withOpacity(0.08),
-                  theme.colorScheme.primary.withOpacity(0.02),
-                  theme.colorScheme.secondary.withOpacity(0.04),
-                ],
+                colors: isDark
+                    ? [
+                        AppColors.slate950,
+                        AppColors.slate900,
+                        AppColors.emeraldDark.withValues(alpha: 0.4),
+                      ]
+                    : [
+                        AppColors.slate50,
+                        Colors.white,
+                        AppColors.emerald.withValues(alpha: 0.06),
+                      ],
               ),
             ),
           ),
-
-          // Decorative blur circles
           Positioned(
-            top: -100,
-            right: -100,
+            top: -80,
+            right: -60,
+            child: Container(
+              width: 260,
+              height: 260,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.emerald.withValues(alpha: isDark ? 0.15 : 0.12),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -100,
+            left: -80,
             child: Container(
               width: 300,
               height: 300,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: theme.colorScheme.primary.withOpacity(0.05),
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.indigo.withValues(alpha: isDark ? 0.12 : 0.08),
+                    Colors.transparent,
+                  ],
+                ),
               ),
             ),
           ),
-          Positioned(
-            bottom: -150,
-            left: -150,
-            child: Container(
-              width: 350,
-              height: 350,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: theme.colorScheme.secondary.withOpacity(0.03),
-              ),
-            ),
-          ),
-
-          // Main content
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 24,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
+                  constraints: const BoxConstraints(maxWidth: 440),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Logo/Branding section
-                      Column(
-                        children: [
-                          // App logo
-                          Container(
-                            width: 96,
-                            height: 96,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  theme.colorScheme.primary.withOpacity(0.15),
-                                  theme.colorScheme.primary.withOpacity(0.04),
-                                ],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: theme.colorScheme.primary.withOpacity(
-                                    0.22,
-                                  ),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            alignment: Alignment.center,
-                            child: SvgPicture.asset(
-                              'assets/branding/retailpos_app_icon.svg',
-                              width: 58,
-                              height: 58,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Title
-                          Text(
-                            'RetailPilot',
-                            style: theme.textTheme.displaySmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          // Subtitle
-                          Text(
-                            'Smart Billing & Inventory',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 48),
-
-                      // Login form
                       Container(
+                        width: 88,
+                        height: 88,
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: theme.colorScheme.onSurface.withOpacity(
-                              0.15,
-                            ),
-                            width: 1.5,
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppColors.emerald.withValues(alpha: 0.18),
+                              AppColors.indigo.withValues(alpha: 0.1),
+                            ],
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
+                              color: AppColors.emerald.withValues(alpha: 0.2),
+                              blurRadius: 24,
+                              offset: const Offset(0, 10),
                             ),
                           ],
                         ),
+                        alignment: Alignment.center,
+                        child: SvgPicture.asset(
+                          'assets/branding/retailpos_app_icon.svg',
+                          width: 52,
+                          height: 52,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Text(
+                        'RetailPilot',
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Smart billing for your store team',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: isDark ? colorScheme.surface : Colors.white,
+                          borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.06)
+                                : AppColors.slate200,
+                          ),
+                          boxShadow: isDark
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.06),
+                                    blurRadius: 32,
+                                    offset: const Offset(0, 12),
+                                  ),
+                                ],
+                        ),
                         padding: const EdgeInsets.all(28),
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Form title
                             Text(
-                              'Sign in',
+                              'Welcome back',
                               style: theme.textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'Enter your credentials',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
+                              'Sign in to start billing',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
                               ),
                             ),
-
-                            const SizedBox(height: 26),
-
-                            // Email field
+                            const SizedBox(height: 28),
                             TextField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
                               enabled: !isBlocked,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                              decoration: InputDecoration(
-                                hintText: 'Email address',
-                                hintStyle: TextStyle(
-                                  color: theme.colorScheme.onSurfaceVariant
-                                      .withOpacity(0.5),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                prefixIcon: Icon(
-                                  Icons.mail_rounded,
-                                  color: theme.colorScheme.primary,
-                                  size: 20,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.primary
-                                        .withOpacity(0.3),
-                                    width: 1,
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.primary,
-                                    width: 2,
-                                  ),
-                                ),
-                                errorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.error,
-                                    width: 1,
-                                  ),
-                                ),
-                                focusedErrorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.error,
-                                    width: 2,
-                                  ),
-                                ),
-                                filled: true,
-                                fillColor:
-                                    theme.colorScheme.surfaceContainerHigh,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 16,
-                                ),
+                              textInputAction: TextInputAction.next,
+                              decoration: const InputDecoration(
+                                labelText: 'Email address',
+                                prefixIcon: Icon(Icons.mail_outline_rounded),
                               ),
                             ),
-
                             const SizedBox(height: 16),
-
-                            // Password field
                             TextField(
                               controller: _passwordController,
                               obscureText: _obscurePassword,
                               enabled: !isBlocked,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) {
+                                if (!isBlocked && !authProvider.isLoading) {
+                                  _submitLogin(authProvider);
+                                }
+                              },
                               decoration: InputDecoration(
-                                hintText: 'Password',
-                                hintStyle: TextStyle(
-                                  color: theme.colorScheme.onSurfaceVariant
-                                      .withOpacity(0.5),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                prefixIcon: Icon(
-                                  Icons.lock_rounded,
-                                  color: theme.colorScheme.secondary,
-                                  size: 20,
-                                ),
+                                labelText: 'Password',
+                                prefixIcon: const Icon(Icons.lock_outline_rounded),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword
-                                        ? Icons.visibility_off_rounded
-                                        : Icons.visibility_rounded,
-                                    color: theme.colorScheme.secondary,
-                                    size: 20,
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
                                   ),
                                   onPressed: () {
                                     setState(() {
@@ -378,130 +310,54 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                                     });
                                   },
                                 ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.secondary
-                                        .withOpacity(0.3),
-                                    width: 1,
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.secondary,
-                                    width: 2,
-                                  ),
-                                ),
-                                errorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.error,
-                                    width: 1,
-                                  ),
-                                ),
-                                focusedErrorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide(
-                                    color: theme.colorScheme.error,
-                                    width: 2,
-                                  ),
-                                ),
-                                filled: true,
-                                fillColor:
-                                    theme.colorScheme.surfaceContainerHigh,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 16,
-                                ),
                               ),
                             ),
-
                             const SizedBox(height: 28),
-
-                            // Sign in button
                             SizedBox(
-                              height: 50,
+                              height: 52,
                               child: authProvider.isLoading
                                   ? Center(
                                       child: CircularProgressIndicator(
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              theme.colorScheme.primary,
-                                            ),
+                                        color: colorScheme.primary,
                                       ),
                                     )
-                                  : ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            theme.colorScheme.primary,
-                                        foregroundColor:
-                                            theme.colorScheme.onPrimary,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        elevation: 0,
-                                      ),
+                                  : FilledButton(
                                       onPressed: isBlocked
                                           ? null
-                                          : () async {
-                                              final outcome = await authProvider
-                                                  .login(
-                                                    _emailController.text,
-                                                    _passwordController.text,
-                                                  );
-
-                                              if (!mounted) return;
-                                              if (outcome ==
-                                                  LoginOutcome
-                                                      .forceLoginRequired) {
-                                                await _showForceLoginDialog();
-                                              }
-                                            },
-                                      child: Text(
-                                        'Sign in',
-                                        style: theme.textTheme.titleSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                              color:
-                                                  theme.colorScheme.onPrimary,
-                                            ),
-                                      ),
+                                          : () => _submitLogin(authProvider),
+                                      child: const Text('Sign in'),
                                     ),
                             ),
-
-                            // Error message
                             if (authProvider.errorMessage != null) ...[
                               const SizedBox(height: 16),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
+                                  horizontal: 14,
+                                  vertical: 12,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.errorContainer,
-                                  borderRadius: BorderRadius.circular(10),
+                                  color: AppColors.error.withValues(alpha: 0.08),
+                                  borderRadius:
+                                      BorderRadius.circular(AppTheme.radiusMd),
+                                  border: Border.all(
+                                    color: AppColors.error.withValues(alpha: 0.2),
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(
-                                      Icons.info_outline,
+                                    const Icon(
+                                      Icons.error_outline_rounded,
                                       size: 18,
-                                      color: theme.colorScheme.error,
+                                      color: AppColors.error,
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Text(
                                         authProvider.errorMessage!,
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: theme
-                                                  .colorScheme
-                                                  .onErrorContainer,
-                                              fontWeight: FontWeight.w500,
-                                            ),
+                                        style: theme.textTheme.bodySmall?.copyWith(
+                                          color: AppColors.error,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -511,19 +367,13 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                           ],
                         ),
                       ),
-
-                      const SizedBox(height: 28),
-
-                      // Footer
+                      const SizedBox(height: 32),
                       Text(
                         'Powered by Daszye',
-                        textAlign: TextAlign.center,
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withOpacity(
-                            0.5,
-                          ),
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.8,
+                          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.6,
                         ),
                       ),
                     ],
@@ -535,5 +385,17 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  Future<void> _submitLogin(AuthProvider authProvider) async {
+    final outcome = await authProvider.login(
+      _emailController.text,
+      _passwordController.text,
+    );
+
+    if (!mounted) return;
+    if (outcome == LoginOutcome.forceLoginRequired) {
+      await _showForceLoginDialog();
+    }
   }
 }

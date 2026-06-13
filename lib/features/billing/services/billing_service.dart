@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/api_config.dart';
+import '../../../core/utils/product_size_format.dart';
 import '../../auth/services/api_service.dart';
 import '../models/billing_models.dart';
 
@@ -501,9 +502,7 @@ class BillingService {
       name: name,
       unitPrice: price,
       barcode: barcode == null || barcode.isEmpty ? null : barcode,
-      size: sizeValue?.toString().trim().isEmpty == true
-          ? null
-          : sizeValue?.toString().trim(),
+      size: formatProductSizeOrNull(sizeValue?.toString()),
       companyName: companyValue?.toString().trim().isEmpty == true
           ? null
           : companyValue?.toString().trim(),

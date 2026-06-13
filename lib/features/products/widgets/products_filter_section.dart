@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../models/product.dart';
 import '../providers/products_provider.dart';
 
@@ -82,7 +83,6 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
 
   Future<void> _pickDateRangeDialog() async {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
     DateTime? start = _dateRange?.start;
     DateTime? end = _dateRange?.end;
@@ -140,7 +140,15 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
         }
 
         return AlertDialog(
-          title: const Text('Select date range'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          ),
+          title: Text(
+            'Date range',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -226,43 +234,32 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
         ..showSnackBar(SnackBar(content: Text(message)));
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Filters',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Close',
-                onPressed: widget.onCloseRequested,
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'More filters',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
           ),
-
-          const SizedBox(height: 12),
-
-          Text(
-            'Gender',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Gender, price range, and date',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
           ),
+        ),
+
+        const SizedBox(height: 20),
+
+        Text(
+          'Gender',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 10,
@@ -289,7 +286,7 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
 
           Text(
             'Price range',
-            style: theme.textTheme.labelLarge?.copyWith(
+            style: theme.textTheme.labelMedium?.copyWith(
               color: colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
             ),
@@ -307,13 +304,14 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                     labelText: 'Min',
                     prefixText: '₹',
                     filled: true,
-                    fillColor: colorScheme.surfaceContainerHigh,
+                    fillColor: colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                       borderSide: BorderSide.none,
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                       borderSide: BorderSide(color: colorScheme.outlineVariant),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
@@ -334,13 +332,14 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                     labelText: 'Max',
                     prefixText: '₹',
                     filled: true,
-                    fillColor: colorScheme.surfaceContainerHigh,
+                    fillColor: colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.5),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                       borderSide: BorderSide.none,
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                       borderSide: BorderSide(color: colorScheme.outlineVariant),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
@@ -356,8 +355,8 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
           const SizedBox(height: 16),
 
           Text(
-            'Date',
-            style: theme.textTheme.labelLarge?.copyWith(
+            'Date added',
+            style: theme.textTheme.labelMedium?.copyWith(
               color: colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w700,
             ),
@@ -393,8 +392,7 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
 
           SizedBox(
             width: double.infinity,
-            height: 48,
-            child: FilledButton.icon(
+            child: FilledButton(
               onPressed: () {
                 final minText = _minPriceController.text.trim();
                 final maxText = _maxPriceController.text.trim();
@@ -430,12 +428,10 @@ class _ProductsFilterSectionState extends State<ProductsFilterSection> {
                 );
                 widget.onCloseRequested();
               },
-              icon: const Icon(Icons.tune),
-              label: const Text('Apply Filters'),
+              child: const Text('Apply filters'),
             ),
           ),
         ],
-      ),
     );
   }
 }

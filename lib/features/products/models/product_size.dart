@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/utils/product_size_format.dart';
+
 @immutable
 class ProductSize {
   const ProductSize({required this.id, required this.name});
@@ -9,7 +11,9 @@ class ProductSize {
 
   factory ProductSize.fromJson(Map<String, dynamic> json) {
     final id = int.tryParse((json['id'] ?? 0).toString()) ?? 0;
-    final name = (json['name'] ?? json['size'] ?? '').toString().trim();
+    final name = formatProductSize(
+      (json['name'] ?? json['size'] ?? '').toString(),
+    );
     return ProductSize(id: id, name: name);
   }
 }

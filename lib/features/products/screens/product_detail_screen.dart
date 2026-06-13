@@ -8,9 +8,12 @@ import 'package:flutter/rendering.dart';
 import '../../../core/printing/barcode_label_data.dart';
 import '../../../core/printing/barcode_label_layout.dart';
 import '../../../core/printing/pdf_printer_service.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_surface_card.dart';
 import '../../../core/widgets/barcode_action_buttons.dart';
 import '../../../core/utils/barcode_saver.dart';
 import '../../../core/utils/inr_format.dart';
+import '../../billing/widgets/billing_ui.dart';
 
 import '../models/product.dart';
 
@@ -113,6 +116,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     final product = widget.product;
     final priceLabel = formatInr(product.price, decimalDigits: 2);
@@ -123,274 +127,126 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final genderText = product.gender?.label;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: isDark ? AppColors.slate950 : AppColors.slate50,
       appBar: AppBar(
-        title: Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        backgroundColor: colorScheme.surface,
-        surfaceTintColor: colorScheme.surface,
+        title: Text(
+          product.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         children: [
-          Card(
-            elevation: 0,
-            color: colorScheme.surfaceContainerLow,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: colorScheme.primary.withAlpha(12),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          Icons.inventory_2_outlined,
-                          color: colorScheme.primary,
-                          size: 22,
-                        ),
+          BillingPayableHero(
+            label: 'Selling price',
+            amount: priceLabel,
+            subtitle: product.companyName.isNotEmpty
+                ? product.companyName
+                : null,
+          ),
+          const SizedBox(height: 12),
+          AppSurfaceCard(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (genderText != null)
+                      _TagChip(
+                        icon: Icons.people_alt_outlined,
+                        text: genderText,
+                        background: AppColors.emerald.withValues(alpha: 0.1),
+                        foreground: AppColors.emeraldDark,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product.name,
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                height: 1.05,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              product.companyName.isEmpty
-                                  ? '—'
-                                  : product.companyName,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                if (genderText != null)
-                                  _TagChip(
-                                    icon: Icons.people_alt_outlined,
-                                    text: genderText,
-                                    background: colorScheme.primary.withAlpha(
-                                      12,
-                                    ),
-                                    foreground: colorScheme.primary,
-                                  ),
-                                _TagChip(
-                                  icon: Icons.straighten_outlined,
-                                  text: product.size,
-                                  background: colorScheme.surface,
-                                  foreground: colorScheme.onSurfaceVariant,
-                                ),
-                                _TagChip(
-                                  icon: Icons.palette_outlined,
-                                  text: product.color,
-                                  background: colorScheme.surface,
-                                  foreground: colorScheme.onSurfaceVariant,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
+                    _TagChip(
+                      icon: Icons.straighten_outlined,
+                      text: product.size,
+                      background: colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.5),
+                      foreground: colorScheme.onSurfaceVariant,
                     ),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary.withAlpha(8),
-                      borderRadius: BorderRadius.circular(14),
+                    _TagChip(
+                      icon: Icons.palette_outlined,
+                      text: product.color,
+                      background: colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.5),
+                      foreground: colorScheme.onSurfaceVariant,
                     ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              'Price',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              priceLabel,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Text(
-                              'Purchase Price',
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              purchasePriceLabel,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                    _TagChip(
+                      icon: Icons.inventory_2_outlined,
+                      text: 'Stock ${product.quantityInStock}',
+                      background: colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.5),
+                      foreground: colorScheme.onSurfaceVariant,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Barcode',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  RepaintBoundary(
-                    key: _barcodeBoundaryKey,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: colorScheme.outlineVariant.withAlpha(80),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'Barcode: ${product.barcode}',
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                'Stock: ${product.quantityInStock}',
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          BarcodeWidget(
-                            barcode: Barcode.code128(),
-                            data: product.barcode,
-                            drawText: true,
-                            color: colorScheme.onSurface,
-                            backgroundColor: colorScheme.surface,
-                            errorBuilder: (context, error) {
-                              return Text(
-                                'Invalid barcode',
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  color: colorScheme.error,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  BarcodeActionButtons(
-                    isDownloading: _isDownloading,
-                    isPrinting: _isPrinting,
-                    onDownload: _downloadBarcode,
-                    onPrint: _printBarcode,
-                    downloadLabel: 'Download',
-                    printLabel: 'Print',
-                  ),
-                  const SizedBox(height: 18),
-                  _DetailRow(
-                    label: 'Quantity in stock',
-                    value: product.quantityInStock.toString(),
-                  ),
-                  _DetailRow(label: 'Size', value: product.size),
-                  _DetailRow(label: 'Colour', value: product.color),
-                  _DetailRow(
-                    label: 'Gender',
-                    value: product.gender?.label ?? '—',
-                  ),
-                ],
-              ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                BillingSummaryLine(
+                  label: 'Purchase price',
+                  value: purchasePriceLabel,
+                ),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
+          const SizedBox(height: 16),
           Text(
-            value,
+            'Barcode',
             style: theme.textTheme.labelLarge?.copyWith(
               fontWeight: FontWeight.w800,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          AppSurfaceCard(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  product.barcode,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                RepaintBoundary(
+                  key: _barcodeBoundaryKey,
+                  child: BarcodeWidget(
+                    barcode: Barcode.code128(),
+                    data: product.barcode,
+                    drawText: true,
+                    color: colorScheme.onSurface,
+                    backgroundColor: Colors.transparent,
+                    errorBuilder: (context, error) {
+                      return Text(
+                        'Invalid barcode',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: colorScheme.error,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                BarcodeActionButtons(
+                  isDownloading: _isDownloading,
+                  isPrinting: _isPrinting,
+                  onDownload: _downloadBarcode,
+                  onPrint: _printBarcode,
+                  downloadLabel: 'Download',
+                  printLabel: 'Print',
+                ),
+              ],
             ),
           ),
         ],

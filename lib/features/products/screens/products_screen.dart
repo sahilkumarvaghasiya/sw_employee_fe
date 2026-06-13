@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../models/product.dart';
 import '../models/product_size.dart';
 import '../models/product_color.dart';
@@ -12,6 +13,7 @@ import 'product_detail_screen.dart';
 import '../widgets/product_card.dart';
 import '../widgets/products_filter_section.dart';
 import '../widgets/products_search_bar.dart';
+import '../widgets/products_ui.dart';
 import '../widgets/searchable_dropdown.dart';
 
 class ProductsScreen extends StatefulWidget {
@@ -90,9 +92,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
         return SafeArea(
           child: Padding(
             padding: EdgeInsets.fromLTRB(
-              16,
-              6,
-              16,
+              20,
+              4,
+              20,
               16 + media.viewInsets.bottom,
             ),
             child: ChangeNotifierProvider<ProductsProvider>.value(
@@ -109,6 +111,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
         );
       },
     );
+  }
+
+  int _advancedFilterCount(ProductsProvider provider) {
+    var count = 0;
+    if (provider.selectedGenders.isNotEmpty) count++;
+    if (provider.selectedDateRange != null) count++;
+    final bounds = provider.priceBounds;
+    final range = provider.selectedPriceRange;
+    if (range.start > bounds.$1 || range.end < bounds.$2) count++;
+    return count;
   }
 
   Future<void> _openProductDetails(Product product) async {
@@ -144,9 +156,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     final provider = context.watch<ProductsProvider>();
+    final advancedFilterCount = _advancedFilterCount(provider);
+    final hasQuickFilters = provider.selectedSize != null ||
+        provider.selectedColor != null ||
+        provider.searchQuery.trim().isNotEmpty;
+    final headerHeight = hasQuickFilters ? 140.0 : 96.0;
 
     // If content doesn't fill the viewport, keep auto-fetching pages until it
     // does (or until there's no more data). This runs after layout.
@@ -174,120 +191,166 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.slate950 : AppColors.slate50,
       appBar: AppBar(
         title: const Text('Products'),
+        centerTitle: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         actions: [
-          IconButton(
-            tooltip: 'Reset filters',
-            onPressed: provider.hasActiveFilters
-                ? () {
-                    _searchController.clear();
-                    _sizeController.clear();
-                    provider.resetFilters();
-                  }
-                : null,
-            icon: const Icon(Icons.filter_alt_off_outlined),
-          ),
-          IconButton(
-            tooltip: 'Filters',
-            onPressed: _openFiltersSheet,
-            icon: const Icon(Icons.tune),
-          ),
+          if (provider.hasActiveFilters)
+            TextButton.icon(
+              onPressed: () {
+                _searchController.clear();
+                _sizeController.clear();
+                provider.resetFilters();
+              },
+              icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+              label: const Text('Clear all'),
+            ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: provider.refresh,
+        color: AppColors.emerald,
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
             SliverPersistentHeader(
               pinned: true,
               delegate: _PinnedHeaderDelegate(
-                // Search bar + spacing + filter row; must match or exceed real content height
-                // or the header clips/overlaps the list below.
-                height: 140,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final dropdownWidth =
-                          (constraints.maxWidth - 10) / 2;
-
-                      final search = ProductsSearchBar(
-                        controller: _searchController,
-                        onChanged: provider.setSearchQuery,
-                      );
-
-                      final sizeOptions = provider.availableSizes
-                          .map(
-                            (s) => SearchableDropdownOption<ProductSize>(
-                              label: s.name,
-                              value: s,
+                height: headerHeight,
+                child: ColoredBox(
+                  color: isDark ? AppColors.slate950 : AppColors.slate50,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ProductsSearchBar(
+                          controller: _searchController,
+                          onChanged: provider.setSearchQuery,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return SearchableDropdown<ProductSize>(
+                                    placeholder: 'Size',
+                                    width: constraints.maxWidth,
+                                    height: 40,
+                                    prefixIcon: Icons.straighten_rounded,
+                                    selectedLabel: provider.selectedSize,
+                                    options: provider.availableSizes
+                                        .map(
+                                          (s) =>
+                                              SearchableDropdownOption<
+                                                  ProductSize>(
+                                            label: s.name,
+                                            value: s,
+                                          ),
+                                        )
+                                        .toList(growable: false),
+                                    filterHintText: 'Type size',
+                                    onClear: () {
+                                      _sizeController.clear();
+                                      provider.setSelectedSize(null);
+                                    },
+                                    clearLabel: 'All sizes',
+                                    onSelected: (opt) {
+                                      _sizeController.text = opt.label;
+                                      _sizeController.selection =
+                                          TextSelection.collapsed(
+                                        offset: opt.label.length,
+                                      );
+                                      provider.setSelectedSize(opt.value);
+                                    },
+                                  );
+                                },
+                              ),
                             ),
-                          )
-                          .toList(growable: false);
-
-                      final colorOptions = provider.availableColors
-                          .map(
-                            (c) => SearchableDropdownOption<ProductColor>(
-                              label: c.name,
-                              value: c,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return SearchableDropdown<ProductColor>(
+                                    placeholder: 'Color',
+                                    width: constraints.maxWidth,
+                                    height: 40,
+                                    prefixIcon: Icons.palette_outlined,
+                                    selectedLabel: provider.selectedColor,
+                                    options: provider.availableColors
+                                        .map(
+                                          (c) =>
+                                              SearchableDropdownOption<
+                                                  ProductColor>(
+                                            label: c.name,
+                                            value: c,
+                                          ),
+                                        )
+                                        .toList(growable: false),
+                                    filterHintText: 'Type colour',
+                                    onClear: () =>
+                                        provider.setSelectedColor(null),
+                                    clearLabel: 'All colours',
+                                    onSelected: (opt) {
+                                      provider.setSelectedColor(opt.value);
+                                    },
+                                  );
+                                },
+                              ),
                             ),
-                          )
-                          .toList(growable: false);
-
-                      final sizeMenu = SearchableDropdown<ProductSize>(
-                        placeholder: 'Size',
-                        width: dropdownWidth,
-                        height: 48,
-                        selectedLabel: provider.selectedSize,
-                        options: sizeOptions,
-                        filterHintText: 'Type size',
-                        onClear: () {
-                          _sizeController.clear();
-                          provider.setSelectedSize(null);
-                        },
-                        clearLabel: 'All sizes',
-                        onSelected: (opt) {
-                          _sizeController.text = opt.label;
-                          _sizeController.selection = TextSelection.collapsed(
-                            offset: opt.label.length,
-                          );
-                          provider.setSelectedSize(opt.value);
-                        },
-                      );
-
-                      final colorMenu = SearchableDropdown<ProductColor>(
-                        placeholder: 'Color',
-                        width: dropdownWidth,
-                        height: 48,
-                        selectedLabel: provider.selectedColor,
-                        options: colorOptions,
-                        filterHintText: 'Type colour',
-                        onClear: () {
-                          provider.setSelectedColor(null);
-                        },
-                        clearLabel: 'All colours',
-                        onSelected: (opt) {
-                          provider.setSelectedColor(opt.value);
-                        },
-                      );
-
-                      // Layout: full-width search on top, then size & color on next line
-                      return Column(
-                        children: [
-                          Row(children: [Expanded(child: search)]),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              sizeMenu,
-                              const SizedBox(width: 10),
-                              colorMenu,
-                            ],
+                            const SizedBox(width: 8),
+                            ProductsCompactFilterButton(
+                              activeCount: advancedFilterCount,
+                              onTap: _openFiltersSheet,
+                            ),
+                          ],
+                        ),
+                        if (hasQuickFilters) ...[
+                          const SizedBox(height: 8),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                if (provider.searchQuery.trim().isNotEmpty)
+                                  ProductsActiveFilterChip(
+                                    label: 'Search: ${provider.searchQuery.trim()}',
+                                    onRemove: () {
+                                      _searchController.clear();
+                                      provider.setSearchQuery('');
+                                    },
+                                  ),
+                                if (provider.selectedSize != null) ...[
+                                  if (provider.searchQuery.trim().isNotEmpty)
+                                    const SizedBox(width: 6),
+                                  ProductsActiveFilterChip(
+                                    label: 'Size: ${provider.selectedSize}',
+                                    onRemove: () {
+                                      _sizeController.clear();
+                                      provider.setSelectedSize(null);
+                                    },
+                                  ),
+                                ],
+                                if (provider.selectedColor != null) ...[
+                                  const SizedBox(width: 6),
+                                  ProductsActiveFilterChip(
+                                    label: 'Color: ${provider.selectedColor}',
+                                    onRemove: () =>
+                                        provider.setSelectedColor(null),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ],
-                      );
-                    },
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -300,61 +363,53 @@ class _ProductsScreenState extends State<ProductsScreen> {
             else if (provider.error != null && provider.items.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          provider.error!,
-                          style: theme.textTheme.titleMedium,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: provider.refresh,
-                          child: const Text('Try again'),
-                        ),
-                      ],
-                    ),
-                  ),
+                child: ProductsEmptyState(
+                  title: 'Could not load products',
+                  subtitle: provider.error,
+                  actionLabel: 'Try again',
+                  onAction: provider.refresh,
+                  icon: Icons.cloud_off_outlined,
                 ),
               )
             else if (provider.items.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(
-                  child: Text(
-                    'No products found',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                child: ProductsEmptyState(
+                  title: 'No products found',
+                  subtitle: provider.hasActiveFilters
+                      ? 'Try adjusting your search or filters'
+                      : 'Products will appear here once added',
+                  actionLabel:
+                      provider.hasActiveFilters ? 'Clear filters' : null,
+                  onAction: provider.hasActiveFilters
+                      ? () {
+                          _searchController.clear();
+                          _sizeController.clear();
+                          provider.resetFilters();
+                        }
+                      : null,
                 ),
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 sliver: SliverList.separated(
                   itemBuilder: (context, index) {
                     final product = provider.items[index];
                     final isLoadingThis = _loadingProductId == product.id;
                     return ProductCard(
                       product: product,
-                      onTap: isLoadingThis
-                          ? () {}
-                          : () => _openProductDetails(product),
+                      isLoading: isLoadingThis,
+                      onTap: () => _openProductDetails(product),
                     );
                   },
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemCount: provider.items.length,
                 ),
               ),
-
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 child: _PaginationFooter(
                   isLoadingMore: provider.isLoadingMore,
                   hasMore: provider.hasMore,
@@ -388,12 +443,15 @@ class _PaginationFooter extends StatelessWidget {
       );
     }
 
-    if (!hasMore) {
+    if (!hasMore && !isLoadingMore) {
       return Center(
-        child: Text(
-          'You’re all caught up',
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: colorScheme.onSurfaceVariant,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            'All products loaded',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       );
@@ -422,20 +480,30 @@ class _PinnedHeaderDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return SizedBox(
       height: height,
       child: Material(
-        color: colorScheme.surface,
-        elevation: overlapsContent ? 1 : 0,
+        color: isDark ? AppColors.slate950 : AppColors.slate50,
+        elevation: overlapsContent ? 0.5 : 0,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: colorScheme.outlineVariant, width: 1),
-            ),
+            border: overlapsContent
+                ? Border(
+                    bottom: BorderSide(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : AppColors.slate200,
+                    ),
+                  )
+                : null,
           ),
-          child: child,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: child,
+          ),
         ),
       ),
     );

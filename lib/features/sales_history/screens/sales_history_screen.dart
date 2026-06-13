@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_surface_card.dart';
 import '../../billing/models/billing_models.dart';
+import '../../billing/widgets/billing_ui.dart';
 import '../models/sales_bill.dart';
 import '../providers/sales_history_provider.dart';
+import '../widgets/sales_history_ui.dart';
 
 abstract class _DateRangeDialogResult {
   const _DateRangeDialogResult();
@@ -159,7 +164,15 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         }
 
         return AlertDialog(
-          title: const Text('Date'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          ),
+          title: Text(
+            'Date range',
+            style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -238,6 +251,13 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     );
   }
 
+  int _activeFilterCount() {
+    var count = 0;
+    if (_dateRange != null) count++;
+    if (_maxTotalController.text.trim().isNotEmpty) count++;
+    return count;
+  }
+
   Future<void> _openFiltersSheet() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -247,126 +267,126 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         final theme = Theme.of(context);
         final colorScheme = theme.colorScheme;
         final media = MediaQuery.of(context);
-        final isWide = media.size.width >= 520;
 
         return SafeArea(
           child: Padding(
             padding: EdgeInsets.fromLTRB(
-              16,
-              6,
-              16,
+              20,
+              4,
+              20,
               16 + media.viewInsets.bottom,
             ),
             child: StatefulBuilder(
               builder: (context, setModalState) {
-                final dateField = OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(56),
-                    side: BorderSide(color: colorScheme.outlineVariant),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  icon: const Icon(Icons.date_range_outlined),
-                  label: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(_dateLabel(context, _dateRange)),
-                  ),
-                  onPressed: () async {
-                    await _pickDateRange();
-                    setModalState(() {});
-                  },
-                );
-
-                final maxField = TextField(
-                  controller: _maxTotalController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.currency_rupee_outlined),
-                    labelText: 'Max total (≤)',
-                    suffixIcon: _maxTotalController.text.trim().isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear',
-                            onPressed: () {
-                              setState(_maxTotalController.clear);
-                              setModalState(() {});
-                            },
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                    filled: true,
-                    fillColor: colorScheme.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: colorScheme.outlineVariant),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: colorScheme.outlineVariant),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: colorScheme.primary),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 18),
-                  ),
-                  onChanged: (_) {
-                    setState(() {});
-                    setModalState(() {});
-                  },
-                );
-
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Filters',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Close',
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (isWide)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: dateField),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: SizedBox(height: 56, child: maxField),
-                          ),
-                        ],
-                      )
-                    else
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          dateField,
-                          const SizedBox(height: 12),
-                          SizedBox(height: 56, child: maxField),
-                        ],
+                    Text(
+                      'Filter bills',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
-                    const SizedBox(height: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Date range and maximum bill total',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Date range',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await _pickDateRange();
+                        setModalState(() {});
+                      },
+                      icon: const Icon(Icons.date_range_outlined, size: 18),
+                      label: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _dateLabel(context, _dateRange),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusMd),
+                        ),
+                      ),
+                    ),
+                    if (_dateRange != null)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() => _dateRange = null);
+                            setModalState(() {});
+                          },
+                          child: const Text('Clear date'),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Max bill total',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _maxTotalController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      onChanged: (_) {
+                        setState(() {});
+                        setModalState(() {});
+                      },
+                      decoration: InputDecoration(
+                        isDense: true,
+                        prefixText: '≤ ₹ ',
+                        hintText: 'Any amount',
+                        filled: true,
+                        fillColor: colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.5),
+                        border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusMd),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusMd),
+                          borderSide:
+                              BorderSide(color: colorScheme.outlineVariant),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     Row(
                       children: [
                         TextButton(
                           onPressed: () async {
                             await _clearFilters();
                             setModalState(() {});
+                            if (context.mounted) Navigator.of(context).pop();
                           },
-                          child: const Text('Clear'),
+                          child: const Text('Clear all'),
                         ),
                         const Spacer(),
                         FilledButton(
@@ -374,7 +394,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                             await _applyCurrentFilters();
                             if (context.mounted) Navigator.of(context).pop();
                           },
-                          child: const Text('Apply'),
+                          child: const Text('Apply filters'),
                         ),
                       ],
                     ),
@@ -450,9 +470,11 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     final provider = context.watch<SalesHistoryProvider>();
     final bills = provider.bills;
+    final filterCount = _activeFilterCount();
 
     final hasAnyFilter =
         _dateRange != null ||
@@ -460,114 +482,115 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         _searchController.text.trim().isNotEmpty;
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.slate950 : AppColors.slate50,
+      appBar: AppBar(
+        title: const Text('Sales history'),
+        centerTitle: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        actions: [
+          if (hasAnyFilter)
+            TextButton.icon(
+              onPressed: _clearFilters,
+              icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+              label: const Text('Clear all'),
+            ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: provider.refresh,
+        color: AppColors.emerald,
         child: CustomScrollView(
           slivers: [
-            SliverAppBar(
-              pinned: true,
-              centerTitle: false,
-              titleSpacing: 0,
-              toolbarHeight: 78,
-              backgroundColor: colorScheme.surface,
-              surfaceTintColor: colorScheme.surfaceTint,
-              title: Padding(
-                padding: const EdgeInsets.only(left: 16, right: 16),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Sales history',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Tap a bill to view details',
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      'Past bills and invoices',
+                      style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SalesHistorySearchBar(
+                            controller: _searchController,
+                            onChanged: _onSearchChanged,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SalesHistoryFilterButton(
+                          activeCount: filterCount,
+                          onTap: _openFiltersSheet,
+                        ),
+                      ],
+                    ),
+                    if (hasAnyFilter) ...[
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            if (_searchController.text.trim().isNotEmpty)
+                              SalesHistoryActiveFilterChip(
+                                label:
+                                    'Search: ${_searchController.text.trim()}',
+                                onRemove: () {
+                                  setState(_searchController.clear);
+                                  _onSearchChanged('');
+                                },
+                              ),
+                            if (_dateRange != null) ...[
+                              if (_searchController.text.trim().isNotEmpty)
+                                const SizedBox(width: 6),
+                              SalesHistoryActiveFilterChip(
+                                label: _dateLabel(context, _dateRange),
+                                onRemove: () async {
+                                  setState(() => _dateRange = null);
+                                  await _applyCurrentFilters();
+                                },
+                              ),
+                            ],
+                            if (_maxTotalController.text.trim().isNotEmpty) ...[
+                              if (_searchController.text.trim().isNotEmpty ||
+                                  _dateRange != null)
+                                const SizedBox(width: 6),
+                              SalesHistoryActiveFilterChip(
+                                label:
+                                    '≤ ₹${_maxTotalController.text.trim()}',
+                                onRemove: () async {
+                                  setState(_maxTotalController.clear);
+                                  await _applyCurrentFilters();
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              actions: [
-                IconButton(
-                  tooltip: 'Clear filters',
-                  onPressed: hasAnyFilter ? _clearFilters : null,
-                  icon: const Icon(Icons.filter_alt_off_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Filters',
-                  onPressed: _openFiltersSheet,
-                  icon: const Icon(Icons.tune),
-                ),
-              ],
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(1),
-                child: Container(
-                  height: 1,
-                  color: colorScheme.outlineVariant.withAlpha(120),
-                ),
-              ),
             ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Material(
-                  elevation: 2,
-                  borderRadius: BorderRadius.circular(24),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _onSearchChanged,
-                    decoration: InputDecoration(
-                      hintText: 'Search customer…',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.trim().isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: 'Clear search',
-                              onPressed: () {
-                                setState(_searchController.clear);
-                                _onSearchChanged('');
-                              },
-                              icon: const Icon(Icons.clear),
-                            ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 16,
-                      ),
+            if (!provider.isLoading && provider.error == null && bills.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  child: Text(
+                    '${bills.length} bill${bills.length == 1 ? '' : 's'}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                child: Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    if (_dateRange != null)
-                      Chip(
-                        avatar: const Icon(Icons.date_range_outlined),
-                        label: Text(_dateLabel(context, _dateRange)),
-                      ),
-                    if (_maxTotalController.text.trim().isNotEmpty)
-                      ActionChip(
-                        avatar: const Icon(Icons.currency_rupee_outlined),
-                        label: Text('≤ ₹${_maxTotalController.text.trim()}'),
-                        onPressed: _openFiltersSheet,
-                      ),
-                  ],
-                ),
-              ),
-            ),
             if (provider.isLoading && bills.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -576,69 +599,32 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             else if (provider.error != null && bills.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.error_outline_rounded,
-                          size: 64,
-                          color: colorScheme.error,
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          provider.error!,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: colorScheme.error,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 10),
-                        FilledButton(
-                          onPressed: provider.refresh,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
+                child: SalesHistoryEmptyState(
+                  title: 'Could not load sales history',
+                  subtitle: provider.error,
+                  actionLabel: 'Try again',
+                  onAction: provider.refresh,
+                  icon: Icons.cloud_off_outlined,
                 ),
               )
             else if (bills.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.receipt_long_outlined,
-                          size: 64,
-                          color: colorScheme.onSurfaceVariant.withAlpha(180),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          'No bills found',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
+                child: SalesHistoryEmptyState(
+                  title: 'No bills found',
+                  subtitle: hasAnyFilter
+                      ? 'Try adjusting your search or filters'
+                      : 'Completed sales will appear here',
+                  actionLabel: hasAnyFilter ? 'Clear filters' : null,
+                  onAction: hasAnyFilter ? _clearFilters : null,
                 ),
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                 sliver: SliverList.separated(
                   itemCount: bills.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final bill = bills[index];
                     final loc = MaterialLocalizations.of(context);
@@ -648,159 +634,16 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                       alwaysUse24HourFormat: false,
                     );
 
-                    return Material(
-                      color: colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(20),
-                      elevation: 0,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () => _openBillDetails(bill),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          width: 38,
-                                          height: 38,
-                                          decoration: BoxDecoration(
-                                            color: colorScheme.primary
-                                                .withAlpha(18),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            Icons.receipt_long_outlined,
-                                            color: colorScheme.primary,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            bill.billNo,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.titleSmall
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w900,
-                                                ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: colorScheme.surface,
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                            border: Border.all(
-                                              color: colorScheme.outlineVariant,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            '$date • $time',
-                                            style: theme.textTheme.labelSmall
-                                                ?.copyWith(
-                                                  color: colorScheme
-                                                      .onSurfaceVariant,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 5,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: colorScheme.primary
-                                                .withOpacity(0.08),
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                            border: Border.all(
-                                              color: colorScheme.outlineVariant,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            bill.customer.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 5,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: colorScheme.secondary
-                                                .withOpacity(0.06),
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                            border: Border.all(
-                                              color: colorScheme.outlineVariant,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            bill.customer.phone,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
-                                                  color: colorScheme
-                                                      .onSurfaceVariant,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (bill.listAmount != null) ...[
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        _money(bill.listAmount!),
-                                        style: theme.textTheme.titleSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    return SalesHistoryBillTile(
+                      billNo: bill.billNo,
+                      customerName: bill.customer.name,
+                      customerPhone: bill.customer.phone,
+                      dateLabel: date,
+                      timeLabel: time,
+                      amountLabel: bill.listAmount != null
+                          ? _money(bill.listAmount!)
+                          : null,
+                      onTap: () => _openBillDetails(bill),
                     );
                   },
                 ),
@@ -824,392 +667,251 @@ class _BillDetailsSheet extends StatelessWidget {
   final String Function(double) money;
   final String Function(BillingPaymentMethod) methodLabel;
 
+  IconData _methodIcon(BillingPaymentMethod method) {
+    return switch (method) {
+      BillingPaymentMethod.cash => Icons.payments_outlined,
+      BillingPaymentMethod.qr => Icons.qr_code_2_rounded,
+      BillingPaymentMethod.card => Icons.credit_card_outlined,
+    };
+  }
+
+  String _itemMeta(SalesLineItem item) {
+    final parts = <String>[
+      'Qty ${item.quantity}',
+      '${money(item.unitPrice)} each',
+    ];
+    if ((item.enteredDiscountPercent ?? 0) > 0) {
+      parts.add('${item.enteredDiscountPercent!.toStringAsFixed(0)}% off');
+    } else if (item.discountAmount > 0) {
+      parts.add('${money(item.discountAmount)} off');
+    }
+    return parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.sizeOf(context).height;
 
     final loc = MaterialLocalizations.of(context);
     final date = loc.formatShortDate(bill.createdAt);
     final time = loc.formatTimeOfDay(TimeOfDay.fromDateTime(bill.createdAt));
+    final itemCount = bill.itemsCount;
+    final paymentLabel = methodLabel(bill.paymentMethod);
 
     return SafeArea(
       child: SizedBox(
         height: screenHeight * 0.86,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Invoice #${bill.billNo}',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              Card(
-                elevation: 0,
-                color: colorScheme.surfaceContainerHigh,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: [
-                      _InvoiceMetaRow(
-                        first: _InvoiceMetaTile(
-                          label: 'Customer',
-                          value: bill.customer.name,
-                          icon: Icons.person_outline_rounded,
-                          backgroundColor: colorScheme.primary.withOpacity(
-                            0.08,
-                          ),
-                          iconColor: colorScheme.primary,
-                        ),
-                        second: _InvoiceMetaTile(
-                          label: 'Phone',
-                          value: bill.customer.phone,
-                          icon: Icons.phone_outlined,
-                          backgroundColor: colorScheme.primary.withOpacity(
-                            0.08,
-                          ),
-                          iconColor: colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      _InvoiceMetaRow(
-                        first: _InvoiceMetaTile(
-                          label: 'Date',
-                          value: '$date, $time',
-                          icon: Icons.event_outlined,
-                          backgroundColor: colorScheme.primary.withOpacity(
-                            0.08,
-                          ),
-                          iconColor: colorScheme.primary,
-                        ),
-                        second: _InvoiceMetaTile(
-                          label: 'Payment',
-                          value: methodLabel(bill.paymentMethod),
-                          icon: Icons.payments_outlined,
-                          backgroundColor: colorScheme.primary.withOpacity(
-                            0.08,
-                          ),
-                          iconColor: colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              Card(
-                elevation: 0,
-                color: colorScheme.surfaceContainerHigh,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  child: Column(
-                    children: [
-                      _SummaryRow(
-                        label: 'Subtotal',
-                        value: money(bill.subtotal),
-                      ),
-                      const SizedBox(height: 6),
-                      _SummaryRow(
-                        label: 'Discount',
-                        value: '- ${money(bill.totalDiscount)}',
-                        muted: true,
-                      ),
-                      const Divider(height: 14),
-                      _SummaryRow(
-                        label: 'Total',
-                        value: money(bill.total),
-                        bold: true,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
               Text(
-                'Items',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+                'Bill details',
+                style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              const SizedBox(height: 8),
-
-              Expanded(
-                child: Scrollbar(
-                  thumbVisibility: bill.items.length > 4,
-                  child: ListView.separated(
-                    itemCount: bill.items.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final item = bill.items[index];
-                      return Card(
-                        elevation: 0,
-                        color: colorScheme.surfaceContainerHigh,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+              const SizedBox(height: 4),
+              Text(
+                bill.billNo,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              BillingPayableHero(
+                label: 'Bill total',
+                amount: money(bill.total),
+                subtitle: '$itemCount item${itemCount == 1 ? '' : 's'} · $paymentLabel',
+              ),
+              const SizedBox(height: 12),
+              AppSurfaceCard(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: AppColors.emerald.withValues(alpha: 0.12),
+                      child: Text(
+                        bill.customer.name.trim().isNotEmpty
+                            ? bill.customer.name.trim()[0].toUpperCase()
+                            : '?',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.emeraldDark,
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.productName,
-                                      style: theme.textTheme.titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          '${item.quantity} × ${money(item.unitPrice)}',
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                color: colorScheme
-                                                    .onSurfaceVariant,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                        if ((item.enteredDiscountPercent ?? 0) >
-                                            0) ...[
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: colorScheme.surface,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color:
-                                                    colorScheme.outlineVariant,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              '${item.enteredDiscountPercent!.toStringAsFixed(0)}% off',
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    color: colorScheme
-                                                        .onSurfaceVariant,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                            ),
-                                          ),
-                                        ] else if (item.discountAmount > 0) ...[
-                                          const SizedBox(width: 8),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: colorScheme.surface,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color:
-                                                    colorScheme.outlineVariant,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              '${money(item.discountAmount)} off',
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    color: colorScheme
-                                                        .onSurfaceVariant,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                money(item.lineTotal),
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            bill.customer.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            bill.customer.phone,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          Text(
+                            '$date · $time',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.emerald.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: AppColors.emerald.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _methodIcon(bill.paymentMethod),
+                            size: 14,
+                            color: AppColors.emeraldDark,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            paymentLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.emeraldDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              AppSurfaceCard(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  children: [
+                    BillingSummaryLine(
+                      label: 'Subtotal',
+                      value: money(bill.subtotal),
+                    ),
+                    if (bill.totalDiscount > 0.0001)
+                      BillingSummaryLine(
+                        label: 'Discount',
+                        value: '- ${money(bill.totalDiscount)}',
+                        valueColor: colorScheme.tertiary,
+                      ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Divider(height: 1),
+                    ),
+                    BillingSummaryLine(
+                      label: 'Total',
+                      value: money(bill.total),
+                      bold: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Items',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: bill.items.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No line items in response',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ),
-                      );
-                    },
-                  ),
-                ),
+                      )
+                    : ListView.separated(
+                        itemCount: bill.items.length,
+                        separatorBuilder: (_, _) => Divider(
+                          height: 1,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : AppColors.slate200,
+                        ),
+                        itemBuilder: (context, index) {
+                          final item = bill.items[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.productName,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.labelLarge
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        _itemMeta(item),
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  money(item.lineTotal),
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.emeraldDark,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _InvoiceMetaRow extends StatelessWidget {
-  const _InvoiceMetaRow({required this.first, required this.second});
-
-  final Widget first;
-  final Widget second;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: first),
-        const SizedBox(width: 10),
-        Expanded(child: second),
-      ],
-    );
-  }
-}
-
-class _InvoiceMetaTile extends StatelessWidget {
-  const _InvoiceMetaTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.backgroundColor,
-    this.iconColor,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color? backgroundColor;
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: backgroundColor ?? colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            size: 18,
-            color: iconColor ?? colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: iconColor ?? colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Text(
-                    value,
-                    softWrap: false,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: iconColor ?? colorScheme.onSurface,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-    this.bold = false,
-    this.muted = false,
-  });
-
-  final String label;
-  final String value;
-  final bool bold;
-  final bool muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final valueStyle =
-        (bold ? theme.textTheme.titleMedium : theme.textTheme.bodyMedium)
-            ?.copyWith(fontWeight: bold ? FontWeight.w900 : FontWeight.w700);
-
-    final labelStyle = theme.textTheme.bodyMedium?.copyWith(
-      color: muted
-          ? colorScheme.onSurfaceVariant
-          : colorScheme.onSurfaceVariant,
-      fontWeight: FontWeight.w700,
-    );
-
-    return Row(
-      children: [
-        Expanded(child: Text(label, style: labelStyle)),
-        Text(value, style: valueStyle),
-      ],
     );
   }
 }

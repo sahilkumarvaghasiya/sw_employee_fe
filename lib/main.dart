@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'core/navigation/app_lifecycle_manager.dart';
 import 'core/navigation/session_cleanup_handler.dart';
 import 'core/providers/theme_provider.dart';
+import 'core/theme/app_theme.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/home/providers/home_dashboard_provider.dart';
@@ -34,19 +35,13 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer2<AuthProvider, ThemeProvider>(
       builder: (context, auth, theme, _) {
-        final lightScheme = ColorScheme.fromSeed(seedColor: Colors.teal);
-        final darkScheme = ColorScheme.fromSeed(
-          seedColor: Colors.teal,
-          brightness: Brightness.dark,
-        );
-
         return SessionCleanupHandler(
           child: AppLifecycleManager(
             child: MaterialApp(
               title: 'RetailPilot',
               themeMode: theme.themeMode,
-              theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
-              darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
+              theme: AppTheme.light(),
+              darkTheme: AppTheme.dark(),
               navigatorKey: AppNavigator.navigatorKey,
               scaffoldMessengerKey: AppNavigator.messengerKey,
               home: auth.isAuthenticated
