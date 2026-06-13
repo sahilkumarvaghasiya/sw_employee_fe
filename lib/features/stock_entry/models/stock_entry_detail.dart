@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/utils/product_size_format.dart';
+
 enum StockEntryStatus { paid, unpaid, partial }
 
 StockEntryStatus _parseStatus(Object? value) {
@@ -76,7 +78,9 @@ class StockEntryDetailVariant {
     final actual = actualRaw == null ? null : _toDouble(actualRaw);
 
     return StockEntryDetailVariant(
-      size: (json['size'] ?? json['variant_size'] ?? '—').toString(),
+      size: formatProductSize(
+        (json['size'] ?? json['variant_size'] ?? '—').toString(),
+      ),
       color: (json['color'] ?? json['colour'] ?? '—').toString(),
       actualPrice: actual,
       quantity: _toInt(json['quantity'] ?? json['pieces']),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+
+import '../../../core/utils/barcode_scan_validator.dart';
+import '../../../core/widgets/barcode_scanner_view.dart';
 
 class StockBarcodeScannerScreen extends StatefulWidget {
   const StockBarcodeScannerScreen({super.key});
@@ -17,7 +19,15 @@ class StockBarcodeScannerScreen extends StatefulWidget {
 }
 
 class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
+  late final _scannerController = createBarcodeScannerController(autoStart: true);
+
   bool _popped = false;
+
+  @override
+  void dispose() {
+    _scannerController.dispose();
+    super.dispose();
+  }
 
   void _popWithValue(String? value) {
     if (_popped) return;
@@ -27,43 +37,39 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Scan barcode')),
-      body: Stack(
-        children: [
-          MobileScanner(
-            fit: BoxFit.cover,
-            onDetect: (capture) {
-              final barcodes = capture.barcodes;
-              if (barcodes.isEmpty) return;
-
-              final raw = barcodes.first.rawValue;
-              final value = raw?.trim();
-              if (value == null || value.isEmpty) return;
-
-              _popWithValue(value);
-            },
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: Card(
-                  color: colorScheme.surfaceContainerHigh,
-                  child: const Padding(
-                    padding: EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    child: Text('Point the camera at a barcode.'),
+      body: BarcodeScannerView(
+        controller: _scannerController,
+        requireManualConfirm: true,
+        hintText:
+            'Align the barcode inside the frame and hold steady until it is detected.',
+        onBarcodeConfirmed: _popWithValue,
+        errorBuilder: (context, error, child) {
+          final colorScheme = Theme.of(context).colorScheme;
+          return Container(
+            color: colorScheme.surfaceContainerHighest,
+            padding: const EdgeInsets.all(16),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.camera_alt_outlined,
+                    color: colorScheme.onSurfaceVariant,
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Camera unavailable',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

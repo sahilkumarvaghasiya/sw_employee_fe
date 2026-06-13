@@ -26,6 +26,7 @@ class SearchableDropdown<T> extends StatefulWidget {
     this.onClear,
     this.clearLabel = 'All',
     this.filterHintText = 'Type to filter',
+    this.prefixIcon,
   });
 
   final String placeholder;
@@ -46,6 +47,9 @@ class SearchableDropdown<T> extends StatefulWidget {
 
   /// Hint shown in the dropdown filter text field.
   final String filterHintText;
+
+  /// Optional leading icon in the field.
+  final IconData? prefixIcon;
 
   @override
   State<SearchableDropdown<T>> createState() => _SearchableDropdownState<T>();
@@ -133,15 +137,30 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
   }
 
   Widget _buildOptionNode(SearchableDropdownOption<T> option) {
+    final theme = Theme.of(context);
+
     if (option.children.isEmpty) {
       return SizedBox(
         width: widget.width,
         child: MenuItemButton(
+          style: ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            padding: WidgetStatePropertyAll(
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            ),
+          ),
           onPressed: () {
             widget.onSelected(option);
             _closeMenu();
           },
-          child: Text(option.label, overflow: TextOverflow.ellipsis),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              option.label,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
         ),
       );
     }
@@ -166,54 +185,70 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
 
     final menuChildren = <Widget>[
       Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-        child: AnimatedBuilder(
-          animation: _filterFocus,
-          builder: (context, _) {
-            final borderColor = _filterFocus.hasFocus
-                ? colorScheme.primary
-                : colorScheme.outlineVariant;
-
-            return CustomPaint(
-              foregroundPainter: _DashedRRectPainter(
-                color: borderColor,
-                strokeWidth: 1,
-                dashLength: 5,
-                gapLength: 3,
-                radius: 4,
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 2,
-                ),
-                child: TextField(
-                  controller: _filterController,
-                  focusNode: _filterFocus,
-                  textInputAction: TextInputAction.done,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: widget.filterHintText,
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-            );
-          },
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+        child: TextField(
+          controller: _filterController,
+          focusNode: _filterFocus,
+          style: theme.textTheme.bodySmall,
+          textInputAction: TextInputAction.search,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            isDense: true,
+            isCollapsed: true,
+            hintText: widget.filterHintText,
+            hintStyle: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 16,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 32,
+              minHeight: 32,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 8,
+            ),
+            filled: true,
+            fillColor: colorScheme.surfaceContainerHighest.withValues(
+              alpha: 0.45,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: colorScheme.outlineVariant),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: colorScheme.outlineVariant),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: colorScheme.primary, width: 1.2),
+            ),
+          ),
         ),
       ),
       if (widget.onClear != null)
         MenuItemButton(
+          style: ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            padding: WidgetStatePropertyAll(
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            ),
+          ),
           onPressed: () {
             widget.onClear?.call();
             _closeMenu();
           },
-          child: Text(widget.clearLabel),
+          child: Text(
+            widget.clearLabel,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ...filtered.map(_buildOptionNode),
       if (filtered.isEmpty)
@@ -248,58 +283,55 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
             .toList(growable: false),
         builder: (context, controller, child) {
           final text = widget.selectedLabel;
+          final hasSelection = text != null && text.trim().isNotEmpty;
+          final displayText =
+              hasSelection ? text.trim() : widget.placeholder;
 
           return Semantics(
             button: true,
             label: widget.placeholder,
-            child: InkWell(
-              onTap: _openMenu,
-              borderRadius: BorderRadius.circular(16),
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  isDense: true,
-                  filled: true,
-                  fillColor: colorScheme.surface,
-                  prefixIcon: const Icon(Icons.straighten_outlined),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 42,
-                    minHeight: 42,
+            child: Material(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                onTap: _openMenu,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: widget.width,
+                  height: widget.height,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colorScheme.outlineVariant),
                   ),
-                  hintText: widget.placeholder,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorScheme.outlineVariant),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  suffixIcon: IconButton(
-                    tooltip: 'Show options',
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(
-                      minWidth: 40,
-                      minHeight: 40,
-                    ),
-                    onPressed: _openMenu,
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                  ),
-                ),
-                child: Text(
-                  (text == null || text.trim().isEmpty)
-                      ? widget.placeholder
-                      : text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: (text == null || text.trim().isEmpty)
-                        ? colorScheme.onSurfaceVariant
-                        : colorScheme.onSurface,
-                    fontWeight: FontWeight.w700,
+                  child: Row(
+                    children: [
+                      Icon(
+                        widget.prefixIcon ??
+                            Icons.arrow_drop_down_circle_outlined,
+                        size: 16,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          displayText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: hasSelection
+                                ? colorScheme.onSurface
+                                : colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.expand_more_rounded,
+                        size: 18,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -308,57 +340,5 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
         },
       ),
     );
-  }
-}
-
-class _DashedRRectPainter extends CustomPainter {
-  const _DashedRRectPainter({
-    required this.color,
-    required this.strokeWidth,
-    required this.dashLength,
-    required this.gapLength,
-    required this.radius,
-  });
-
-  final Color color;
-  final double strokeWidth;
-  final double dashLength;
-  final double gapLength;
-  final double radius;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(
-      rect.deflate(strokeWidth / 2),
-      Radius.circular(radius),
-    );
-
-    final path = Path()..addRRect(rrect);
-    for (final metric in path.computeMetrics()) {
-      double distance = 0;
-      while (distance < metric.length) {
-        final next = distance + dashLength;
-        canvas.drawPath(
-          metric.extractPath(distance, next.clamp(0, metric.length)),
-          paint,
-        );
-        distance = next + gapLength;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedRRectPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.strokeWidth != strokeWidth ||
-        oldDelegate.dashLength != dashLength ||
-        oldDelegate.gapLength != gapLength ||
-        oldDelegate.radius != radius;
   }
 }

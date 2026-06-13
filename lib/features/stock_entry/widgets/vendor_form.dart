@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
+
 class VendorFormValues {
   VendorFormValues({
     required this.name,
@@ -74,49 +77,24 @@ class _VendorFormState extends State<VendorForm> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    InputDecoration decoration({
-      required String label,
-      required IconData icon,
-      String? hint,
-    }) {
-      return InputDecoration(
-        isDense: true,
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon),
-        prefixIconConstraints: const BoxConstraints(
-          minWidth: 44,
-          minHeight: 44,
-        ),
-        filled: true,
-        fillColor: colorScheme.surfaceContainerHighest,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 12,
-        ),
-      );
-    }
-
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                height: 38,
-                width: 38,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: colorScheme.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(14),
+                  color: AppColors.emerald.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.badge_outlined,
-                  color: colorScheme.primary,
-                  size: 20,
+                  color: AppColors.emerald,
+                  size: 22,
                 ),
               ),
               const SizedBox(width: 12),
@@ -127,15 +105,13 @@ class _VendorFormState extends State<VendorForm> {
                     Text(
                       'Vendor details',
                       style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
-                      'Enter details to start stock entry.',
+                      'Required fields marked below',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -143,16 +119,16 @@ class _VendorFormState extends State<VendorForm> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
 
           TextFormField(
             controller: _nameController,
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.words,
-            decoration: decoration(
-              label: 'Vendor name',
-              icon: Icons.storefront_outlined,
-              hint: 'Example: Shree Traders',
+            decoration: const InputDecoration(
+              labelText: 'Vendor name *',
+              prefixIcon: Icon(Icons.storefront_outlined),
+              hintText: 'e.g. Shree Traders',
             ),
             validator: (v) {
               if (v == null || v.trim().isEmpty) {
@@ -162,16 +138,16 @@ class _VendorFormState extends State<VendorForm> {
               return null;
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           TextFormField(
             controller: _phoneController,
             textInputAction: TextInputAction.next,
             keyboardType: TextInputType.phone,
-            decoration: decoration(
-              label: 'Phone number',
-              icon: Icons.phone_outlined,
-              hint: 'Example: 9876543210',
+            decoration: const InputDecoration(
+              labelText: 'Phone number *',
+              prefixIcon: Icon(Icons.phone_outlined),
+              hintText: '10-digit mobile number',
             ),
             validator: (v) {
               final value = v?.trim() ?? '';
@@ -181,16 +157,15 @@ class _VendorFormState extends State<VendorForm> {
               return null;
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           TextFormField(
             controller: _emailController,
             textInputAction: TextInputAction.next,
             keyboardType: TextInputType.emailAddress,
-            decoration: decoration(
-              label: 'Email address (optional)',
-              icon: Icons.email_outlined,
-              hint: 'Example: vendor@email.com',
+            decoration: const InputDecoration(
+              labelText: 'Email (optional)',
+              prefixIcon: Icon(Icons.email_outlined),
             ),
             validator: (v) {
               final value = v?.trim() ?? '';
@@ -201,7 +176,7 @@ class _VendorFormState extends State<VendorForm> {
               return null;
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           TextFormField(
             controller: _addressController,
@@ -209,47 +184,48 @@ class _VendorFormState extends State<VendorForm> {
             textCapitalization: TextCapitalization.sentences,
             keyboardType: TextInputType.streetAddress,
             maxLines: 2,
-            decoration: decoration(
-              label: 'Address (optional)',
-              icon: Icons.location_on_outlined,
-              hint: 'Street / area / city',
+            decoration: const InputDecoration(
+              labelText: 'Address (optional)',
+              prefixIcon: Icon(Icons.location_on_outlined),
+              alignLabelWithHint: true,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           TextFormField(
             controller: _gstController,
             textInputAction: TextInputAction.done,
             textCapitalization: TextCapitalization.characters,
-            decoration: decoration(
-              label: 'GST',
-              icon: Icons.receipt_long_outlined,
-              hint: 'Example: 22AAAAA0000A1Z5',
+            decoration: const InputDecoration(
+              labelText: 'GST (optional)',
+              prefixIcon: Icon(Icons.receipt_long_outlined),
             ),
             validator: (v) {
               final value = v?.trim() ?? '';
               if (value.isEmpty) return null;
-              if (value.length < 5) return 'Enter a valid GST';
+              if (value.length < 5) return 'Enter a valid GST number';
               return null;
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          FilledButton.icon(
-            onPressed: widget.isSubmitting ? null : _submit,
-            style: FilledButton.styleFrom(
-              shape: const StadiumBorder(),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            icon: widget.isSubmitting
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.play_arrow_rounded),
-            label: Text(
-              widget.isSubmitting ? 'Checking vendor…' : 'Start Stock Entry',
+          SizedBox(
+            height: 52,
+            child: FilledButton.icon(
+              onPressed: widget.isSubmitting ? null : _submit,
+              icon: widget.isSubmitting
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.arrow_forward_rounded),
+              label: Text(
+                widget.isSubmitting ? 'Checking vendor…' : 'Continue to add items',
+              ),
             ),
           ),
         ],

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/api_config.dart';
+import '../../../core/utils/product_size_format.dart';
 import '../../auth/services/api_service.dart';
 import '../models/stock_entry.dart';
 import '../models/vendor.dart';
@@ -413,7 +414,7 @@ class StockEntryService {
     final id = map['id'];
     final name = (map['name'] ?? '').toString().trim();
     if (id is! int || name.isEmpty) return null;
-    return StockSizeOption(id: id, name: name);
+    return StockSizeOption(id: id, name: formatProductSize(name));
   }
 
   bool _sizeHasMore(dynamic decoded, int itemCount, int pageSize, int page) {

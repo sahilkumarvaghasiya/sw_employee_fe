@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../models/stock_entry.dart';
 import '../models/vendor.dart';
 import '../providers/stock_entry_provider.dart';
+import '../widgets/stock_entry_ui.dart';
 import 'stock_entry_detail_screen.dart';
 
 enum _PaymentFilter { paid, halfPaid, unpaid }
@@ -93,82 +96,11 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
     );
   }
 
-  Widget _filtersSummaryBar(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final paymentLabel = _paymentLabel(_paymentFilter);
-    final statusIcon = _statusIcon(_paymentFilter);
-    final statusColor = _statusColor(_paymentFilter);
-
-    final dateRange = _dateRange;
-    final dateLabel = dateRange == null
-        ? null
-        : _rangeLabel(context, dateRange);
-
-    return Material(
-      color: colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: null,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(statusIcon, size: 18, color: statusColor),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Payment: $paymentLabel',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (dateLabel != null) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.date_range_outlined,
-                            size: 18,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Date: $dateLabel',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  int _activeFilterCount() {
+    var count = 0;
+    if (_paymentFilter != _PaymentFilter.unpaid) count++;
+    if (_dateRange != null) count++;
+    return count;
   }
 
   Future<void> _openFiltersSheet() async {
@@ -184,99 +116,127 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
         return SafeArea(
           child: Padding(
             padding: EdgeInsets.fromLTRB(
-              16,
-              6,
-              16,
+              20,
+              4,
+              20,
               16 + media.viewInsets.bottom,
             ),
             child: StatefulBuilder(
               builder: (context, setModalState) {
-                Widget statusTile(_PaymentFilter value) {
-                  final selected = _paymentFilter == value;
-                  return RadioListTile<_PaymentFilter>(
-                    contentPadding: EdgeInsets.zero,
-                    value: value,
-                    groupValue: _paymentFilter,
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _paymentFilter = v);
-                      setModalState(() {});
-                    },
-                    title: Text(
-                      _paymentLabel(value),
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                      ),
-                    ),
-                    secondary: Icon(
-                      _statusIcon(value),
-                      color: _statusColor(value),
-                    ),
-                  );
-                }
-
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Filters',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Close',
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
+                    Text(
+                      'Filter entries',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                    const SizedBox(height: 12),
-
+                    const SizedBox(height: 4),
+                    Text(
+                      'Payment status and date range',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     Text(
                       'Payment status',
-                      style: theme.textTheme.labelLarge?.copyWith(
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    statusTile(_PaymentFilter.paid),
-                    statusTile(_PaymentFilter.halfPaid),
-                    statusTile(_PaymentFilter.unpaid),
-                    const SizedBox(height: 10),
-
+                    const SizedBox(height: 8),
+                    SegmentedButton<_PaymentFilter>(
+                      segments: [
+                        ButtonSegment(
+                          value: _PaymentFilter.paid,
+                          label: Text(
+                            _paymentLabel(_PaymentFilter.paid),
+                            style: theme.textTheme.labelSmall,
+                          ),
+                          icon: Icon(
+                            _statusIcon(_PaymentFilter.paid),
+                            size: 16,
+                          ),
+                        ),
+                        ButtonSegment(
+                          value: _PaymentFilter.halfPaid,
+                          label: Text(
+                            _paymentLabel(_PaymentFilter.halfPaid),
+                            style: theme.textTheme.labelSmall,
+                          ),
+                          icon: Icon(
+                            _statusIcon(_PaymentFilter.halfPaid),
+                            size: 16,
+                          ),
+                        ),
+                        ButtonSegment(
+                          value: _PaymentFilter.unpaid,
+                          label: Text(
+                            _paymentLabel(_PaymentFilter.unpaid),
+                            style: theme.textTheme.labelSmall,
+                          ),
+                          icon: Icon(
+                            _statusIcon(_PaymentFilter.unpaid),
+                            size: 16,
+                          ),
+                        ),
+                      ],
+                      selected: {_paymentFilter},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (selection) {
+                        setState(() => _paymentFilter = selection.first);
+                        setModalState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 16),
                     Text(
-                      'Date',
-                      style: theme.textTheme.labelLarge?.copyWith(
+                      'Date range',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     OutlinedButton.icon(
                       onPressed: () async {
                         await _pickDateRange();
                         setModalState(() {});
                       },
-                      icon: const Icon(Icons.date_range_outlined),
+                      icon: const Icon(Icons.date_range_outlined, size: 18),
                       label: Align(
                         alignment: Alignment.centerLeft,
-                        child: Text(_rangeLabel(context, _dateRange)),
+                        child: Text(
+                          _rangeLabel(context, _dateRange),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusMd),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-
+                    if (_dateRange != null)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() => _dateRange = null);
+                            setModalState(() {});
+                          },
+                          child: const Text('Clear date'),
+                        ),
+                      ),
+                    const SizedBox(height: 20),
                     Row(
                       children: [
                         TextButton(
@@ -284,8 +244,9 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                             _clearFilters();
                             setModalState(() {});
                             unawaited(_refreshBackendHistory());
+                            Navigator.of(context).pop();
                           },
-                          child: const Text('Clear'),
+                          child: const Text('Clear all'),
                         ),
                         const Spacer(),
                         FilledButton(
@@ -293,7 +254,7 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
                             Navigator.of(context).pop();
                             unawaited(_refreshBackendHistory());
                           },
-                          child: const Text('Apply'),
+                          child: const Text('Apply filters'),
                         ),
                       ],
                     ),
@@ -367,17 +328,6 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
   String _rangeLabel(BuildContext context, DateTimeRange? range) {
     if (range == null) return 'Select date range';
     return '${_ddMMyyyy(range.start)} – ${_ddMMyyyy(range.end)}';
-  }
-
-  Color _statusColor(_PaymentFilter filter) {
-    switch (filter) {
-      case _PaymentFilter.paid:
-        return Colors.green;
-      case _PaymentFilter.halfPaid:
-        return Colors.orange;
-      case _PaymentFilter.unpaid:
-        return Colors.red;
-    }
   }
 
   IconData _statusIcon(_PaymentFilter filter) {
@@ -496,7 +446,15 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
         }
 
         return AlertDialog(
-          title: const Text('Date'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          ),
+          title: Text(
+            'Date range',
+            style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -560,10 +518,30 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
     }
   }
 
+  (String, Color, IconData) _entryStatusUi(StockEntry entry) {
+    final remaining = entry.payment.remainingAmount;
+    final paid = entry.payment.paidAmount;
+    final isPaid = remaining <= 0;
+    final isHalfPaid = !isPaid && paid > 0.0001;
+
+    if (isPaid) {
+      return (
+        'Paid',
+        AppColors.emerald,
+        Icons.check_circle_outline_rounded,
+      );
+    }
+    if (isHalfPaid) {
+      return ('Half paid', AppColors.warning, Icons.timelapse_outlined);
+    }
+    return ('Unpaid', AppColors.error, Icons.warning_amber_rounded);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     final provider = context.watch<StockEntryProvider>();
 
@@ -575,72 +553,102 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
 
     final filteredEntries = _applyFilters(baseEntries);
 
-    final subtitle = widget.vendor?.name ?? 'All traders';
-
-    final hasAnyFilter =
-        _dateRange != null || _paymentFilter != _PaymentFilter.unpaid;
+    final vendorName = widget.vendor?.name ?? 'All traders';
+    final filterCount = _activeFilterCount();
+    final hasAnyFilter = filterCount > 0;
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.slate950 : AppColors.slate50,
+      appBar: AppBar(
+        title: const Text('Entry history'),
+        centerTitle: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        actions: [
+          if (hasAnyFilter)
+            TextButton.icon(
+              onPressed: () {
+                _clearFilters();
+                unawaited(_refreshBackendHistory());
+              },
+              icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+              label: const Text('Clear all'),
+            ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _refreshBackendHistory,
+        color: AppColors.emerald,
         child: CustomScrollView(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverAppBar(
-              pinned: true,
-              centerTitle: false,
-              titleSpacing: 0,
-              toolbarHeight: 78,
-              title: Padding(
-                padding: const EdgeInsets.only(left: 16, right: 16),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'History',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
+                      vendorName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Past stock entries for this vendor',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        StockEntryHistoryFilterButton(
+                          activeCount: filterCount,
+                          onTap: _openFiltersSheet,
+                        ),
+                      ],
+                    ),
+                    if (hasAnyFilter) ...[
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            if (_paymentFilter != _PaymentFilter.unpaid)
+                              StockEntryHistoryFilterChip(
+                                label:
+                                    'Payment: ${_paymentLabel(_paymentFilter)}',
+                                onRemove: () {
+                                  setState(
+                                    () => _paymentFilter = _PaymentFilter.unpaid,
+                                  );
+                                  unawaited(_refreshBackendHistory());
+                                },
+                              ),
+                            if (_dateRange != null) ...[
+                              if (_paymentFilter != _PaymentFilter.unpaid)
+                                const SizedBox(width: 6),
+                              StockEntryHistoryFilterChip(
+                                label: _rangeLabel(context, _dateRange),
+                                onRemove: () {
+                                  setState(() => _dateRange = null);
+                                  unawaited(_refreshBackendHistory());
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
-                ),
-              ),
-              actions: [
-                IconButton(
-                  tooltip: 'Clear filters',
-                  onPressed: hasAnyFilter
-                      ? () {
-                          _clearFilters();
-                          unawaited(_refreshBackendHistory());
-                        }
-                      : null,
-                  icon: const Icon(Icons.filter_alt_off_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Filters',
-                  onPressed: _openFiltersSheet,
-                  icon: const Icon(Icons.tune),
-                ),
-              ],
-              backgroundColor: colorScheme.surface,
-              surfaceTintColor: colorScheme.surfaceTint,
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(1),
-                child: Container(
-                  height: 1,
-                  color: colorScheme.outlineVariant.withAlpha(120),
                 ),
               ),
             ),
@@ -652,145 +660,103 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
             else if (provider.error != null)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.wifi_off_rounded,
-                          size: 44,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          provider.error!,
-                          style: theme.textTheme.titleMedium,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: () {
-                            final vendor = widget.vendor;
-                            if (vendor == null) return;
-                            provider.refreshHistory(vendor: vendor);
-                          },
-                          child: const Text('Try again'),
-                        ),
-                      ],
-                    ),
-                  ),
+                child: StockEntryHistoryEmptyState(
+                  title: 'Could not load history',
+                  subtitle: provider.error,
+                  actionLabel: 'Try again',
+                  onAction: () {
+                    final vendor = widget.vendor;
+                    if (vendor == null) return;
+                    provider.refreshHistory(vendor: vendor);
+                  },
+                  icon: Icons.cloud_off_outlined,
+                ),
+              )
+            else if (baseEntries.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: StockEntryHistoryEmptyState(
+                  title: 'No entries yet',
+                  subtitle: hasAnyFilter
+                      ? 'Try changing your filters'
+                      : 'Stock entries will appear here after you save',
+                  actionLabel: hasAnyFilter ? 'Clear filters' : null,
+                  onAction: hasAnyFilter
+                      ? () {
+                          _clearFilters();
+                          unawaited(_refreshBackendHistory());
+                        }
+                      : null,
+                ),
+              )
+            else if (filteredEntries.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: StockEntryHistoryEmptyState(
+                  title: 'No matching entries',
+                  subtitle: 'Try changing payment status or date range',
+                  actionLabel: 'Clear filters',
+                  onAction: () {
+                    _clearFilters();
+                    unawaited(_refreshBackendHistory());
+                  },
+                  icon: Icons.search_off_rounded,
                 ),
               )
             else ...[
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: _filtersSummaryBar(context),
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  child: Text(
+                    '${filteredEntries.length} entr${filteredEntries.length == 1 ? 'y' : 'ies'}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ),
               ),
-              if (baseEntries.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.receipt_long_outlined,
-                            size: 64,
-                            color: colorScheme.onSurfaceVariant.withAlpha(180),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            'No transactions found',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Try changing filters or date range',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              height: 1.3,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else if (filteredEntries.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.search_off_rounded,
-                            size: 64,
-                            color: colorScheme.onSurfaceVariant.withAlpha(180),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            'No transactions found',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Try changing filters or date range',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              height: 1.3,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  sliver: SliverList.separated(
-                    itemCount: filteredEntries.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final entry = filteredEntries[index];
-                      return _HistoryRow(
-                        entry: entry,
-                        money: _money,
-                        showVendor: widget.vendor == null,
-                        onTap: () {
-                          Navigator.of(
-                            context,
-                          ).push(StockEntryDetailScreen.route(entry: entry));
-                        },
-                      );
-                    },
-                  ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                sliver: SliverList.separated(
+                  itemCount: filteredEntries.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final entry = filteredEntries[index];
+                    final (statusLabel, statusColor, statusIcon) =
+                        _entryStatusUi(entry);
+                    final invoiceNo = entry.stknumber?.trim();
+                    final due = entry.payment.remainingAmount <= 0
+                        ? 0.0
+                        : entry.payment.remainingAmount;
+
+                    return StockEntryHistoryTile(
+                      invoiceNo: invoiceNo,
+                      dateLabel: _ddMMyyyy(entry.createdAt),
+                      vendorName: entry.vendor.name,
+                      showVendor: widget.vendor == null,
+                      totalLabel: _money(entry.payment.totalPayment),
+                      paidLabel: _money(entry.payment.paidAmount),
+                      dueLabel: _money(due),
+                      statusLabel: statusLabel,
+                      statusColor: statusColor,
+                      statusIcon: statusIcon,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          StockEntryDetailScreen.route(entry: entry),
+                        );
+                      },
+                    );
+                  },
                 ),
+              ),
             ],
             if (!provider.isLoadingInitial &&
                 provider.error == null &&
                 baseEntries.isNotEmpty)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                   child: _PaginationFooter(
                     isLoadingMore: provider.isLoadingMore,
                     hasMore: provider.hasMore,
@@ -799,178 +765,6 @@ class _StockEntryHistoryScreenState extends State<StockEntryHistoryScreen> {
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _HistoryRow extends StatelessWidget {
-  const _HistoryRow({
-    required this.entry,
-    required this.money,
-    required this.showVendor,
-    required this.onTap,
-  });
-
-  final StockEntry entry;
-  final String Function(double) money;
-  final bool showVendor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final invoiceNo = entry.stknumber?.trim();
-
-    String ddMMyyyy(DateTime d) {
-      final dd = d.day.toString().padLeft(2, '0');
-      final mm = d.month.toString().padLeft(2, '0');
-      final yyyy = d.year.toString();
-      return '$dd/$mm/$yyyy';
-    }
-
-    final dateLabel = ddMMyyyy(entry.createdAt);
-
-    final remaining = entry.payment.remainingAmount;
-    final paid = entry.payment.paidAmount;
-    final total = entry.payment.totalPayment;
-
-    final bool isPaid = remaining <= 0;
-    final bool isHalfPaid = !isPaid && paid > 0.0001;
-
-    final String statusText = isPaid
-        ? 'Paid'
-        : (isHalfPaid ? 'Half Paid' : 'Unpaid');
-    final Color statusColor = isPaid
-        ? colorScheme.primary
-        : (isHalfPaid ? colorScheme.tertiary : colorScheme.error);
-    final IconData statusIcon = isPaid
-        ? Icons.check_circle_outline_rounded
-        : (isHalfPaid ? Icons.timelapse_outlined : Icons.warning_amber_rounded);
-
-    final double due = remaining <= 0 ? 0 : remaining;
-
-    return Card(
-      elevation: 0,
-      color: colorScheme.surface,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colorScheme.outlineVariant.withAlpha(90)),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (showVendor) ...[
-                          Text(
-                            entry.vendor.name,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                        ],
-                        if (invoiceNo != null && invoiceNo.isNotEmpty) ...[
-                          Text(
-                            invoiceNo,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                        ],
-                        Text(
-                          'Created: $dateLabel',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _StatusBadge(
-                    text: statusText,
-                    color: statusColor,
-                    icon: statusIcon,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                money(total),
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.1,
-                  color: colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Paid ${money(paid)}  •  Due ${money(due)}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({
-    required this.text,
-    required this.color,
-    required this.icon,
-  });
-
-  final String text;
-  final Color color;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withAlpha(20),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withAlpha(120)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1009,9 +803,9 @@ class _PaginationFooter extends StatelessWidget {
 
     if (!hasMore) {
       return Text(
-        'You’re all caught up',
+        'All entries loaded',
         textAlign: TextAlign.center,
-        style: theme.textTheme.bodyMedium?.copyWith(
+        style: theme.textTheme.labelMedium?.copyWith(
           color: colorScheme.onSurfaceVariant,
         ),
       );

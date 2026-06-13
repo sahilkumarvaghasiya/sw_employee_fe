@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/providers/theme_provider.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/home_dashboard_provider.dart';
 import '../widgets/quick_action_card.dart';
@@ -59,155 +61,81 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _refreshDashboard();
   }
 
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     final employeeName = context.watch<AuthProvider>().employeeName;
     final branchName = context.watch<AuthProvider>().branchName;
+    final firstName = employeeName.trim().split(' ').first;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await _openAndRefresh(CustomerFormScreen.route());
         },
-        icon: const Icon(Icons.qr_code_scanner),
+        backgroundColor: AppColors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.qr_code_scanner_rounded),
         label: const Text('Scan & Bill'),
       ),
       body: RefreshIndicator(
         onRefresh: _refreshDashboard,
+        color: AppColors.indigo,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverAppBar(
-              pinned: true,
-              floating: false,
-              elevation: 0,
-              scrolledUnderElevation: 1,
-              backgroundColor: colorScheme.primaryContainer,
-              foregroundColor: colorScheme.onPrimaryContainer,
-              surfaceTintColor: colorScheme.primaryContainer,
-              titleTextStyle: theme.textTheme.titleMedium?.copyWith(
-                color: colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.w800,
+            SliverToBoxAdapter(
+              child: _HomeHeroHeader(
+                greeting: _greeting(),
+                employeeName: firstName.isNotEmpty ? firstName : 'there',
+                branchName: branchName,
+                isDark: isDark,
+                onAlertsTap: () async {
+                  await _openAndRefresh(StockAlertsScreen.route());
+                },
+                onThemeToggle: () => context.read<ThemeProvider>().toggle(),
+                isDarkMode: context.watch<ThemeProvider>().isDark,
+                alertCount: context.watch<StockAlertsProvider>().unseenCount,
+                employeeChip: _EmployeeChip(name: employeeName),
               ),
-              title: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (branchName.isNotEmpty)
-                    Text(
-                      branchName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                ],
-              ),
-              actions: [
-                Consumer<ThemeProvider>(
-                  builder: (context, themeProvider, _) {
-                    final isDark = themeProvider.isDark;
-                    return IconButton(
-                      tooltip: isDark
-                          ? 'Switch to light mode'
-                          : 'Switch to dark mode',
-                      onPressed: themeProvider.toggle,
-                      icon: Icon(
-                        isDark
-                            ? Icons.light_mode_outlined
-                            : Icons.dark_mode_outlined,
-                      ),
-                    );
-                  },
-                ),
-                Consumer<StockAlertsProvider>(
-                  builder: (context, alertsProvider, _) {
-                    final count = alertsProvider.unseenCount;
-                    final showBadge = count > 0;
-                    final badgeText = count > 99 ? '99+' : '$count';
-
-                    return IconButton(
-                      tooltip: 'Stock alerts',
-                      onPressed: () async {
-                        await _openAndRefresh(StockAlertsScreen.route());
-                      },
-                      icon: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          const Icon(Icons.notifications_outlined),
-                          if (showBadge)
-                            Positioned(
-                              right: -2,
-                              top: -2,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.error,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                constraints: const BoxConstraints(minWidth: 16),
-                                child: Text(
-                                  badgeText,
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onError,
-                                        fontWeight: FontWeight.w800,
-                                        height: 1,
-                                      ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _EmployeeChip(name: employeeName),
-                ),
-              ],
             ),
 
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
               sliver: SliverToBoxAdapter(
                 child: SectionHeader(
                   title: 'Quick actions',
-                  action: Text(
-                    'Tap to start',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                  subtitle: 'Everything you need in one tap',
                 ),
               ),
             ),
 
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
               sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.25,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 1.15,
                 ),
                 delegate: SliverChildListDelegate.fixed([
                   QuickActionCard(
                     title: 'Start Billing',
-                    icon: Icons.qr_code_scanner,
+                    subtitle: 'Scan & checkout',
+                    icon: Icons.qr_code_scanner_rounded,
                     isPrimary: true,
                     onTap: () async {
                       await _openAndRefresh(CustomerFormScreen.route());
@@ -215,21 +143,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   QuickActionCard(
                     title: 'Stock Entry',
+                    subtitle: 'Receive inventory',
                     icon: Icons.inventory_2_outlined,
+                    accentColor: AppColors.homeAccentAmber,
                     onTap: () async {
                       await _openAndRefresh(StockEntryMainScreen.route());
                     },
                   ),
                   QuickActionCard(
-                    title: 'View Products',
-                    icon: Icons.list_alt_outlined,
+                    title: 'Products',
+                    subtitle: 'Browse catalog',
+                    icon: Icons.grid_view_rounded,
+                    accentColor: AppColors.homeAccentViolet,
                     onTap: () async {
                       await _openAndRefresh(ProductsScreen.route());
                     },
                   ),
                   QuickActionCard(
                     title: 'Sales History',
+                    subtitle: 'Past bills',
                     icon: Icons.receipt_long_outlined,
+                    accentColor: AppColors.homeAccentSky,
                     onTap: () async {
                       await _openAndRefresh(SalesHistoryScreen.route());
                     },
@@ -239,14 +173,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
 
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
               sliver: const SliverToBoxAdapter(
-                child: SectionHeader(title: 'Today summary'),
+                child: SectionHeader(
+                  title: 'Today at a glance',
+                  subtitle: 'Live stats from your store',
+                ),
               ),
             ),
 
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
               sliver: SliverToBoxAdapter(
                 child: Consumer<HomeDashboardProvider>(
                   builder: (context, dashboardProvider, _) {
@@ -263,17 +200,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             value: summary == null
                                 ? '₹0.00'
                                 : '₹${summary.totalSalesDisplay}',
-                            icon: Icons.payments_outlined,
+                            icon: Icons.payments_rounded,
+                            accentColor: AppColors.homeAccentTeal,
                           ),
                           SummaryMetricCard(
                             label: 'Bills Generated',
                             value: summary?.billsGenerated.toString() ?? '0',
-                            icon: Icons.receipt_long_outlined,
+                            icon: Icons.receipt_long_rounded,
+                            accentColor: AppColors.indigo,
                           ),
                           SummaryMetricCard(
                             label: 'Items Sold',
                             value: summary?.itemsSold.toString() ?? '0',
                             icon: Icons.shopping_bag_outlined,
+                            accentColor: AppColors.homeAccentAmber,
                           ),
                         ];
 
@@ -323,14 +263,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
 
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
               sliver: const SliverToBoxAdapter(
-                child: SectionHeader(title: 'Recent activity'),
+                child: SectionHeader(
+                  title: 'Recent activity',
+                  subtitle: 'Latest bills from today',
+                ),
               ),
             ),
 
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               sliver: Consumer<HomeDashboardProvider>(
                 builder: (context, dashboardProvider, _) {
                   final recent =
@@ -339,7 +282,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   if (dashboardProvider.isLoading && recent.isEmpty) {
                     return const SliverToBoxAdapter(
                       child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 10),
+                        padding: EdgeInsets.symmetric(vertical: 24),
                         child: Center(child: CircularProgressIndicator()),
                       ),
                     );
@@ -362,13 +305,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                   if (recent.isEmpty) {
                     return SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          'No recent bills yet',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? colorScheme.surface
+                              : Colors.white,
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusLg),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.06)
+                                : AppColors.slate200,
                           ),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.receipt_long_outlined,
+                              size: 40,
+                              color: colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'No recent bills yet',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Start billing to see activity here',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -379,15 +352,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       childCount: recent.length,
                       (context, index) {
                         final bill = recent[index];
+                        const billAccents = [
+                          AppColors.homeAccentTeal,
+                          AppColors.indigo,
+                          AppColors.homeAccentSky,
+                          AppColors.homeAccentAmber,
+                        ];
 
                         return Padding(
                           padding: EdgeInsets.only(
-                            bottom: index == recent.length - 1 ? 0 : 12,
+                            bottom: index == recent.length - 1 ? 0 : 10,
                           ),
                           child: RecentBillTile(
                             billNo: bill.billNumber,
                             amount: bill.amountDisplay,
                             method: bill.paymentMethodLabel,
+                            accentColor: billAccents[index % billAccents.length],
                             onTap: null,
                           ),
                         );
@@ -398,8 +378,162 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 96)),
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeHeroHeader extends StatelessWidget {
+  const _HomeHeroHeader({
+    required this.greeting,
+    required this.employeeName,
+    required this.branchName,
+    required this.isDark,
+    required this.onAlertsTap,
+    required this.onThemeToggle,
+    required this.isDarkMode,
+    required this.alertCount,
+    required this.employeeChip,
+  });
+
+  final String greeting;
+  final String employeeName;
+  final String branchName;
+  final bool isDark;
+  final VoidCallback onAlertsTap;
+  final VoidCallback onThemeToggle;
+  final bool isDarkMode;
+  final int alertCount;
+  final Widget employeeChip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final gradientColors =
+        isDark ? AppColors.heroGradientDark : AppColors.heroGradientLight;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradientColors,
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(AppTheme.radiusXl),
+          bottomRight: Radius.circular(AppTheme.radiusXl),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (branchName.isNotEmpty)
+                          Text(
+                            branchName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: isDarkMode ? 'Light mode' : 'Dark mode',
+                    onPressed: onThemeToggle,
+                    icon: Icon(
+                      isDarkMode
+                          ? Icons.light_mode_rounded
+                          : Icons.dark_mode_rounded,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                  ),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      IconButton(
+                        tooltip: 'Stock alerts',
+                        onPressed: onAlertsTap,
+                        icon: Icon(
+                          Icons.notifications_outlined,
+                          color: Colors.white.withValues(alpha: 0.9),
+                        ),
+                      ),
+                      if (alertCount > 0)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: Colors.white, width: 1.5),
+                            ),
+                            constraints: const BoxConstraints(minWidth: 18),
+                            child: Text(
+                              alertCount > 99 ? '99+' : '$alertCount',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                height: 1,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  employeeChip,
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '$greeting,',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.82),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                employeeName,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Ready to serve customers today',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -634,9 +768,6 @@ class _EmployeeChip extends StatelessWidget {
       useSafeArea: true,
       showDragHandle: true,
       backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (sheetContext) {
         final initial = name.trim().isEmpty
             ? '?'
@@ -651,11 +782,11 @@ class _EmployeeChip extends StatelessWidget {
               Row(
                 children: [
                   CircleAvatar(
-                    radius: 18,
-                    backgroundColor: colorScheme.primary.withOpacity(0.12),
+                    radius: 22,
+                    backgroundColor: colorScheme.primary.withValues(alpha: 0.12),
                     child: Text(
                       initial.toUpperCase(),
-                      style: theme.textTheme.titleSmall?.copyWith(
+                      style: theme.textTheme.titleMedium?.copyWith(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.w800,
                       ),
@@ -681,8 +812,7 @@ class _EmployeeChip extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                leading: const Icon(Icons.lock_outline),
+                leading: Icon(Icons.lock_outline, color: colorScheme.primary),
                 title: const Text('Change password'),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () async {
@@ -694,7 +824,6 @@ class _EmployeeChip extends StatelessWidget {
               ),
               const Divider(height: 20),
               ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                 leading: Icon(Icons.logout, color: colorScheme.error),
                 title: Text(
                   'Log out',
@@ -720,42 +849,29 @@ class _EmployeeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
     final initial = name.trim().isEmpty ? '?' : name.trim().characters.first;
 
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: () => _showAccountSheet(context),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHigh,
+          color: Colors.white.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: colorScheme.outlineVariant),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             CircleAvatar(
               radius: 14,
-              backgroundColor: colorScheme.primary.withOpacity(0.12),
+              backgroundColor: Colors.white.withValues(alpha: 0.22),
               child: Text(
                 initial.toUpperCase(),
                 style: theme.textTheme.labelLarge?.copyWith(
-                  color: colorScheme.primary,
+                  color: Colors.white,
                   fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 140),
-              child: Text(
-                name,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -763,7 +879,7 @@ class _EmployeeChip extends StatelessWidget {
             Icon(
               Icons.keyboard_arrow_down_rounded,
               size: 18,
-              color: colorScheme.onSurfaceVariant,
+              color: Colors.white.withValues(alpha: 0.85),
             ),
           ],
         ),

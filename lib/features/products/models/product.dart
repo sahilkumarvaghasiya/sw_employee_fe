@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/utils/product_size_format.dart';
+
 enum ProductGender { men, women, boy, girl }
 
 @immutable
@@ -45,7 +47,7 @@ class Product {
             .toString();
     final companyName = (json['company_name'] ?? json['companyName'] ?? '')
         .toString();
-    final size = (json['size'] ?? '').toString().trim();
+    final size = formatProductSize((json['size'] ?? '').toString());
     final colorRaw = json['color'];
     final colorStr = colorRaw == null ? '' : colorRaw.toString().trim();
 
@@ -112,13 +114,13 @@ class Product {
     final barcode = (wrapped['barcode_number'] ?? wrapped['barcode'] ?? id)
         .toString();
 
-    final size =
-        (wrapped['size'] ??
-                wrapped['size_name'] ??
-                wrapped['variant_size'] ??
-                '—')
-            .toString()
-            .trim();
+    final size = formatProductSize(
+      (wrapped['size'] ??
+              wrapped['size_name'] ??
+              wrapped['variant_size'] ??
+              '—')
+          .toString(),
+    );
 
     final colorVal = wrapped['color'];
     final colorStr = colorVal == null ? '' : colorVal.toString().trim();
