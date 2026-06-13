@@ -4,7 +4,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../theme/app_colors.dart';
 import '../utils/barcode_scan_validator.dart';
 
-/// Reusable camera scanner with focus window, stable-read validation, and torch.
+/// Reusable camera scanner with focus window and stable-read validation.
 class BarcodeScannerView extends StatefulWidget {
   const BarcodeScannerView({
     super.key,
@@ -31,7 +31,6 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   final BarcodeScanValidator _validator = BarcodeScanValidator();
 
   String? _awaitingConfirmValue;
-  bool _torchOn = false;
 
   @override
   void didUpdateWidget(covariant BarcodeScannerView oldWidget) {
@@ -45,18 +44,6 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     _validator.reset();
     if (_awaitingConfirmValue != null) {
       setState(() => _awaitingConfirmValue = null);
-    }
-  }
-
-  Future<void> _toggleTorch() async {
-    try {
-      await widget.controller.toggleTorch();
-      if (!mounted) return;
-      setState(
-        () => _torchOn = widget.controller.value.torchState == TorchState.on,
-      );
-    } catch (_) {
-      // Torch not supported on this platform.
     }
   }
 
@@ -134,15 +121,6 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
               bottom: 12,
               child: _buildBottomPanel(theme, colorScheme),
             ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: _TorchButton(
-                enabled: widget.enabled,
-                torchOn: _torchOn,
-                onPressed: _toggleTorch,
-              ),
-            ),
             if (_awaitingConfirmValue != null)
               _ConfirmOverlay(
                 value: _awaitingConfirmValue!,
@@ -219,34 +197,6 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _TorchButton extends StatelessWidget {
-  const _TorchButton({
-    required this.enabled,
-    required this.torchOn,
-    required this.onPressed,
-  });
-
-  final bool enabled;
-  final bool torchOn;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Material(
-      color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.92),
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: IconButton(
-        tooltip: torchOn ? 'Turn off flashlight' : 'Turn on flashlight',
-        onPressed: enabled ? onPressed : null,
-        icon: Icon(torchOn ? Icons.flashlight_on : Icons.flashlight_off),
-      ),
     );
   }
 }
