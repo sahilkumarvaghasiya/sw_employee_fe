@@ -2,6 +2,47 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../models/sales_bill.dart';
+
+class WhatsAppStatusChip extends StatelessWidget {
+  const WhatsAppStatusChip({super.key, required this.status});
+
+  final WhatsAppBillStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (Color bg, Color fg) = switch (status) {
+      WhatsAppBillStatus.sent => (
+          AppColors.emerald.withValues(alpha: 0.12),
+          AppColors.emeraldDark,
+        ),
+      WhatsAppBillStatus.failed => (
+          Colors.red.withValues(alpha: 0.12),
+          Colors.red.shade700,
+        ),
+      WhatsAppBillStatus.pending => (
+          AppColors.slate200.withValues(alpha: 0.8),
+          AppColors.slate600,
+        ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        status.label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
 
 class SalesHistorySearchBar extends StatelessWidget {
   const SalesHistorySearchBar({
@@ -267,6 +308,7 @@ class SalesHistoryBillTile extends StatelessWidget {
     required this.dateLabel,
     required this.timeLabel,
     required this.amountLabel,
+    required this.whatsappStatus,
     required this.onTap,
   });
 
@@ -276,6 +318,7 @@ class SalesHistoryBillTile extends StatelessWidget {
   final String dateLabel;
   final String timeLabel;
   final String? amountLabel;
+  final WhatsAppBillStatus whatsappStatus;
   final VoidCallback onTap;
 
   @override
@@ -337,6 +380,9 @@ class SalesHistoryBillTile extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    WhatsAppStatusChip(status: whatsappStatus),
+                    const SizedBox(height: 2),
                     Text(
                       '$customerPhone · $dateLabel $timeLabel',
                       maxLines: 1,

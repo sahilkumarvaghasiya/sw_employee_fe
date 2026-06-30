@@ -3,6 +3,26 @@ import 'package:intl/intl.dart';
 
 import '../../billing/models/billing_models.dart';
 
+enum WhatsAppBillStatus {
+  pending,
+  sent,
+  failed;
+
+  static WhatsAppBillStatus fromRaw(String? raw) {
+    return switch (raw?.toLowerCase().trim()) {
+      'sent' => WhatsAppBillStatus.sent,
+      'failed' => WhatsAppBillStatus.failed,
+      _ => WhatsAppBillStatus.pending,
+    };
+  }
+
+  String get label => switch (this) {
+    WhatsAppBillStatus.pending => 'Pending',
+    WhatsAppBillStatus.sent => 'Sent',
+    WhatsAppBillStatus.failed => 'Failed',
+  };
+}
+
 @immutable
 class SalesLineItem {
   const SalesLineItem({
@@ -50,6 +70,7 @@ class SalesBill {
     required this.customer,
     required this.items,
     required this.paymentMethod,
+    this.whatsappStatus = WhatsAppBillStatus.pending,
     this.listAmount,
     this.subtotalAmount,
     this.discountAmount,
@@ -62,6 +83,7 @@ class SalesBill {
   final BillingCustomer customer;
   final List<SalesLineItem> items;
   final BillingPaymentMethod paymentMethod;
+  final WhatsAppBillStatus whatsappStatus;
   final double? listAmount;
   final double? subtotalAmount;
   final double? discountAmount;
@@ -90,6 +112,9 @@ class SalesBill {
       ),
       items: const <SalesLineItem>[],
       paymentMethod: _paymentMethodFromRaw(json['payment_method']),
+      whatsappStatus: WhatsAppBillStatus.fromRaw(
+        json['whatsapp_status']?.toString(),
+      ),
       listAmount: _parseNullableDouble(json['amount']),
       totalAmount: _parseNullableDouble(json['amount']),
     );
@@ -115,6 +140,9 @@ class SalesBill {
       ),
       items: parsedItems,
       paymentMethod: _paymentMethodFromRaw(json['payment_method']),
+      whatsappStatus: WhatsAppBillStatus.fromRaw(
+        json['whatsapp_status']?.toString(),
+      ),
       listAmount: _parseNullableDouble(json['total_amount']),
       subtotalAmount: _parseNullableDouble(json['subtotal']),
       discountAmount: _parseNullableDouble(json['discount_rs']),
