@@ -34,13 +34,14 @@ class BillingService {
     : _apiService = apiService ?? ApiService();
 
   // Flip this to true once the backend endpoint is available.
-  static const bool whatsAppApiIntegrated = false;
+  static const bool whatsAppApiIntegrated = true;
   static const String _barcodeLookupPath = '/sales/barcode-lookup/';
   static const String _barcodeLookupSearchPath =
       '/sales/barcode-lookup/search/';
   static const String _customerLookupPath = '/sales/customer-lookup/';
   static const String _qrConfigsPath = '/sales/payment-configs/qr/';
   static const String _createBillPath = '/sales/bills/create/';
+  static const String _sendWhatsAppInvoicePath = '/sales/bills/send-whatsapp-invoice/';
 
   final ApiService _apiService;
 
@@ -59,6 +60,7 @@ class BillingService {
   }
 
   Future<void> sendWhatsAppInvoice({
+    required String billId,
     required BillingCustomer customer,
     required List<BillingLineItem> items,
     required BillingPaymentMethod? paymentMethod,
@@ -73,41 +75,16 @@ class BillingService {
     }
 
     final response = await _apiService.post(
-      _url('/billing/send-whatsapp-invoice/').toString(),
+      _url(_sendWhatsAppInvoicePath).toString(),
       body: {
-        'customer': {
-          'name': customer.name,
-          'phone': customer.phone,
-          if (customer.address != null) 'address': customer.address,
-        },
-        'items': [
-          for (final item in items)
-            {
-              'id': item.id,
-              'name': item.productName,
-              'quantity': item.quantity,
-              'unitPrice': item.unitPrice,
-              'discountPercent': item.discountPercent,
-              'lineTotal': item.lineTotal,
-            },
-        ],
-        'paymentMethod': paymentMethod?.name,
-        'markPaid': markPaid,
-        'paidAmount': paidAmount,
-        'totals': {
-          'subtotal': subtotal,
-          'discount': totalDiscount,
-          'final': finalAmount,
-        },
+        'bill_id': billId,
       },
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) return;
 
     final message = _errorMessageFromResponse(response);
-    throw http.ClientException(
-      message.isEmpty ? 'Failed to send invoice' : message,
-    );
+    throw Exception(message.isEmpty ? 'Bill send failed.' : message);
   }
 
   Future<BillingCreateBillResult> createSalesBill({

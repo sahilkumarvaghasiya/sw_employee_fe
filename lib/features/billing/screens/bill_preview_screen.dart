@@ -33,6 +33,17 @@ class BillPreviewScreen extends StatelessWidget {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String _billingErrorMessage(Object error) {
+    if (error is Exception) {
+      final message = error.toString();
+      if (message.startsWith('Exception: ')) {
+        return message.substring('Exception: '.length);
+      }
+      return message;
+    }
+    return 'Bill send failed.';
+  }
+
   Future<void> _confirmAndSendWhatsApp(BuildContext context) async {
     final provider = context.read<BillingProvider>();
     final customer = provider.customer;
@@ -83,6 +94,7 @@ class BillPreviewScreen extends StatelessWidget {
                 }
 
                 await BillingService().sendWhatsAppInvoice(
+                  billId: billResult.billId,
                   customer: customer,
                   items: provider.items,
                   paymentMethod: paymentMethod,
@@ -92,12 +104,18 @@ class BillPreviewScreen extends StatelessWidget {
                   totalDiscount: provider.totalDiscount,
                   finalAmount: provider.finalAmount,
                 );
+                if (context.mounted) {
+                  _showSnack(
+                    context,
+                    'Invoice sent on WhatsApp to ${customer.phone}',
+                  );
+                }
                 if (dialogContext.mounted) {
                   Navigator.of(dialogContext).pop(true);
                 }
               } catch (e) {
                 if (context.mounted) {
-                  _showSnack(context, e.toString());
+                  _showSnack(context, _billingErrorMessage(e));
                 }
                 if (dialogContext.mounted) {
                   Navigator.of(dialogContext).pop(false);

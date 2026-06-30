@@ -29,6 +29,11 @@ jobs:
       - name: Build web
         run: flutter build web --release
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -36,3 +41,4 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_BILLINGFRONTEND }}'
           projectId: billingfrontend
           channelId: live
+          firebaseToolsVersion: '15.22.3'

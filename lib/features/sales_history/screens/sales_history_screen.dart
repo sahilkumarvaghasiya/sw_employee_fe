@@ -640,6 +640,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                       customerPhone: bill.customer.phone,
                       dateLabel: date,
                       timeLabel: time,
+                      whatsappStatus: bill.whatsappStatus,
                       amountLabel: bill.listAmount != null
                           ? _money(bill.listAmount!)
                           : null,
@@ -716,11 +717,18 @@ class _BillDetailsSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                bill.billNo,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      bill.billNo,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  WhatsAppStatusChip(status: bill.whatsappStatus),
+                ],
               ),
               const SizedBox(height: 12),
               BillingPayableHero(
