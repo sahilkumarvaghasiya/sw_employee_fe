@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -20,7 +21,7 @@ void main() {
       final profile = BarcodeScanProfile.stockEntry;
 
       expect(profile.formats, contains(BarcodeFormat.ean13));
-      expect(profile.requiredConsecutiveReads, 1);
+      expect(profile.requiredConsecutiveReads, 2);
       expect(profile.enableSecondaryDecode, isFalse);
     });
   });
@@ -34,10 +35,11 @@ void main() {
       expect(validator.registerRead('123'), '123');
     });
 
-    test('stock profile accepts on first stable read', () {
+    test('stock profile accepts after two identical reads', () {
       final validator =
           BarcodeScanValidator(profile: BarcodeScanProfile.stockEntry);
 
+      expect(validator.registerRead('2510077869'), isNull);
       expect(validator.registerRead('2510077869'), '2510077869');
     });
 
@@ -45,6 +47,7 @@ void main() {
       final validator =
           BarcodeScanValidator(profile: BarcodeScanProfile.stockEntry);
 
+      expect(validator.registerRead('01126087'), isNull);
       expect(validator.registerRead('01126087'), '01126087');
     });
 
@@ -52,12 +55,53 @@ void main() {
       final validator =
           BarcodeScanValidator(profile: BarcodeScanProfile.stockEntry);
 
+      expect(validator.registerRead('R R33194'), isNull);
       expect(validator.registerRead('R R33194'), 'R R33194');
     });
 
     test('normalizeStockBarcodeValue preserves leading zeros', () {
       expect(normalizeStockBarcodeValue(' 01126087 '), '01126087');
       expect(normalizeStockBarcodeValue('R R33194'), 'R R33194');
+    });
+
+    test('rejects phone numbers and product codes on labels', () {
+      expect(isLikelyStockBarcodeValue('8320105110'), isFalse);
+      expect(isLikelyStockBarcodeValue('SFL-10465'), isFalse);
+      expect(isLikelyStockBarcodeValue('2510077869'), isTrue);
+      expect(isLikelyStockBarcodeValue('01126087'), isTrue);
+      expect(isLikelyStockBarcodeValue('R R33194'), isTrue);
+    });
+
+    test('accepts vertical barcodes using longest bounding edge', () {
+      const layoutSize = Size(400, 800);
+      final profile = BarcodeScanProfile.stockEntry;
+
+      const horizontal = Barcode(
+        rawValue: '2510077869',
+        format: BarcodeFormat.code128,
+        size: Size(180, 24),
+      );
+      const vertical = Barcode(
+        rawValue: '2510077869',
+        format: BarcodeFormat.code128,
+        size: Size(24, 180),
+      );
+      const verticalThin = Barcode(
+        rawValue: '2510077869',
+        format: BarcodeFormat.code128,
+        size: Size(200, 4),
+      );
+
+      expect(isBarcodeLargeEnough(horizontal, layoutSize, profile), isTrue);
+      expect(isBarcodeLargeEnough(vertical, layoutSize, profile), isTrue);
+      expect(isBarcodeLargeEnough(verticalThin, layoutSize, profile), isTrue);
+
+      final best = pickBestBarcode(
+        [verticalThin, horizontal],
+        layoutSize: layoutSize,
+        profile: profile,
+      );
+      expect(best?.rawValue, '2510077869');
     });
   });
 
