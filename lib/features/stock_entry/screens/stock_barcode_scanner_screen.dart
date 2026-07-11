@@ -133,7 +133,7 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
       return 'Hold steady… $progress/$required';
     }
 
-    return 'Move the tag so the barcode bars sit in the green frame';
+    return 'Align barcode bars in the green frame — move closer if small';
   }
 
   @override
@@ -211,7 +211,6 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
                     MobileScanner(
                       controller: _controller,
                       fit: BoxFit.cover,
-                      scanWindow: scanWindow,
                       onDetect: (capture) =>
                           _onDetect(capture, layoutSize, scanWindow),
                       errorBuilder: (context, error, child) {
