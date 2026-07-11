@@ -49,20 +49,24 @@ class BarcodeScanProfile {
     detectionTimeoutMs: 300,
   );
 
+  static const stockEntry1dFormats = [
+    BarcodeFormat.code128,
+    BarcodeFormat.code39,
+    BarcodeFormat.code93,
+    BarcodeFormat.codabar,
+    BarcodeFormat.ean13,
+    BarcodeFormat.ean8,
+    BarcodeFormat.itf,
+    BarcodeFormat.upcA,
+    BarcodeFormat.upcE,
+  ];
+
   static BarcodeScanProfile get stockEntry {
     return BarcodeScanProfile(
       kind: BarcodeScanProfileKind.stockEntry,
-      formats: const [
-        BarcodeFormat.code128,
-        BarcodeFormat.ean13,
-        BarcodeFormat.ean8,
-        BarcodeFormat.upcA,
-        BarcodeFormat.code39,
-        BarcodeFormat.itf,
-        BarcodeFormat.codabar,
-      ],
-      requiredConsecutiveReads: 1,
-      maxGapBetweenReads: const Duration(milliseconds: 900),
+      formats: stockEntry1dFormats,
+      requiredConsecutiveReads: 2,
+      maxGapBetweenReads: const Duration(milliseconds: 1200),
       minBarcodeHeightRatio: 0.0,
       scanWindowWidthFactor: 0.88,
       scanWindowHeightFactor: kIsWeb ? 0.62 : 0.58,
@@ -225,26 +229,89 @@ bool isBarcodeLargeEnough(
   return extent / layoutSize.shortestSide >= profile.minBarcodeHeightRatio;
 }
 
-/// Reads [Barcode.rawValue] from the first valid 1D barcode in a camera frame.
-String? extractStockBarcodeValue(List<Barcode> barcodes) {
-  final formats = BarcodeScanProfile.stockEntry.formats;
+/// True when [format] is a supported 1D stock barcode symbology.
+bool isStock1dBarcodeFormat(BarcodeFormat format) {
+  return BarcodeScanProfile.stockEntry1dFormats.contains(format);
+}
+
+/// True when [format] is a 2D symbology (not used for stock entry).
+bool is2dBarcodeFormat(BarcodeFormat format) {
+  return format == BarcodeFormat.qrCode ||
+      format == BarcodeFormat.dataMatrix ||
+      format == BarcodeFormat.pdf417 ||
+      format == BarcodeFormat.aztec;
+}
+
+/// Picks the best 1D barcode in a frame. Prefers a known symbology and the
+/// largest barcode box so crowded labels do not return the wrong number.
+String? pickStockBarcodeValue(
+  List<Barcode> barcodes, {
+  Size layoutSize = Size.zero,
+}) {
+  Barcode? best;
+  var bestScore = -1.0;
 
   for (final barcode in barcodes) {
     final raw = barcode.rawValue?.trim();
     if (raw == null || raw.isEmpty) continue;
-    if (barcode.format == BarcodeFormat.qrCode) continue;
-    if (barcode.format != BarcodeFormat.unknown &&
-        !formats.contains(barcode.format)) {
-      continue;
-    }
+    if (is2dBarcodeFormat(barcode.format)) continue;
+
+    final knownFormat = isStock1dBarcodeFormat(barcode.format);
+    if (!knownFormat && barcode.format != BarcodeFormat.unknown) continue;
 
     final normalized = normalizeStockBarcodeValue(raw);
-    if (normalized.isNotEmpty && normalized.length <= 100) {
-      return normalized;
+    if (normalized.isEmpty || normalized.length > 100) continue;
+
+    // Known 1D symbology: trust the library decoder on [rawValue].
+    if (!knownFormat && !isPlausibleStockBarcodePayload(normalized)) continue;
+
+    var score = knownFormat ? 100000.0 : 1000.0;
+    score += _barcodeExtent(barcode) * 2;
+    if (layoutSize.shortestSide > 0) {
+      final extent = _barcodeExtent(barcode);
+      score += (extent / layoutSize.shortestSide) * 500;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = barcode;
     }
   }
 
-  return null;
+  if (best == null) return null;
+  return normalizeStockBarcodeValue(best.rawValue!.trim());
+}
+
+/// Light guard for unknown-format reads on web. Known 1D formats are trusted.
+bool isPlausibleStockBarcodePayload(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty || trimmed.length > 100) return false;
+
+  final lower = trimmed.toLowerCase();
+  if (lower.contains('mrp') ||
+      lower.contains('cust') ||
+      lower.contains('care') ||
+      lower.contains('incl') ||
+      lower.contains('tax') ||
+      lower.contains('http')) {
+    return false;
+  }
+
+  if (trimmed.contains('.') || trimmed.contains(',') || trimmed.contains('+')) {
+    return false;
+  }
+
+  if (RegExp(r'^[A-Z]{2,5}-\d{3,8}$', caseSensitive: false).hasMatch(trimmed)) {
+    return false;
+  }
+
+  final compact = trimmed.replaceAll(' ', '');
+  if (RegExp(r'^\d+$').hasMatch(compact)) {
+    if (RegExp(r'^[6-9]\d{9}$').hasMatch(compact)) return false;
+    if (RegExp(r'^(\d)\1{5,}$').hasMatch(compact)) return false;
+  }
+
+  return true;
 }
 
 bool isBarcodeInScanWindow(
