@@ -330,7 +330,7 @@ void main() {
       );
     });
 
-    test('rejects scanner garbage misread 12345678', () {
+    test('rejects scanner garbage misread 12345678 on weak reads', () {
       const barcodes = [
         Barcode(
           rawValue: '12345678',
@@ -340,10 +340,47 @@ void main() {
 
       expect(pickStockBarcodeValue(barcodes), isNull);
       expect(isSuspiciousStockBarcodeMisread('12345678'), isTrue);
+      expect(
+        isSuspiciousStockBarcodeMisread('12345678', confidentRead: true),
+        isFalse,
+      );
     });
 
-    test('rejects ascending digit sequence misreads', () {
+    test('accepts real 12345678 when decode is confident', () {
+      const layoutSize = Size(400, 800);
+      final scanWindow = computeBarcodeScanWindow(
+        layoutSize,
+        BarcodeScanProfile.stockEntry,
+      );
+      const barcodes = [
+        Barcode(
+          rawValue: '12345678',
+          format: BarcodeFormat.code128,
+          corners: [
+            Offset(160, 400),
+            Offset(240, 400),
+            Offset(240, 430),
+            Offset(160, 430),
+          ],
+        ),
+      ];
+
+      expect(
+        pickStockBarcodeValue(
+          barcodes,
+          layoutSize: layoutSize,
+          scanWindow: scanWindow,
+        ),
+        '12345678',
+      );
+    });
+
+    test('rejects ascending digit sequence misreads on weak reads', () {
       expect(isSuspiciousStockBarcodeMisread('1234567890'), isTrue);
+      expect(
+        isSuspiciousStockBarcodeMisread('1234567890', confidentRead: true),
+        isFalse,
+      );
       expect(isSuspiciousStockBarcodeMisread('2510077869'), isFalse);
     });
 

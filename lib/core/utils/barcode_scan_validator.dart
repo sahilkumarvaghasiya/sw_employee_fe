@@ -323,15 +323,42 @@ bool _isValidStockBarcodeCandidate(Barcode barcode) {
 
   final normalized = normalizeStockBarcodeValue(raw);
   if (normalized.isEmpty || normalized.length > 100) return false;
-  if (isSuspiciousStockBarcodeMisread(normalized)) return false;
   if (!knownFormat && !isPlausibleStockBarcodePayload(normalized)) return false;
 
   return true;
 }
 
-/// Rejects common scanner garbage reads (e.g. 12345678) when a label fails to
-/// decode — especially small barcodes without printed numbers below the bars.
-bool isSuspiciousStockBarcodeMisread(String value) {
+/// True when the camera gives a solid decode (position + frame). Confident reads
+/// are trusted even if the value looks like 12345678.
+bool isConfidentStockBarcodeRead(
+  Barcode barcode, {
+  required Size layoutSize,
+  Size textureSize = Size.zero,
+  Rect? scanWindow,
+  bool relaxPosition = false,
+}) {
+  if (relaxPosition || scanWindow == null) return false;
+  if (barcode.corners.isEmpty) return false;
+  if (_isSmallStockBarcode(barcode, layoutSize)) return false;
+
+  return isBarcodeInsideScanWindow(
+    barcode,
+    scanWindow,
+    layoutSize: layoutSize,
+    textureSize: textureSize,
+    allowWithoutPosition: false,
+  );
+}
+
+/// Rejects common scanner garbage on weak reads only (e.g. 12345678 hallucination
+/// on small barcodes). Real barcodes encoding 12345678 pass when the decode is
+/// confident. Manual entry is never filtered.
+bool isSuspiciousStockBarcodeMisread(
+  String value, {
+  bool confidentRead = false,
+}) {
+  if (confidentRead) return false;
+
   final compact = value.replaceAll(RegExp(r'\s+'), '');
   if (compact.isEmpty) return true;
 
@@ -426,6 +453,21 @@ String? _pickBestStockBarcodeCandidate(
             totalCandidateCount: candidates.length,
           ),
         )) {
+      continue;
+    }
+
+    final normalized = normalizeStockBarcodeValue(barcode.rawValue!.trim());
+    final confident = isConfidentStockBarcodeRead(
+      barcode,
+      layoutSize: layoutSize,
+      textureSize: textureSize,
+      scanWindow: scanWindow,
+      relaxPosition: relaxPosition,
+    );
+    if (isSuspiciousStockBarcodeMisread(
+      normalized,
+      confidentRead: confident,
+    )) {
       continue;
     }
 
