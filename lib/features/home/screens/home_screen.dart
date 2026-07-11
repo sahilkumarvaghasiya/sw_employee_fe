@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/providers/theme_provider.dart';
+import '../../../core/utils/indian_time.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -61,13 +62,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _refreshDashboard();
   }
 
-  String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -98,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           slivers: [
             SliverToBoxAdapter(
               child: _HomeHeroHeader(
-                greeting: _greeting(),
+                greeting: greetingForIndianTime(),
                 employeeName: firstName.isNotEmpty ? firstName : 'there',
                 branchName: branchName,
                 isDark: isDark,
