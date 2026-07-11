@@ -323,9 +323,53 @@ bool _isValidStockBarcodeCandidate(Barcode barcode) {
 
   final normalized = normalizeStockBarcodeValue(raw);
   if (normalized.isEmpty || normalized.length > 100) return false;
+  if (isSuspiciousStockBarcodeMisread(normalized)) return false;
   if (!knownFormat && !isPlausibleStockBarcodePayload(normalized)) return false;
 
   return true;
+}
+
+/// Rejects common scanner garbage reads (e.g. 12345678) when a label fails to
+/// decode — especially small barcodes without printed numbers below the bars.
+bool isSuspiciousStockBarcodeMisread(String value) {
+  final compact = value.replaceAll(RegExp(r'\s+'), '');
+  if (compact.isEmpty) return true;
+
+  const knownGarbage = {
+    '12345678',
+    '123456789',
+    '1234567890',
+    '01234567',
+    '012345678',
+    '98765432',
+    '987654321',
+    '87654321',
+    '11111111',
+    '00000000',
+  };
+  if (knownGarbage.contains(compact)) return true;
+
+  if (RegExp(r'^\d+$').hasMatch(compact)) {
+    if (RegExp(r'^(\d)\1{5,}$').hasMatch(compact)) return true;
+    if (compact.length >= 7 && _isMonotonicDigitSequence(compact)) return true;
+  }
+
+  return false;
+}
+
+bool _isMonotonicDigitSequence(String digits) {
+  if (digits.length < 7) return false;
+
+  var ascending = true;
+  var descending = true;
+  for (var i = 1; i < digits.length; i++) {
+    final prev = digits.codeUnitAt(i - 1) - 48;
+    final curr = digits.codeUnitAt(i) - 48;
+    if (curr != prev + 1) ascending = false;
+    if (curr != prev - 1) descending = false;
+  }
+
+  return ascending || descending;
 }
 
 bool _isSmallStockBarcode(Barcode barcode, Size layoutSize) {

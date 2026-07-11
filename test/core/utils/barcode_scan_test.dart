@@ -121,7 +121,7 @@ void main() {
         BarcodeFormat.codabar: 'A40156B',
         BarcodeFormat.ean13: '5901234123457',
         BarcodeFormat.ean8: '01126087',
-        BarcodeFormat.itf: '1234567890',
+        BarcodeFormat.itf: '4021345678',
         BarcodeFormat.upcA: '012345678905',
         BarcodeFormat.upcE: '01234565',
       };
@@ -328,6 +328,23 @@ void main() {
         ]),
         value,
       );
+    });
+
+    test('rejects scanner garbage misread 12345678', () {
+      const barcodes = [
+        Barcode(
+          rawValue: '12345678',
+          format: BarcodeFormat.code128,
+        ),
+      ];
+
+      expect(pickStockBarcodeValue(barcodes), isNull);
+      expect(isSuspiciousStockBarcodeMisread('12345678'), isTrue);
+    });
+
+    test('rejects ascending digit sequence misreads', () {
+      expect(isSuspiciousStockBarcodeMisread('1234567890'), isTrue);
+      expect(isSuspiciousStockBarcodeMisread('2510077869'), isFalse);
     });
 
     test('normalizeStockBarcodeValue preserves leading zeros', () {
