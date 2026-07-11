@@ -59,14 +59,15 @@ class BarcodeScanProfile {
         BarcodeFormat.upcA,
         BarcodeFormat.code39,
         BarcodeFormat.itf,
+        BarcodeFormat.codabar,
       ],
-      requiredConsecutiveReads: 2,
-      maxGapBetweenReads: const Duration(milliseconds: 900),
-      minBarcodeHeightRatio: kIsWeb ? 0.04 : 0.04,
-      scanWindowWidthFactor: 0.88,
-      scanWindowHeightFactor: kIsWeb ? 0.45 : 0.38,
-      detectionSpeed: kIsWeb ? DetectionSpeed.unrestricted : DetectionSpeed.normal,
-      detectionTimeoutMs: kIsWeb ? 150 : 300,
+      requiredConsecutiveReads: 1,
+      maxGapBetweenReads: const Duration(milliseconds: 1200),
+      minBarcodeHeightRatio: 0.02,
+      scanWindowWidthFactor: 0.92,
+      scanWindowHeightFactor: kIsWeb ? 0.5 : 0.42,
+      detectionSpeed: DetectionSpeed.unrestricted,
+      detectionTimeoutMs: kIsWeb ? 120 : 250,
       enableSecondaryDecode: true,
       returnImage: !kIsWeb,
     );
@@ -188,8 +189,10 @@ Barcode? pickBestBarcode(
         !isBarcodeInScanWindow(barcode, scanWindow, profile)) {
       continue;
     }
+    if (profile.isStockEntry && !isLikelyStockBarcodeValue(value)) continue;
 
-    final score = _barcodeScore(barcode, layoutSize, profile);
+    final score = _barcodeScore(barcode, layoutSize, profile) +
+        _stockBarcodeValueScore(value);
     if (score > bestScore) {
       bestScore = score;
       best = barcode;
@@ -231,8 +234,8 @@ bool isBarcodeInScanWindow(
   final corners = barcode.corners;
   if (corners.isEmpty) return true;
 
-  // On web, be lenient when the scan window is only a visual guide.
-  if (kIsWeb && profile.isStockEntry) {
+  // Stock entry uses the scan window as a visual guide only.
+  if (profile.isStockEntry) {
     return true;
   }
 
@@ -245,6 +248,65 @@ bool isBarcodeInScanWindow(
 
   final center = Offset(sumX / corners.length, sumY / corners.length);
   return scanWindow.contains(center);
+}
+
+/// Normalizes a scanned value for stock entry before saving.
+String normalizeStockBarcodeValue(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return trimmed;
+
+  final compact = trimmed.replaceAll(RegExp(r'\s+'), '');
+  if (RegExp(r'^\d{6,14}$').hasMatch(compact)) {
+    return compact;
+  }
+
+  return trimmed.replaceAll(RegExp(r'\s+'), ' ').trim().toUpperCase();
+}
+
+bool isLikelyStockBarcodeValue(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty || trimmed.length > 100) return false;
+
+  final lower = trimmed.toLowerCase();
+  if (lower.contains('mrp') ||
+      lower.contains('cust') ||
+      lower.contains('care') ||
+      lower.contains('incl') ||
+      lower.contains('tax')) {
+    return false;
+  }
+
+  if (trimmed.contains('.') || trimmed.contains(',') || trimmed.contains('+')) {
+    return false;
+  }
+
+  final compact = trimmed.replaceAll(' ', '');
+  if (RegExp(r'^\d{6,14}$').hasMatch(compact)) {
+    if (RegExp(r'^[6-9]\d{9}$').hasMatch(compact)) return false;
+    return true;
+  }
+
+  return RegExp(r'^[A-Z][A-Z0-9\s\-]{3,14}$', caseSensitive: false)
+      .hasMatch(trimmed);
+}
+
+int _stockBarcodeValueScore(String value) {
+  final compact = value.replaceAll(' ', '');
+  var score = 0;
+
+  if (RegExp(r'^\d{6,14}$').hasMatch(compact)) {
+    score += 100;
+    final len = compact.length;
+    if (len >= 8 && len <= 10) score += 30;
+    if (compact.startsWith('0')) score += 10;
+  }
+
+  if (RegExp(r'^[A-Z][A-Z0-9\s\-]{3,14}$', caseSensitive: false)
+      .hasMatch(value)) {
+    score += 80;
+  }
+
+  return score;
 }
 
 double _barcodeHeight(Barcode barcode, Size layoutSize) {

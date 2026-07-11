@@ -6,6 +6,8 @@ import 'package:zxing_lib/common.dart';
 import 'package:zxing_lib/multi.dart';
 import 'package:zxing_lib/zxing.dart';
 
+import 'barcode_scan_validator.dart';
+
 /// Result of a secondary barcode decode attempt.
 class BarcodeFrameDecodeResult {
   const BarcodeFrameDecodeResult({
@@ -26,7 +28,11 @@ enum BarcodeFrameDecodeSource {
 class BarcodeFrameDecoder {
   const BarcodeFrameDecoder();
 
-  static final RegExp _barcodeDigitPattern = RegExp(r'\d{8,14}');
+  static final RegExp _barcodeDigitPattern = RegExp(r'\d{6,14}');
+  static final RegExp _barcodeTextPattern = RegExp(
+    r'^[A-Z][A-Z0-9\s\-]{3,14}$',
+    caseSensitive: false,
+  );
 
   static const List<List<String>> _digitTemplates = [
     ['111', '101', '101', '101', '111'], // 0
@@ -41,21 +47,36 @@ class BarcodeFrameDecoder {
     ['111', '101', '111', '001', '111'], // 9
   ];
 
+  static const Map<String, List<String>> _letterTemplates = {
+    'A': ['010', '101', '111', '101', '101', '111', '101'],
+    'B': ['110', '101', '110', '101', '110', '101', '110'],
+    'C': ['011', '100', '100', '100', '100', '100', '011'],
+    'D': ['110', '101', '101', '101', '101', '101', '110'],
+    'E': ['111', '100', '110', '100', '111', '100', '111'],
+    'F': ['111', '100', '110', '100', '100', '100', '100'],
+    'L': ['100', '100', '100', '100', '100', '100', '111'],
+    'R': ['110', '101', '111', '101', '101', '101', '101'],
+    'S': ['011', '100', '011', '001', '110', '100', '011'],
+  };
+
   /// Attempts to decode a barcode from raw image bytes.
   ///
   /// [cropRect] is in normalized coordinates (0-1) relative to the image.
+  /// Set [live] to true for faster camera-frame retries.
   Future<BarcodeFrameDecodeResult?> decodeFromImageBytes(
     Uint8List bytes, {
     Rect? cropRect,
+    bool live = false,
   }) async {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
 
-    for (final variant in _buildVariants(decoded, cropRect: cropRect)) {
+    for (final variant in _buildVariants(decoded, cropRect: cropRect, live: live)) {
       final value = _decodeVariant(variant);
-      if (value != null && value.isNotEmpty) {
+      final normalized = _normalizeDecodedValue(value);
+      if (normalized != null) {
         return BarcodeFrameDecodeResult(
-          value: value,
+          value: normalized,
           source: BarcodeFrameDecodeSource.barcodePattern,
         );
       }
@@ -68,47 +89,74 @@ class BarcodeFrameDecoder {
   Future<BarcodeFrameDecodeResult?> decodePrintedNumberNearBarcode(
     Uint8List bytes, {
     Rect? cropRect,
+    bool live = false,
   }) async {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
 
     final searchAreas = <img.Image>[
+      _stripBelowBarcodeBars(decoded),
       _expandCropForLabelText(decoded, cropRect),
-      img.copyCrop(
-        decoded,
-        x: 0,
-        y: 0,
-        width: decoded.width,
-        height: (decoded.height * 0.5).round().clamp(1, decoded.height),
-      ),
       _vendorNumberStrip(decoded),
-      img.copyRotate(decoded, angle: 180),
-      _vendorNumberStrip(img.copyRotate(decoded, angle: 180)),
+      if (!live) img.copyRotate(decoded, angle: 180),
+      if (!live) _vendorNumberStrip(img.copyRotate(decoded, angle: 180)),
     ];
 
+    String? best;
+    var bestScore = 0;
+
     for (final area in searchAreas) {
-      for (final variant in _buildVariants(area, cropRect: null)) {
-        final value = _extractDigitSequence(variant);
-        if (value != null) {
-          return BarcodeFrameDecodeResult(
-            value: value,
-            source: BarcodeFrameDecodeSource.labelText,
-          );
+      if (area.width < 8 || area.height < 8) continue;
+
+      for (final variant in _buildVariants(area, cropRect: null, live: live)) {
+        final zxingValue = _normalizeDecodedValue(_decodeVariant(variant));
+        if (zxingValue != null) {
+          final score = _scoreBarcodeCandidate(zxingValue, preferLabelText: true);
+          if (score > bestScore) {
+            bestScore = score;
+            best = zxingValue;
+          }
+        }
+
+        final digitValue = _extractDigitSequence(variant);
+        if (digitValue != null) {
+          final score = _scoreBarcodeCandidate(digitValue, preferLabelText: true);
+          if (score > bestScore) {
+            bestScore = score;
+            best = digitValue;
+          }
+        }
+
+        final textValue = _readPrintedBarcodeText(variant);
+        if (textValue != null) {
+          final score = _scoreBarcodeCandidate(textValue, preferLabelText: true);
+          if (score > bestScore) {
+            bestScore = score;
+            best = textValue;
+          }
         }
       }
     }
 
-    return null;
+    if (best == null) return null;
+    return BarcodeFrameDecodeResult(
+      value: best,
+      source: BarcodeFrameDecodeSource.labelText,
+    );
   }
 
-  List<img.Image> _buildVariants(img.Image source, {Rect? cropRect}) {
+  List<img.Image> _buildVariants(
+    img.Image source, {
+    Rect? cropRect,
+    bool live = false,
+  }) {
     final cropRects = <Rect?>[cropRect];
     if (cropRect == null) {
       cropRects.addAll([
         const Rect.fromLTWH(0, 0.2, 1, 0.45),
         const Rect.fromLTWH(0, 0.35, 1, 0.3),
-        const Rect.fromLTWH(0, 0.1, 1, 0.55),
-        const Rect.fromLTWH(0.2, 0.25, 0.8, 0.3),
+        if (!live) const Rect.fromLTWH(0, 0.1, 1, 0.55),
+        if (!live) const Rect.fromLTWH(0.2, 0.25, 0.8, 0.3),
       ]);
     }
 
@@ -130,11 +178,7 @@ class BarcodeFrameDecoder {
       );
       final upscaled2 = img.copyResize(
         contrasted,
-        width: (contrasted.width * 2).clamp(16, 2400),
-      );
-      final upscaled3 = img.copyResize(
-        contrasted,
-        width: (contrasted.width * 3).clamp(16, 3200),
+        width: (contrasted.width * 2).clamp(16, live ? 1600 : 2400),
       );
 
       variants.addAll([
@@ -142,22 +186,58 @@ class BarcodeFrameDecoder {
         contrasted,
         sharpened,
         upscaled2,
-        upscaled3,
-        img.copyRotate(cropped, angle: 180),
-        img.copyRotate(contrasted, angle: 180),
-        img.copyRotate(upscaled2, angle: 180),
-        _invertImage(cropped),
         _invertImage(contrasted),
-        _invertImage(upscaled2),
+        if (!live) img.copyResize(
+          contrasted,
+          width: (contrasted.width * 3).clamp(16, 3200),
+        ),
+        if (!live) img.copyRotate(cropped, angle: 180),
+        if (!live) img.copyRotate(contrasted, angle: 180),
+        if (!live) _invertImage(upscaled2),
       ]);
     }
 
-    return variants;
+    return live ? variants.take(8).toList() : variants;
+  }
+
+  img.Image _stripBelowBarcodeBars(img.Image source) {
+    final rowDensity = List<double>.filled(source.height, 0);
+    for (var y = 0; y < source.height; y++) {
+      var transitions = 0;
+      var lastDark = false;
+      for (var x = 0; x < source.width; x++) {
+        final dark = source.getPixel(x, y).r < 120;
+        if (x > 0 && dark != lastDark) transitions++;
+        lastDark = dark;
+      }
+      rowDensity[y] = transitions / source.width;
+    }
+
+    var peakY = 0;
+    var peakDensity = 0.0;
+    for (var y = 0; y < source.height; y++) {
+      if (rowDensity[y] > peakDensity) {
+        peakDensity = rowDensity[y];
+        peakY = y;
+      }
+    }
+
+    final top = (peakY + source.height * 0.08).round().clamp(0, source.height - 1);
+    final bottom =
+        (peakY + source.height * 0.28).round().clamp(top + 1, source.height);
+
+    return img.copyCrop(
+      source,
+      x: 0,
+      y: top,
+      width: source.width,
+      height: bottom - top,
+    );
   }
 
   img.Image _vendorNumberStrip(img.Image source) {
-    final y = (source.height * 0.4).round().clamp(0, source.height - 1);
-    final height = (source.height * 0.12).round().clamp(1, source.height - y);
+    final y = (source.height * 0.42).round().clamp(0, source.height - 1);
+    final height = (source.height * 0.14).round().clamp(1, source.height - y);
     return img.copyCrop(
       source,
       x: 0,
@@ -263,6 +343,35 @@ class BarcodeFrameDecoder {
     return null;
   }
 
+  String? _normalizeDecodedValue(String? value) {
+    if (value == null) return null;
+    final normalized = normalizeStockBarcodeValue(value);
+    if (!isLikelyStockBarcodeValue(normalized)) return null;
+    return normalized;
+  }
+
+  int _scoreBarcodeCandidate(String value, {required bool preferLabelText}) {
+    final compact = value.replaceAll(' ', '');
+    var score = 0;
+
+    if (_barcodeDigitPattern.hasMatch(compact)) {
+      score += 100;
+      final len = compact.length;
+      if (len >= 8 && len <= 10) score += 40;
+      if (len == 8 || len == 10) score += 20;
+    }
+
+    if (_barcodeTextPattern.hasMatch(value.toUpperCase())) {
+      score += 90;
+      if (RegExp(r'[A-Z]').hasMatch(value) && RegExp(r'\d').hasMatch(value)) {
+        score += 30;
+      }
+    }
+
+    if (preferLabelText) score += 10;
+    return score;
+  }
+
   Uint8List _toLuminance(img.Image image) {
     final pixels = Uint8List(image.width * image.height);
     for (var y = 0; y < image.height; y++) {
@@ -280,11 +389,52 @@ class BarcodeFrameDecoder {
   String? _extractDigitSequence(img.Image image) {
     final value = _decodeVariant(image);
     if (value != null) {
-      final match = _barcodeDigitPattern.firstMatch(value);
+      final match = _barcodeDigitPattern.firstMatch(value.replaceAll(' ', ''));
       if (match != null) return match.group(0);
     }
 
     return _readPrintedDigits(image);
+  }
+
+  String? _readPrintedBarcodeText(img.Image image) {
+    final upscaled = img.copyResize(
+      image,
+      width: (image.width * 3).round().clamp(120, 2400),
+    );
+    final gray = img.grayscale(upscaled);
+    img.adjustColor(gray, contrast: 2.0, brightness: 0.05);
+    final cleaned = img.gaussianBlur(gray, radius: 1);
+
+    String? best;
+    var bestScore = 0;
+
+    for (final bandSource in [gray, cleaned]) {
+      for (var bandHeight = 14; bandHeight <= 40; bandHeight += 8) {
+        for (var y = 0; y <= bandSource.height - bandHeight; y += 6) {
+          final band = img.copyCrop(
+            bandSource,
+            x: 0,
+            y: y,
+            width: bandSource.width,
+            height: bandHeight,
+          );
+
+          final score = _textBandScore(band);
+          if (score < 16) continue;
+
+          final text = _recognizeBarcodeTextInBand(band);
+          if (text == null) continue;
+
+          final candidateScore = score + _scoreBarcodeCandidate(text, preferLabelText: true);
+          if (candidateScore > bestScore) {
+            bestScore = candidateScore;
+            best = text;
+          }
+        }
+      }
+    }
+
+    return best;
   }
 
   String? _readPrintedDigits(img.Image image) {
@@ -314,10 +464,11 @@ class BarcodeFrameDecoder {
           if (score < 16) continue;
 
           final digits = _recognizeDigitsInBand(band);
-          if (digits == null || digits.length < 8) continue;
+          if (digits == null || digits.length < 6) continue;
 
-          if (score > bestScore) {
-            bestScore = score;
+          final candidateScore = score + _scoreBarcodeCandidate(digits, preferLabelText: true);
+          if (candidateScore > bestScore) {
+            bestScore = candidateScore;
             best = digits;
           }
         }
@@ -352,30 +503,55 @@ class BarcodeFrameDecoder {
     final darkRatio = darkPixels / total;
     if (darkRatio < 0.04 || darkRatio > 0.45) return 0;
 
-    // Printed digits have fewer transitions than barcode stripes.
     final transitionDensity = transitions / total;
     if (transitionDensity > 0.35) return 0;
 
     return ((darkRatio * 100).round() + transitions ~/ 8);
   }
 
-  String? _recognizeDigitsInBand(img.Image band) {
-    final binary = band.clone();
-    for (var y = 0; y < binary.height; y++) {
-      for (var x = 0; x < binary.width; x++) {
-        final dark = binary.getPixel(x, y).r < 120;
-        binary.setPixel(
-          x,
-          y,
-          dark ? img.ColorRgb8(0, 0, 0) : img.ColorRgb8(255, 255, 255),
-        );
+  String? _recognizeBarcodeTextInBand(img.Image band) {
+    final columns = _segmentColumns(_binarizeBand(band));
+    if (columns.length < 4) return null;
+
+    final buffer = StringBuffer();
+    var uncertain = 0;
+
+    for (final column in columns) {
+      if (column.width <= 1) {
+        buffer.write(' ');
+        continue;
       }
+
+      final glyph = _matchDigit(column) ?? _matchLetter(column);
+      if (glyph == null) {
+        uncertain++;
+        if (uncertain > 2) return null;
+        continue;
+      }
+      buffer.write(glyph);
     }
 
-    final columns = _segmentColumns(binary);
-    if (columns.length < 8) return null;
+    final raw = buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim().toUpperCase();
+    if (raw.isEmpty) return null;
+    if (!isLikelyStockBarcodeValue(raw)) return null;
 
-    for (final windowSize in [10, 11, 12, 13, 14]) {
+    if (_barcodeDigitPattern.hasMatch(raw.replaceAll(' ', ''))) {
+      return _barcodeDigitPattern.firstMatch(raw.replaceAll(' ', ''))!.group(0);
+    }
+
+    if (_barcodeTextPattern.hasMatch(raw)) {
+      return raw;
+    }
+
+    return null;
+  }
+
+  String? _recognizeDigitsInBand(img.Image band) {
+    final binary = _binarizeBand(band);
+    final columns = _segmentColumns(binary);
+    if (columns.length < 6) return null;
+
+    for (final windowSize in [8, 9, 10, 11, 12, 13, 14]) {
       if (columns.length < windowSize) continue;
 
       for (var start = 0; start <= columns.length - windowSize; start++) {
@@ -388,6 +564,21 @@ class BarcodeFrameDecoder {
     }
 
     return _recognizeDigitWindow(columns);
+  }
+
+  img.Image _binarizeBand(img.Image band) {
+    final binary = band.clone();
+    for (var y = 0; y < binary.height; y++) {
+      for (var x = 0; x < binary.width; x++) {
+        final dark = binary.getPixel(x, y).r < 120;
+        binary.setPixel(
+          x,
+          y,
+          dark ? img.ColorRgb8(0, 0, 0) : img.ColorRgb8(255, 255, 255),
+        );
+      }
+    }
+    return binary;
   }
 
   String? _recognizeDigitWindow(List<img.Image> columns) {
@@ -405,7 +596,7 @@ class BarcodeFrameDecoder {
     }
 
     final value = buffer.toString();
-    if (value.length < 8) return null;
+    if (value.length < 6) return null;
     return _barcodeDigitPattern.hasMatch(value) ? value : null;
   }
 
@@ -474,6 +665,32 @@ class BarcodeFrameDecoder {
 
     if (bestDigit == -1 || bestDistance > 14) return null;
     return '$bestDigit';
+  }
+
+  String? _matchLetter(img.Image segment) {
+    final normalized = img.copyResize(segment, width: 5, height: 7);
+    final pattern = <String>[];
+    for (var y = 0; y < 7; y++) {
+      final row = StringBuffer();
+      for (var x = 0; x < 5; x++) {
+        row.write(normalized.getPixel(x, y).r < 128 ? '1' : '0');
+      }
+      pattern.add(row.toString());
+    }
+
+    String? bestLetter;
+    var bestDistance = 999;
+    for (final entry in _letterTemplates.entries) {
+      final expanded = _expandTemplate(entry.value);
+      final distance = _patternDistance(pattern, expanded);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestLetter = entry.key;
+      }
+    }
+
+    if (bestLetter == null || bestDistance > 16) return null;
+    return bestLetter;
   }
 
   List<String> _expandTemplate(List<String> template) {

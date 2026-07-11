@@ -36,7 +36,8 @@ class BarcodeScannerView extends StatefulWidget {
 }
 
 class _BarcodeScannerViewState extends State<BarcodeScannerView> {
-  static const _secondaryDecodeDelay = Duration(seconds: 1);
+  static const _secondaryDecodeIdleDelay = Duration(seconds: 2);
+  static const _secondaryDecodeInterval = Duration(milliseconds: 1200);
   static const _secondaryDecodeCooldown = Duration(milliseconds: 900);
 
   late final BarcodeScanValidator _validator = BarcodeScanValidator(
@@ -48,6 +49,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   String? _confirmSourceLabel;
   DateTime? _lastSuccessfulDetectAt;
   DateTime? _lastSecondaryAttemptAt;
+  DateTime? _scanSessionStartedAt;
   bool _secondaryDecodeInFlight = false;
   Timer? _secondaryDecodeTimer;
   int _hintIndex = 0;
@@ -61,6 +63,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   @override
   void initState() {
     super.initState();
+    _scanSessionStartedAt = DateTime.now();
     _startHintRotation();
     _scheduleSecondaryDecode();
   }
@@ -100,11 +103,24 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     _secondaryDecodeTimer?.cancel();
     if (!widget.profile.enableSecondaryDecode) return;
 
-    _secondaryDecodeTimer = Timer.periodic(const Duration(milliseconds: 500), (
-      _,
-    ) {
+    _secondaryDecodeTimer = Timer.periodic(_secondaryDecodeInterval, (_) {
       unawaited(_maybeRunSecondaryDecode());
     });
+  }
+
+  bool _shouldBlockSecondaryDecode() {
+    final pending = _validator.pendingValue;
+    final progress = _validator.consecutiveCount;
+    return pending != null && progress > 0;
+  }
+
+  bool _secondaryDecodeReady() {
+    final startedAt = _scanSessionStartedAt;
+    if (startedAt == null) return false;
+
+    final lastDetect = _lastSuccessfulDetectAt;
+    final idleSince = lastDetect ?? startedAt;
+    return DateTime.now().difference(idleSince) >= _secondaryDecodeIdleDelay;
   }
 
   void _resetScanState() {
@@ -113,6 +129,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     _lastSecondaryAttemptAt = null;
     _secondaryDecodeInFlight = false;
     _latestFrameBytes = null;
+    _scanSessionStartedAt = DateTime.now();
     if (_awaitingConfirmValue != null || _confirmSourceLabel != null) {
       setState(() {
         _awaitingConfirmValue = null;
@@ -139,24 +156,40 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     final value = barcode?.rawValue?.trim();
     if (value == null || value.isEmpty) return;
 
+    final normalized = widget.profile.isStockEntry
+        ? normalizeStockBarcodeValue(value)
+        : value;
+    if (widget.profile.isStockEntry && !isLikelyStockBarcodeValue(normalized)) {
+      return;
+    }
+
     _lastSuccessfulDetectAt = DateTime.now();
-    final accepted = _validator.registerRead(value);
+    final accepted = _validator.registerRead(normalized);
     if (accepted == null) {
       if (mounted) setState(() {});
       return;
     }
 
-    _presentCandidate(accepted);
+    _presentCandidate(
+      accepted,
+      fromPrintedText: false,
+    );
   }
 
   void _presentCandidate(
     String value, {
-    String? sourceLabel,
+    bool fromPrintedText = false,
   }) {
-    if (widget.requireManualConfirm) {
+    final needsConfirm =
+        widget.requireManualConfirm ||
+        (widget.profile.isStockEntry && fromPrintedText);
+
+    if (needsConfirm) {
       setState(() {
         _awaitingConfirmValue = value;
-        _confirmSourceLabel = sourceLabel;
+        _confirmSourceLabel = fromPrintedText
+            ? 'Detected from label text'
+            : null;
       });
       return;
     }
@@ -174,9 +207,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     }
 
     final now = DateTime.now();
-    final lastDetect = _lastSuccessfulDetectAt;
-    if (lastDetect != null &&
-        now.difference(lastDetect) < _secondaryDecodeDelay) {
+    if (_shouldBlockSecondaryDecode() || !_secondaryDecodeReady()) {
       return;
     }
 
@@ -203,11 +234,15 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
       final decoded = await _frameDecoder.decodeFromImageBytes(
         frameBytes,
         cropRect: cropRect,
+        live: true,
       );
       if (decoded != null) {
         final accepted = _validator.registerRead(decoded.value);
         if (accepted != null) {
-          _presentCandidate(accepted);
+          _presentCandidate(
+            accepted,
+            fromPrintedText: false,
+          );
           return;
         }
         if (mounted) setState(() {});
@@ -217,12 +252,11 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
       final printed = await readPrintedBarcodeNumber(frameBytes);
       if (printed == null || printed.isEmpty) return;
 
-      final accepted = _validator.registerRead(printed);
+      final normalized = normalizeStockBarcodeValue(printed);
+      if (!isLikelyStockBarcodeValue(normalized)) return;
+
+      final accepted = _presentPrintedCandidate(normalized);
       if (accepted != null) {
-        _presentCandidate(
-          accepted,
-          sourceLabel: 'Detected from label text',
-        );
         return;
       }
 
@@ -230,6 +264,23 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     } finally {
       _secondaryDecodeInFlight = false;
     }
+  }
+
+  String? _presentPrintedCandidate(String value) {
+    final accepted = _validator.registerRead(value);
+    if (accepted != null) {
+      _presentCandidate(
+        accepted,
+        fromPrintedText: true,
+      );
+      return accepted;
+    }
+
+    _presentCandidate(
+      value.trim(),
+      fromPrintedText: true,
+    );
+    return value.trim();
   }
 
   void _confirmPending() {

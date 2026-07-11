@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/barcode_scan_validator.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/inr_format.dart';
@@ -141,7 +142,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     if (!mounted) return;
     if (barcode == null || barcode.trim().isEmpty) return;
 
-    final normalized = barcode.trim();
+    final normalized = normalizeStockBarcodeValue(barcode);
+    if (normalized.isEmpty) return;
 
     final existingIndex = _items.indexWhere(
       (e) => e.draft.barcode.trim() == normalized,
