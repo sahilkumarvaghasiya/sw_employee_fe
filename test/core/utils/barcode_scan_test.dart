@@ -21,7 +21,7 @@ void main() {
 
       expect(profile.formats, contains(BarcodeFormat.ean13));
       expect(profile.requiredConsecutiveReads, 1);
-      expect(profile.enableSecondaryDecode, isTrue);
+      expect(profile.enableSecondaryDecode, isFalse);
     });
   });
 

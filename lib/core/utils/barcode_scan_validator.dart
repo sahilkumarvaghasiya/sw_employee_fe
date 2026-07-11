@@ -66,10 +66,10 @@ class BarcodeScanProfile {
       minBarcodeHeightRatio: 0.02,
       scanWindowWidthFactor: 0.92,
       scanWindowHeightFactor: kIsWeb ? 0.5 : 0.42,
-      detectionSpeed: DetectionSpeed.unrestricted,
-      detectionTimeoutMs: kIsWeb ? 120 : 250,
-      enableSecondaryDecode: true,
-      returnImage: !kIsWeb,
+      detectionSpeed: DetectionSpeed.normal,
+      detectionTimeoutMs: kIsWeb ? 200 : 300,
+      enableSecondaryDecode: false,
+      returnImage: false,
     );
   }
 
@@ -192,7 +192,7 @@ Barcode? pickBestBarcode(
     if (profile.isStockEntry && !isLikelyStockBarcodeValue(value)) continue;
 
     final score = _barcodeScore(barcode, layoutSize, profile) +
-        _stockBarcodeValueScore(value);
+        stockBarcodeValueScore(value);
     if (score > bestScore) {
       bestScore = score;
       best = barcode;
@@ -290,7 +290,7 @@ bool isLikelyStockBarcodeValue(String value) {
       .hasMatch(trimmed);
 }
 
-int _stockBarcodeValueScore(String value) {
+int stockBarcodeValueScore(String value) {
   final compact = value.replaceAll(' ', '');
   var score = 0;
 
