@@ -19,7 +19,10 @@ class StockBarcodeScannerScreen extends StatefulWidget {
 }
 
 class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
-  late final _scannerController = createBarcodeScannerController(autoStart: true);
+  late final _scannerController = createBarcodeScannerController(
+    autoStart: true,
+    profile: BarcodeScanProfile.stockEntry,
+  );
 
   bool _popped = false;
 
@@ -41,6 +44,7 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
       appBar: AppBar(title: const Text('Scan barcode')),
       body: BarcodeScannerView(
         controller: _scannerController,
+        profile: BarcodeScanProfile.stockEntry,
         requireManualConfirm: true,
         hintText:
             'Align the barcode inside the frame and hold steady until it is detected.',

@@ -1,7 +1,13 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../theme/app_colors.dart';
+import '../utils/barcode_frame_capture.dart';
+import '../utils/barcode_frame_decoder.dart';
+import '../utils/barcode_label_text_reader.dart';
 import '../utils/barcode_scan_validator.dart';
 
 /// Reusable camera scanner with focus window and stable-read validation.
@@ -10,6 +16,7 @@ class BarcodeScannerView extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onBarcodeConfirmed,
+    this.profile = BarcodeScanProfile.billing,
     this.enabled = true,
     this.requireManualConfirm = false,
     this.hintText = 'Align the barcode inside the frame and hold steady.',
@@ -18,6 +25,7 @@ class BarcodeScannerView extends StatefulWidget {
 
   final MobileScannerController controller;
   final ValueChanged<String> onBarcodeConfirmed;
+  final BarcodeScanProfile profile;
   final bool enabled;
   final bool requireManualConfirm;
   final String hintText;
@@ -28,9 +36,34 @@ class BarcodeScannerView extends StatefulWidget {
 }
 
 class _BarcodeScannerViewState extends State<BarcodeScannerView> {
-  final BarcodeScanValidator _validator = BarcodeScanValidator();
+  static const _secondaryDecodeDelay = Duration(seconds: 1);
+  static const _secondaryDecodeCooldown = Duration(milliseconds: 900);
+
+  late final BarcodeScanValidator _validator = BarcodeScanValidator(
+    profile: widget.profile,
+  );
+  final BarcodeFrameDecoder _frameDecoder = const BarcodeFrameDecoder();
 
   String? _awaitingConfirmValue;
+  String? _confirmSourceLabel;
+  DateTime? _lastSuccessfulDetectAt;
+  DateTime? _lastSecondaryAttemptAt;
+  bool _secondaryDecodeInFlight = false;
+  Timer? _secondaryDecodeTimer;
+  int _hintIndex = 0;
+  Timer? _hintTimer;
+  Uint8List? _latestFrameBytes;
+  Size? _layoutSize;
+
+  bool get _useStockWebHints =>
+      kIsWeb && widget.profile.isStockEntry && _awaitingConfirmValue == null;
+
+  @override
+  void initState() {
+    super.initState();
+    _startHintRotation();
+    _scheduleSecondaryDecode();
+  }
 
   @override
   void didUpdateWidget(covariant BarcodeScannerView oldWidget) {
@@ -38,41 +71,165 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     if (!widget.enabled && oldWidget.enabled) {
       _resetScanState();
     }
+    if (widget.profile != oldWidget.profile) {
+      _validator.reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _secondaryDecodeTimer?.cancel();
+    _hintTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startHintRotation() {
+    _hintTimer?.cancel();
+    if (!_useStockWebHints) return;
+
+    _hintTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || _awaitingConfirmValue != null) return;
+      setState(() {
+        _hintIndex =
+            (_hintIndex + 1) % widget.profile.webScanHints.length;
+      });
+    });
+  }
+
+  void _scheduleSecondaryDecode() {
+    _secondaryDecodeTimer?.cancel();
+    if (!widget.profile.enableSecondaryDecode) return;
+
+    _secondaryDecodeTimer = Timer.periodic(const Duration(milliseconds: 500), (
+      _,
+    ) {
+      unawaited(_maybeRunSecondaryDecode());
+    });
   }
 
   void _resetScanState() {
     _validator.reset();
-    if (_awaitingConfirmValue != null) {
-      setState(() => _awaitingConfirmValue = null);
+    _lastSuccessfulDetectAt = null;
+    _lastSecondaryAttemptAt = null;
+    _secondaryDecodeInFlight = false;
+    _latestFrameBytes = null;
+    if (_awaitingConfirmValue != null || _confirmSourceLabel != null) {
+      setState(() {
+        _awaitingConfirmValue = null;
+        _confirmSourceLabel = null;
+      });
     }
   }
 
   void _handleDetect(BarcodeCapture capture, Size layoutSize) {
     if (!widget.enabled || _awaitingConfirmValue != null) return;
 
-    final scanWindow = computeBarcodeScanWindow(layoutSize);
+    if (capture.image != null && capture.image!.isNotEmpty) {
+      _latestFrameBytes = capture.image;
+    }
+
+    final scanWindow = computeBarcodeScanWindow(layoutSize, widget.profile);
     final barcode = pickBestBarcode(
       capture.barcodes,
       layoutSize: layoutSize,
       scanWindow: scanWindow,
+      profile: widget.profile,
     );
 
     final value = barcode?.rawValue?.trim();
     if (value == null || value.isEmpty) return;
 
+    _lastSuccessfulDetectAt = DateTime.now();
     final accepted = _validator.registerRead(value);
     if (accepted == null) {
       if (mounted) setState(() {});
       return;
     }
 
+    _presentCandidate(accepted);
+  }
+
+  void _presentCandidate(
+    String value, {
+    String? sourceLabel,
+  }) {
     if (widget.requireManualConfirm) {
-      setState(() => _awaitingConfirmValue = accepted);
+      setState(() {
+        _awaitingConfirmValue = value;
+        _confirmSourceLabel = sourceLabel;
+      });
       return;
     }
 
-    widget.onBarcodeConfirmed(accepted);
-    _validator.reset();
+    widget.onBarcodeConfirmed(value);
+    _resetScanState();
+  }
+
+  Future<void> _maybeRunSecondaryDecode() async {
+    if (!widget.enabled ||
+        !widget.profile.enableSecondaryDecode ||
+        _awaitingConfirmValue != null ||
+        _secondaryDecodeInFlight) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final lastDetect = _lastSuccessfulDetectAt;
+    if (lastDetect != null &&
+        now.difference(lastDetect) < _secondaryDecodeDelay) {
+      return;
+    }
+
+    final lastAttempt = _lastSecondaryAttemptAt;
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < _secondaryDecodeCooldown) {
+      return;
+    }
+
+    _secondaryDecodeInFlight = true;
+    _lastSecondaryAttemptAt = now;
+
+    try {
+      final layoutSize = _layoutSize;
+      if (layoutSize == null) return;
+
+      final scanWindow = computeBarcodeScanWindow(layoutSize, widget.profile);
+      final cropRect = normalizedCropFromScanWindow(scanWindow, layoutSize);
+
+      Uint8List? frameBytes = _latestFrameBytes;
+      frameBytes ??= await captureCameraPreviewFrame(cropRect: cropRect);
+      if (frameBytes == null || frameBytes.isEmpty) return;
+
+      final decoded = await _frameDecoder.decodeFromImageBytes(
+        frameBytes,
+        cropRect: cropRect,
+      );
+      if (decoded != null) {
+        final accepted = _validator.registerRead(decoded.value);
+        if (accepted != null) {
+          _presentCandidate(accepted);
+          return;
+        }
+        if (mounted) setState(() {});
+        return;
+      }
+
+      final printed = await readPrintedBarcodeNumber(frameBytes);
+      if (printed == null || printed.isEmpty) return;
+
+      final accepted = _validator.registerRead(printed);
+      if (accepted != null) {
+        _presentCandidate(
+          accepted,
+          sourceLabel: 'Detected from label text',
+        );
+        return;
+      }
+
+      if (mounted) setState(() {});
+    } finally {
+      _secondaryDecodeInFlight = false;
+    }
   }
 
   void _confirmPending() {
@@ -86,6 +243,29 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     _resetScanState();
   }
 
+  String _statusText() {
+    if (_awaitingConfirmValue != null) {
+      return _confirmSourceLabel ?? 'Confirm the barcode below.';
+    }
+
+    if (_useStockWebHints) {
+      return widget.profile.webScanHints[_hintIndex];
+    }
+
+    final pending = _validator.pendingValue;
+    final progress = _validator.consecutiveCount;
+    final required = _validator.requiredConsecutiveReads;
+
+    if (pending != null && progress > 0 && progress < required) {
+      return 'Hold steady… $progress/$required';
+    }
+    if (pending != null && progress >= required) {
+      return 'Barcode detected';
+    }
+
+    return widget.hintText;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -94,7 +274,8 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final layoutSize = constraints.biggest;
-        final scanWindow = computeBarcodeScanWindow(layoutSize);
+        _layoutSize = layoutSize;
+        final scanWindow = computeBarcodeScanWindow(layoutSize, widget.profile);
 
         return Stack(
           fit: StackFit.expand,
@@ -124,6 +305,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
             if (_awaitingConfirmValue != null)
               _ConfirmOverlay(
                 value: _awaitingConfirmValue!,
+                sourceLabel: _confirmSourceLabel,
                 onConfirm: _confirmPending,
                 onRescan: _rejectPending,
               ),
@@ -137,15 +319,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     final pending = _validator.pendingValue;
     final progress = _validator.consecutiveCount;
     final required = _validator.requiredConsecutiveReads;
-
-    String statusText = widget.hintText;
-    if (_awaitingConfirmValue != null) {
-      statusText = 'Confirm the barcode below.';
-    } else if (pending != null && progress > 0 && progress < required) {
-      statusText = 'Hold steady… $progress/$required';
-    } else if (pending != null && progress >= required) {
-      statusText = 'Barcode detected';
-    }
+    final statusText = _statusText();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -206,9 +380,11 @@ class _ConfirmOverlay extends StatelessWidget {
     required this.value,
     required this.onConfirm,
     required this.onRescan,
+    this.sourceLabel,
   });
 
   final String value;
+  final String? sourceLabel;
   final VoidCallback onConfirm;
   final VoidCallback onRescan;
 
@@ -231,7 +407,7 @@ class _ConfirmOverlay extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Barcode detected',
+                    sourceLabel ?? 'Barcode detected',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),

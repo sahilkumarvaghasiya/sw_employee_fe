@@ -1,33 +1,121 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-/// Shared tuning for barcode camera scanning.
+/// Preset tuning for different barcode scanning contexts.
+enum BarcodeScanProfileKind {
+  billing,
+  stockEntry,
+}
+
+/// Configuration bundle for a barcode scanning context.
+class BarcodeScanProfile {
+  const BarcodeScanProfile({
+    required this.kind,
+    required this.formats,
+    required this.requiredConsecutiveReads,
+    required this.maxGapBetweenReads,
+    required this.minBarcodeHeightRatio,
+    required this.scanWindowWidthFactor,
+    required this.scanWindowHeightFactor,
+    required this.detectionSpeed,
+    required this.detectionTimeoutMs,
+    this.enableSecondaryDecode = false,
+    this.returnImage = false,
+  });
+
+  final BarcodeScanProfileKind kind;
+  final List<BarcodeFormat> formats;
+  final int requiredConsecutiveReads;
+  final Duration maxGapBetweenReads;
+  final double minBarcodeHeightRatio;
+  final double scanWindowWidthFactor;
+  final double scanWindowHeightFactor;
+  final DetectionSpeed detectionSpeed;
+  final int detectionTimeoutMs;
+  final bool enableSecondaryDecode;
+  final bool returnImage;
+
+  static const billing = BarcodeScanProfile(
+    kind: BarcodeScanProfileKind.billing,
+    formats: [BarcodeFormat.code128],
+    requiredConsecutiveReads: 3,
+    maxGapBetweenReads: Duration(milliseconds: 900),
+    minBarcodeHeightRatio: 0.06,
+    scanWindowWidthFactor: 0.88,
+    scanWindowHeightFactor: 0.38,
+    detectionSpeed: DetectionSpeed.normal,
+    detectionTimeoutMs: 300,
+  );
+
+  static BarcodeScanProfile get stockEntry {
+    return BarcodeScanProfile(
+      kind: BarcodeScanProfileKind.stockEntry,
+      formats: const [
+        BarcodeFormat.code128,
+        BarcodeFormat.ean13,
+        BarcodeFormat.ean8,
+        BarcodeFormat.upcA,
+        BarcodeFormat.code39,
+        BarcodeFormat.itf,
+      ],
+      requiredConsecutiveReads: 2,
+      maxGapBetweenReads: const Duration(milliseconds: 900),
+      minBarcodeHeightRatio: kIsWeb ? 0.04 : 0.04,
+      scanWindowWidthFactor: 0.88,
+      scanWindowHeightFactor: kIsWeb ? 0.45 : 0.38,
+      detectionSpeed: kIsWeb ? DetectionSpeed.unrestricted : DetectionSpeed.normal,
+      detectionTimeoutMs: kIsWeb ? 150 : 300,
+      enableSecondaryDecode: true,
+      returnImage: !kIsWeb,
+    );
+  }
+
+  bool get isStockEntry => kind == BarcodeScanProfileKind.stockEntry;
+
+  List<String> get webScanHints => const [
+        'Tilt the label to remove glare',
+        'Move closer until the barcode fills the frame',
+        'Hold steady for about one second',
+        'Rotate the label upright if needed',
+      ];
+}
+
+/// Legacy shared defaults kept for backward compatibility.
 abstract final class BarcodeScanSettings {
-  static const List<BarcodeFormat> supportedFormats = [BarcodeFormat.code128];
+  static List<BarcodeFormat> get supportedFormats =>
+      BarcodeScanProfile.billing.formats;
 
-  /// Number of identical consecutive reads required before accepting a scan.
-  static const int requiredConsecutiveReads = 3;
+  static int get requiredConsecutiveReads =>
+      BarcodeScanProfile.billing.requiredConsecutiveReads;
 
-  /// Max gap between consecutive reads before the counter resets.
-  static const Duration maxGapBetweenReads = Duration(milliseconds: 900);
+  static Duration get maxGapBetweenReads =>
+      BarcodeScanProfile.billing.maxGapBetweenReads;
 
-  /// Minimum barcode height as a fraction of the scanner layout height.
-  static const double minBarcodeHeightRatio = 0.06;
+  static double get minBarcodeHeightRatio =>
+      BarcodeScanProfile.billing.minBarcodeHeightRatio;
 
-  /// Scan window width as a fraction of layout width.
-  static const double scanWindowWidthFactor = 0.88;
+  static double get scanWindowWidthFactor =>
+      BarcodeScanProfile.billing.scanWindowWidthFactor;
 
-  /// Scan window height as a fraction of layout height.
-  static const double scanWindowHeightFactor = 0.38;
+  static double get scanWindowHeightFactor =>
+      BarcodeScanProfile.billing.scanWindowHeightFactor;
 }
 
 /// Tracks stable barcode reads to reject partial or flickering detections.
 class BarcodeScanValidator {
   BarcodeScanValidator({
-    this.requiredReads = BarcodeScanSettings.requiredConsecutiveReads,
-    this.maxGap = BarcodeScanSettings.maxGapBetweenReads,
-  });
+    BarcodeScanProfile profile = BarcodeScanProfile.billing,
+  })  : requiredReads = profile.requiredConsecutiveReads,
+        maxGap = profile.maxGapBetweenReads;
+
+  BarcodeScanValidator.legacy({
+    int? requiredReads,
+    Duration? maxGap,
+  })  : requiredReads =
+            requiredReads ?? BarcodeScanSettings.requiredConsecutiveReads,
+        maxGap = maxGap ?? BarcodeScanSettings.maxGapBetweenReads;
 
   final int requiredReads;
   final Duration maxGap;
@@ -83,6 +171,7 @@ Barcode? pickBestBarcode(
   List<Barcode> barcodes, {
   required Size layoutSize,
   Rect? scanWindow,
+  BarcodeScanProfile profile = BarcodeScanProfile.billing,
 }) {
   if (barcodes.isEmpty) return null;
 
@@ -93,13 +182,14 @@ Barcode? pickBestBarcode(
     final value = barcode.rawValue?.trim();
     if (value == null || value.isEmpty) continue;
 
-    if (!_isSupportedFormat(barcode.format)) continue;
-    if (!isBarcodeLargeEnough(barcode, layoutSize)) continue;
-    if (scanWindow != null && !isBarcodeInScanWindow(barcode, scanWindow)) {
+    if (!_isSupportedFormat(barcode.format, profile)) continue;
+    if (!isBarcodeLargeEnough(barcode, layoutSize, profile)) continue;
+    if (scanWindow != null &&
+        !isBarcodeInScanWindow(barcode, scanWindow, profile)) {
       continue;
     }
 
-    final score = _barcodeScore(barcode, layoutSize);
+    final score = _barcodeScore(barcode, layoutSize, profile);
     if (score > bestScore) {
       bestScore = score;
       best = barcode;
@@ -109,15 +199,19 @@ Barcode? pickBestBarcode(
   return best;
 }
 
-bool _isSupportedFormat(BarcodeFormat format) {
+bool _isSupportedFormat(BarcodeFormat format, BarcodeScanProfile profile) {
   if (format == BarcodeFormat.unknown) {
     // Web / some platforms may not report format reliably.
     return true;
   }
-  return BarcodeScanSettings.supportedFormats.contains(format);
+  return profile.formats.contains(format);
 }
 
-bool isBarcodeLargeEnough(Barcode barcode, Size layoutSize) {
+bool isBarcodeLargeEnough(
+  Barcode barcode,
+  Size layoutSize, [
+  BarcodeScanProfile profile = BarcodeScanProfile.billing,
+]) {
   if (layoutSize.height <= 0) return true;
 
   final height = _barcodeHeight(barcode, layoutSize);
@@ -126,12 +220,21 @@ bool isBarcodeLargeEnough(Barcode barcode, Size layoutSize) {
     return true;
   }
 
-  return height / layoutSize.height >= BarcodeScanSettings.minBarcodeHeightRatio;
+  return height / layoutSize.height >= profile.minBarcodeHeightRatio;
 }
 
-bool isBarcodeInScanWindow(Barcode barcode, Rect scanWindow) {
+bool isBarcodeInScanWindow(
+  Barcode barcode,
+  Rect scanWindow, [
+  BarcodeScanProfile profile = BarcodeScanProfile.billing,
+]) {
   final corners = barcode.corners;
   if (corners.isEmpty) return true;
+
+  // On web, be lenient when the scan window is only a visual guide.
+  if (kIsWeb && profile.isStockEntry) {
+    return true;
+  }
 
   var sumX = 0.0;
   var sumY = 0.0;
@@ -162,21 +265,31 @@ double _barcodeHeight(Barcode barcode, Size layoutSize) {
   return (maxY - minY).abs();
 }
 
-double _barcodeScore(Barcode barcode, Size layoutSize) {
+double _barcodeScore(
+  Barcode barcode,
+  Size layoutSize,
+  BarcodeScanProfile profile,
+) {
   final heightScore = _barcodeHeight(barcode, layoutSize);
   final widthScore = barcode.size.width > 0 ? barcode.size.width : heightScore;
 
   var formatBonus = 0.0;
-  if (barcode.format == BarcodeFormat.code128) {
+  if (profile.formats.contains(barcode.format)) {
     formatBonus = 1000;
+  }
+  if (barcode.format == BarcodeFormat.code128) {
+    formatBonus += 250;
   }
 
   return formatBonus + heightScore * 2 + widthScore;
 }
 
-Rect computeBarcodeScanWindow(Size layoutSize) {
-  final width = layoutSize.width * BarcodeScanSettings.scanWindowWidthFactor;
-  final height = layoutSize.height * BarcodeScanSettings.scanWindowHeightFactor;
+Rect computeBarcodeScanWindow(
+  Size layoutSize, [
+  BarcodeScanProfile profile = BarcodeScanProfile.billing,
+]) {
+  final width = layoutSize.width * profile.scanWindowWidthFactor;
+  final height = layoutSize.height * profile.scanWindowHeightFactor;
 
   return Rect.fromCenter(
     center: layoutSize.center(Offset.zero),
@@ -187,11 +300,13 @@ Rect computeBarcodeScanWindow(Size layoutSize) {
 
 MobileScannerController createBarcodeScannerController({
   bool autoStart = false,
+  BarcodeScanProfile profile = BarcodeScanProfile.billing,
 }) {
   return MobileScannerController(
     autoStart: autoStart,
-    formats: BarcodeScanSettings.supportedFormats,
-    detectionSpeed: DetectionSpeed.normal,
-    detectionTimeoutMs: 300,
+    formats: profile.formats,
+    detectionSpeed: profile.detectionSpeed,
+    detectionTimeoutMs: profile.detectionTimeoutMs,
+    returnImage: profile.returnImage,
   );
 }
