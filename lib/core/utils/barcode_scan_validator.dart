@@ -115,17 +115,21 @@ class BarcodeScanValidator {
   BarcodeScanValidator({
     BarcodeScanProfile profile = BarcodeScanProfile.billing,
   })  : requiredReads = profile.requiredConsecutiveReads,
-        maxGap = profile.maxGapBetweenReads;
+        maxGap = profile.maxGapBetweenReads,
+        _forgiveReadGap = profile.isStockEntry;
 
   BarcodeScanValidator.legacy({
     int? requiredReads,
     Duration? maxGap,
+    bool forgiveReadGap = false,
   })  : requiredReads =
             requiredReads ?? BarcodeScanSettings.requiredConsecutiveReads,
-        maxGap = maxGap ?? BarcodeScanSettings.maxGapBetweenReads;
+        maxGap = maxGap ?? BarcodeScanSettings.maxGapBetweenReads,
+        _forgiveReadGap = forgiveReadGap;
 
   final int requiredReads;
   final Duration maxGap;
+  final bool _forgiveReadGap;
 
   String? _lastCandidate;
   int _consecutiveCount = 0;
@@ -148,7 +152,7 @@ class BarcodeScanValidator {
     final withinGap =
         _lastReadAt != null && now.difference(_lastReadAt!) <= maxGap;
 
-    if (sameAsLast && withinGap) {
+    if (sameAsLast && (withinGap || _forgiveReadGap)) {
       _consecutiveCount++;
     } else {
       _lastCandidate = normalized;

@@ -41,6 +41,16 @@ void main() {
       expect(validator.registerRead('2510077869'), isNull);
       expect(validator.registerRead('2510077869'), '2510077869');
     });
+
+    test('stock profile still accepts second read after a long pause', () {
+      final validator =
+          BarcodeScanValidator(profile: BarcodeScanProfile.stockEntry);
+
+      expect(validator.registerRead('2510077869'), isNull);
+      expect(validator.registerRead('01126087'), isNull);
+      expect(validator.registerRead('2510077869'), isNull);
+      expect(validator.registerRead('2510077869'), '2510077869');
+    });
   });
 
   group('pickStockBarcodeValue', () {

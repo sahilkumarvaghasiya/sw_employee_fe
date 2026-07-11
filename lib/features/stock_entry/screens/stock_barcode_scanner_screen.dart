@@ -44,6 +44,8 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
 
   bool _isClosing = false;
   double _zoom = 0;
+  String? _lastShownPending;
+  int _lastShownProgress = 0;
 
   @override
   void initState() {
@@ -66,14 +68,14 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
     if (normalized.isEmpty) return;
 
     _isClosing = true;
-    setState(() {});
+    _validator.reset();
+
+    if (!mounted) return;
+    Navigator.of(context).pop(normalized);
 
     try {
       await _controller.stop();
     } catch (_) {}
-
-    if (!mounted) return;
-    Navigator.of(context).pop(normalized);
   }
 
   void _submitManual() {
@@ -111,6 +113,12 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
       return;
     }
 
+    final pending = _validator.pendingValue;
+    final progress = _validator.consecutiveCount;
+    if (pending == _lastShownPending && progress == _lastShownProgress) return;
+
+    _lastShownPending = pending;
+    _lastShownProgress = progress;
     if (mounted) setState(() {});
   }
 
