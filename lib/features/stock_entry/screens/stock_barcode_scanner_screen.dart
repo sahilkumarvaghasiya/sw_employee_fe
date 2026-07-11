@@ -133,7 +133,7 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
       return 'Hold steady… $progress/$required';
     }
 
-    return 'Align the barcode bars inside the green frame';
+    return 'Move the tag so the barcode bars sit in the green frame';
   }
 
   @override
