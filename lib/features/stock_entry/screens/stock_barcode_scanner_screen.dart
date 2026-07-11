@@ -106,6 +106,7 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
       scanWindow: scanWindow,
     );
     if (value == null) return;
+    if (isSuspiciousStockBarcodeMisread(value)) return;
 
     final accepted = _validator.registerRead(value);
     if (accepted != null) {
