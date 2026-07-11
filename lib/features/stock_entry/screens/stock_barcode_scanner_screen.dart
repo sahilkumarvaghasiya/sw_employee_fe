@@ -7,8 +7,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/barcode_scan_validator.dart';
 
-/// Stock-entry barcode scanner. Uses [mobile_scanner] to decode 1D barcodes and
-/// accepts when the same [Barcode.rawValue] is read twice in a row.
+/// Stock-entry barcode scanner. Uses [mobile_scanner] with a scan frame so
+/// detection focuses on the barcode inside the green rectangle.
 class StockBarcodeScannerScreen extends StatefulWidget {
   const StockBarcodeScannerScreen({super.key});
 
@@ -94,12 +94,14 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
     } catch (_) {}
   }
 
-  void _onDetect(BarcodeCapture capture, Size layoutSize) {
+  void _onDetect(BarcodeCapture capture, Size layoutSize, Rect scanWindow) {
     if (_isClosing) return;
 
     final value = pickStockBarcodeValue(
       capture.barcodes,
       layoutSize: layoutSize,
+      textureSize: capture.size,
+      scanWindow: scanWindow,
     );
     if (value == null) return;
 
@@ -123,7 +125,7 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
       return 'Hold steady… $progress/$required';
     }
 
-    return 'Point the camera at the barcode';
+    return 'Place the barcode inside the green frame';
   }
 
   @override
@@ -192,6 +194,8 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final layoutSize = constraints.biggest;
+                final scanWindow =
+                    computeBarcodeScanWindow(layoutSize, _profile);
 
                 return Stack(
                   fit: StackFit.expand,
@@ -199,7 +203,9 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
                     MobileScanner(
                       controller: _controller,
                       fit: BoxFit.cover,
-                      onDetect: (capture) => _onDetect(capture, layoutSize),
+                      scanWindow: scanWindow,
+                      onDetect: (capture) =>
+                          _onDetect(capture, layoutSize, scanWindow),
                       errorBuilder: (context, error, child) {
                         return Container(
                           color: colorScheme.surfaceContainerHighest,
@@ -224,6 +230,12 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
                           ),
                         );
                       },
+                    ),
+                    IgnorePointer(
+                      child: CustomPaint(
+                        painter: _StockScanFramePainter(scanWindow: scanWindow),
+                        size: layoutSize,
+                      ),
                     ),
                     Positioned(
                       left: 12,
@@ -280,5 +292,40 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
         ],
       ),
     );
+  }
+}
+
+class _StockScanFramePainter extends CustomPainter {
+  _StockScanFramePainter({required this.scanWindow});
+
+  final Rect scanWindow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final overlayPaint = Paint()..color = Colors.black.withValues(alpha: 0.45);
+    final backgroundPath = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    final cutoutPath = Path()
+      ..addRRect(RRect.fromRectAndRadius(scanWindow, const Radius.circular(12)));
+
+    canvas.drawPath(
+      Path.combine(PathOperation.difference, backgroundPath, cutoutPath),
+      overlayPaint,
+    );
+
+    final borderPaint = Paint()
+      ..color = AppColors.emerald
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(scanWindow, const Radius.circular(12)),
+      borderPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _StockScanFramePainter oldDelegate) {
+    return oldDelegate.scanWindow != scanWindow;
   }
 }
