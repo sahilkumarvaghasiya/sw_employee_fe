@@ -61,12 +61,12 @@ class BarcodeScanProfile {
         BarcodeFormat.itf,
         BarcodeFormat.codabar,
       ],
-      requiredConsecutiveReads: 1,
-      maxGapBetweenReads: const Duration(milliseconds: 1200),
-      minBarcodeHeightRatio: 0.02,
-      scanWindowWidthFactor: 0.92,
-      scanWindowHeightFactor: kIsWeb ? 0.5 : 0.42,
-      detectionSpeed: DetectionSpeed.normal,
+      requiredConsecutiveReads: 2,
+      maxGapBetweenReads: const Duration(milliseconds: 1400),
+      minBarcodeHeightRatio: 0.006,
+      scanWindowWidthFactor: 0.88,
+      scanWindowHeightFactor: kIsWeb ? 0.62 : 0.58,
+      detectionSpeed: DetectionSpeed.unrestricted,
       detectionTimeoutMs: kIsWeb ? 200 : 300,
       enableSecondaryDecode: false,
       returnImage: false,
@@ -76,10 +76,10 @@ class BarcodeScanProfile {
   bool get isStockEntry => kind == BarcodeScanProfileKind.stockEntry;
 
   List<String> get webScanHints => const [
+        'Horizontal or vertical barcode — any angle works',
         'Tilt the label to remove glare',
         'Move closer until the barcode fills the frame',
         'Hold steady for about one second',
-        'Rotate the label upright if needed',
       ];
 }
 
@@ -189,10 +189,15 @@ Barcode? pickBestBarcode(
         !isBarcodeInScanWindow(barcode, scanWindow, profile)) {
       continue;
     }
-    if (profile.isStockEntry && !isLikelyStockBarcodeValue(value)) continue;
+    if (profile.isStockEntry) {
+      final normalized = normalizeStockBarcodeValue(value);
+      if (!isStrongStockBarcodeRead(normalized, barcode.format)) continue;
+    }
 
+    final scoreValue =
+        profile.isStockEntry ? normalizeStockBarcodeValue(value) : value;
     final score = _barcodeScore(barcode, layoutSize, profile) +
-        stockBarcodeValueScore(value);
+        stockBarcodeValueScore(scoreValue, format: barcode.format);
     if (score > bestScore) {
       bestScore = score;
       best = barcode;
@@ -215,15 +220,37 @@ bool isBarcodeLargeEnough(
   Size layoutSize, [
   BarcodeScanProfile profile = BarcodeScanProfile.billing,
 ]) {
-  if (layoutSize.height <= 0) return true;
+  if (layoutSize.shortestSide <= 0) return true;
 
-  final height = _barcodeHeight(barcode, layoutSize);
-  if (height <= 0) {
+  final extent = _barcodeExtent(barcode);
+  if (extent <= 0) {
     // Corners/size unavailable — do not reject (common on web).
     return true;
   }
 
-  return height / layoutSize.height >= profile.minBarcodeHeightRatio;
+  // Use the longest barcode edge so vertical (rotated) labels are not rejected.
+  return extent / layoutSize.shortestSide >= profile.minBarcodeHeightRatio;
+}
+
+/// Picks the best stock barcode value from a camera frame.
+String? pickBestStockBarcodeValue(
+  List<Barcode> barcodes, {
+  required Size layoutSize,
+}) {
+  final barcode = pickBestBarcode(
+    barcodes,
+    layoutSize: layoutSize,
+    profile: BarcodeScanProfile.stockEntry,
+  );
+
+  final raw = barcode?.rawValue?.trim();
+  if (raw == null || raw.isEmpty) return null;
+
+  final normalized = normalizeStockBarcodeValue(raw);
+  if (normalized.isEmpty) return null;
+  if (!isStrongStockBarcodeRead(normalized, barcode!.format)) return null;
+
+  return normalized;
 }
 
 bool isBarcodeInScanWindow(
@@ -263,6 +290,10 @@ String normalizeStockBarcodeValue(String raw) {
   return trimmed.replaceAll(RegExp(r'\s+'), ' ').trim().toUpperCase();
 }
 
+bool isKnownStockBarcodeFormat(BarcodeFormat format) {
+  return format != BarcodeFormat.unknown && format != BarcodeFormat.qrCode;
+}
+
 bool isLikelyStockBarcodeValue(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty || trimmed.length > 100) return false;
@@ -272,7 +303,8 @@ bool isLikelyStockBarcodeValue(String value) {
       lower.contains('cust') ||
       lower.contains('care') ||
       lower.contains('incl') ||
-      lower.contains('tax')) {
+      lower.contains('tax') ||
+      lower.contains('http')) {
     return false;
   }
 
@@ -280,9 +312,19 @@ bool isLikelyStockBarcodeValue(String value) {
     return false;
   }
 
+  // Product/style codes on hangtags (e.g. SFL-10465) are not stock barcodes.
+  if (RegExp(r'^[A-Z]{2,5}-\d{3,8}$', caseSensitive: false).hasMatch(trimmed)) {
+    return false;
+  }
+
   final compact = trimmed.replaceAll(' ', '');
-  if (RegExp(r'^\d{6,14}$').hasMatch(compact)) {
+  if (RegExp(r'^\d+$').hasMatch(compact)) {
+    // Numeric vendor barcodes are typically 8-14 digits.
+    if (compact.length < 8 || compact.length > 14) return false;
+    // Reject Indian mobile numbers often printed on labels.
     if (RegExp(r'^[6-9]\d{9}$').hasMatch(compact)) return false;
+    // Reject repeated-digit noise (e.g. 00000000).
+    if (RegExp(r'^(\d)\1{5,}$').hasMatch(compact)) return false;
     return true;
   }
 
@@ -290,7 +332,7 @@ bool isLikelyStockBarcodeValue(String value) {
       .hasMatch(trimmed);
 }
 
-int stockBarcodeValueScore(String value) {
+int stockBarcodeValueScore(String value, {BarcodeFormat? format}) {
   final compact = value.replaceAll(' ', '');
   var score = 0;
 
@@ -306,25 +348,59 @@ int stockBarcodeValueScore(String value) {
     score += 80;
   }
 
+  if (format != null) {
+    if (format == BarcodeFormat.code128) score += 40;
+    if (format == BarcodeFormat.code39) score += 35;
+    if (format == BarcodeFormat.ean13 || format == BarcodeFormat.ean8) {
+      score += 30;
+    }
+    if (format == BarcodeFormat.upcA) score += 30;
+    if (format == BarcodeFormat.unknown) score -= 50;
+  }
+
   return score;
 }
 
-double _barcodeHeight(Barcode barcode, Size layoutSize) {
-  if (barcode.size.height > 0) {
-    return barcode.size.height;
+/// Whether a camera read is strong enough to count toward acceptance.
+bool isStrongStockBarcodeRead(String value, BarcodeFormat format) {
+  if (!isLikelyStockBarcodeValue(value)) return false;
+
+  if (isKnownStockBarcodeFormat(format)) {
+    return true;
+  }
+
+  // Unknown format: only trust well-shaped numeric vendor codes.
+  final compact = value.replaceAll(' ', '');
+  return RegExp(r'^\d{8,14}$').hasMatch(compact);
+}
+
+Size _barcodeBoundingSize(Barcode barcode) {
+  if (barcode.size.width > 0 && barcode.size.height > 0) {
+    return barcode.size;
   }
 
   final corners = barcode.corners;
-  if (corners.length < 2) return 0;
+  if (corners.length < 2) return Size.zero;
 
+  var minX = corners.first.dx;
+  var maxX = corners.first.dx;
   var minY = corners.first.dy;
   var maxY = corners.first.dy;
   for (final corner in corners) {
+    if (corner.dx < minX) minX = corner.dx;
+    if (corner.dx > maxX) maxX = corner.dx;
     if (corner.dy < minY) minY = corner.dy;
     if (corner.dy > maxY) maxY = corner.dy;
   }
 
-  return (maxY - minY).abs();
+  return Size((maxX - minX).abs(), (maxY - minY).abs());
+}
+
+/// Longest edge of the barcode box — works for horizontal and vertical labels.
+double _barcodeExtent(Barcode barcode) {
+  final bounds = _barcodeBoundingSize(barcode);
+  if (bounds.width <= 0 && bounds.height <= 0) return 0;
+  return bounds.width > bounds.height ? bounds.width : bounds.height;
 }
 
 double _barcodeScore(
@@ -332,8 +408,9 @@ double _barcodeScore(
   Size layoutSize,
   BarcodeScanProfile profile,
 ) {
-  final heightScore = _barcodeHeight(barcode, layoutSize);
-  final widthScore = barcode.size.width > 0 ? barcode.size.width : heightScore;
+  final bounds = _barcodeBoundingSize(barcode);
+  final extent = bounds.width > bounds.height ? bounds.width : bounds.height;
+  final minEdge = bounds.width < bounds.height ? bounds.width : bounds.height;
 
   var formatBonus = 0.0;
   if (profile.formats.contains(barcode.format)) {
@@ -343,7 +420,8 @@ double _barcodeScore(
     formatBonus += 250;
   }
 
-  return formatBonus + heightScore * 2 + widthScore;
+  // Prefer larger, clearer reads regardless of rotation.
+  return formatBonus + extent * 2 + minEdge;
 }
 
 Rect computeBarcodeScanWindow(
