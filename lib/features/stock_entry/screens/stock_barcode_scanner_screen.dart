@@ -7,8 +7,8 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/barcode_scan_validator.dart';
 
-/// Stock-entry barcode scanner. Uses [mobile_scanner] only — reads [Barcode.rawValue]
-/// from the camera and accepts on the first valid 1D barcode detection.
+/// Stock-entry barcode scanner. Uses [mobile_scanner] to decode 1D barcodes and
+/// accepts when the same [Barcode.rawValue] is read twice in a row.
 class StockBarcodeScannerScreen extends StatefulWidget {
   const StockBarcodeScannerScreen({super.key});
 
@@ -25,14 +25,18 @@ class StockBarcodeScannerScreen extends StatefulWidget {
 }
 
 class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
-  static final _formats = BarcodeScanProfile.stockEntry.formats;
+  static final _profile = BarcodeScanProfile.stockEntry;
 
   late final MobileScannerController _controller = MobileScannerController(
     autoStart: false,
-    formats: _formats,
-    detectionSpeed: DetectionSpeed.unrestricted,
-    detectionTimeoutMs: kIsWeb ? 200 : 300,
+    formats: _profile.formats,
+    detectionSpeed: _profile.detectionSpeed,
+    detectionTimeoutMs: _profile.detectionTimeoutMs,
     returnImage: false,
+  );
+
+  late final BarcodeScanValidator _validator = BarcodeScanValidator(
+    profile: _profile,
   );
 
   final TextEditingController _manualController = TextEditingController();
@@ -90,19 +94,43 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
     } catch (_) {}
   }
 
-  void _onDetect(BarcodeCapture capture) {
+  void _onDetect(BarcodeCapture capture, Size layoutSize) {
     if (_isClosing) return;
 
-    final value = extractStockBarcodeValue(capture.barcodes);
+    final value = pickStockBarcodeValue(
+      capture.barcodes,
+      layoutSize: layoutSize,
+    );
     if (value == null) return;
 
-    unawaited(_closeWithValue(value));
+    final accepted = _validator.registerRead(value);
+    if (accepted != null) {
+      unawaited(_closeWithValue(accepted));
+      return;
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  String _statusText() {
+    if (_isClosing) return 'Opening item form…';
+
+    final pending = _validator.pendingValue;
+    final progress = _validator.consecutiveCount;
+    final required = _validator.requiredConsecutiveReads;
+
+    if (pending != null && progress > 0 && progress < required) {
+      return 'Hold steady… $progress/$required';
+    }
+
+    return 'Point the camera at the barcode';
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final pending = _validator.pendingValue;
 
     return Scaffold(
       appBar: AppBar(
@@ -161,71 +189,92 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
             ),
           ),
           Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                MobileScanner(
-                  controller: _controller,
-                  fit: BoxFit.cover,
-                  onDetect: _onDetect,
-                  errorBuilder: (context, error, child) {
-                    return Container(
-                      color: colorScheme.surfaceContainerHighest,
-                      padding: const EdgeInsets.all(16),
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.camera_alt_outlined,
-                              color: colorScheme.onSurfaceVariant,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final layoutSize = constraints.biggest;
+
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    MobileScanner(
+                      controller: _controller,
+                      fit: BoxFit.cover,
+                      onDetect: (capture) => _onDetect(capture, layoutSize),
+                      errorBuilder: (context, error, child) {
+                        return Container(
+                          color: colorScheme.surfaceContainerHighest,
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.camera_alt_outlined,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Camera unavailable',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Camera unavailable',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
+                          ),
+                        );
+                      },
+                    ),
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 12,
+                      child: Card(
+                        color: colorScheme.surfaceContainerHigh.withValues(
+                          alpha: 0.94,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _statusText(),
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
+                              if (pending != null && !_isClosing) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  pending,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.4,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_isClosing)
+                      const Positioned.fill(
+                        child: ColoredBox(
+                          color: Color(0x55000000),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.emerald,
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    );
-                  },
-                ),
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 12,
-                  child: Card(
-                    color: colorScheme.surfaceContainerHigh.withValues(
-                      alpha: 0.94,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                      child: Text(
-                        _isClosing
-                            ? 'Opening item form…'
-                            : 'Point the camera at the barcode',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                if (_isClosing)
-                  const Positioned.fill(
-                    child: ColoredBox(
-                      color: Color(0x55000000),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.emerald,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+                  ],
+                );
+              },
             ),
           ),
         ],

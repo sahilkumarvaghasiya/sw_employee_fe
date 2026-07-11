@@ -15,12 +15,13 @@ void main() {
       expect(profile.enableSecondaryDecode, isFalse);
     });
 
-    test('stock profile supports vendor 1D formats', () {
+    test('stock profile supports all common 1D formats', () {
       final profile = BarcodeScanProfile.stockEntry;
 
-      expect(profile.formats, contains(BarcodeFormat.ean13));
-      expect(profile.requiredConsecutiveReads, 1);
-      expect(profile.enableSecondaryDecode, isFalse);
+      expect(profile.formats, contains(BarcodeFormat.code93));
+      expect(profile.formats, contains(BarcodeFormat.upcE));
+      expect(profile.formats, isNot(contains(BarcodeFormat.qrCode)));
+      expect(profile.requiredConsecutiveReads, 2);
     });
   });
 
@@ -32,10 +33,18 @@ void main() {
       expect(validator.registerRead('123'), isNull);
       expect(validator.registerRead('123'), '123');
     });
+
+    test('stock profile accepts after two identical reads', () {
+      final validator =
+          BarcodeScanValidator(profile: BarcodeScanProfile.stockEntry);
+
+      expect(validator.registerRead('2510077869'), isNull);
+      expect(validator.registerRead('2510077869'), '2510077869');
+    });
   });
 
-  group('Stock barcode extraction', () {
-    test('extractStockBarcodeValue reads rawValue on first 1D barcode', () {
+  group('pickStockBarcodeValue', () {
+    test('reads rawValue from a known 1D symbology', () {
       const barcodes = [
         Barcode(
           rawValue: '2510077869',
@@ -43,10 +52,61 @@ void main() {
         ),
       ];
 
-      expect(extractStockBarcodeValue(barcodes), '2510077869');
+      expect(pickStockBarcodeValue(barcodes), '2510077869');
     });
 
-    test('extractStockBarcodeValue preserves leading zeros', () {
+    test('prefers largest known 1D barcode on crowded labels', () {
+      const layoutSize = Size(400, 800);
+      const barcodes = [
+        Barcode(
+          rawValue: '8320105110',
+          format: BarcodeFormat.code128,
+          size: Size(80, 12),
+        ),
+        Barcode(
+          rawValue: '2510077869',
+          format: BarcodeFormat.code128,
+          size: Size(220, 36),
+        ),
+      ];
+
+      expect(
+        pickStockBarcodeValue(barcodes, layoutSize: layoutSize),
+        '2510077869',
+      );
+    });
+
+    test('supports Code93 and UPC-E', () {
+      expect(
+        pickStockBarcodeValue(const [
+          Barcode(rawValue: 'ABC123', format: BarcodeFormat.code93),
+        ]),
+        'ABC123',
+      );
+      expect(
+        pickStockBarcodeValue(const [
+          Barcode(rawValue: '01234565', format: BarcodeFormat.upcE),
+        ]),
+        '01234565',
+      );
+    });
+
+    test('skips 2D symbologies', () {
+      const barcodes = [
+        Barcode(
+          rawValue: 'wrong',
+          format: BarcodeFormat.qrCode,
+        ),
+        Barcode(
+          rawValue: '2510077869',
+          format: BarcodeFormat.ean13,
+        ),
+      ];
+
+      expect(pickStockBarcodeValue(barcodes), '2510077869');
+    });
+
+    test('preserves leading zeros', () {
       const barcodes = [
         Barcode(
           rawValue: '01126087',
@@ -54,33 +114,7 @@ void main() {
         ),
       ];
 
-      expect(extractStockBarcodeValue(barcodes), '01126087');
-    });
-
-    test('extractStockBarcodeValue accepts alphanumeric Code39', () {
-      const barcodes = [
-        Barcode(
-          rawValue: 'R R33194',
-          format: BarcodeFormat.code39,
-        ),
-      ];
-
-      expect(extractStockBarcodeValue(barcodes), 'R R33194');
-    });
-
-    test('extractStockBarcodeValue skips QR codes', () {
-      const barcodes = [
-        Barcode(
-          rawValue: '2510077869',
-          format: BarcodeFormat.qrCode,
-        ),
-        Barcode(
-          rawValue: '2510077869',
-          format: BarcodeFormat.code128,
-        ),
-      ];
-
-      expect(extractStockBarcodeValue(barcodes), '2510077869');
+      expect(pickStockBarcodeValue(barcodes), '01126087');
     });
 
     test('normalizeStockBarcodeValue preserves leading zeros', () {
