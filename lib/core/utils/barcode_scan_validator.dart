@@ -61,9 +61,9 @@ class BarcodeScanProfile {
         BarcodeFormat.itf,
         BarcodeFormat.codabar,
       ],
-      requiredConsecutiveReads: 2,
-      maxGapBetweenReads: const Duration(milliseconds: 1400),
-      minBarcodeHeightRatio: 0.006,
+      requiredConsecutiveReads: 1,
+      maxGapBetweenReads: const Duration(milliseconds: 900),
+      minBarcodeHeightRatio: 0.0,
       scanWindowWidthFactor: 0.88,
       scanWindowHeightFactor: kIsWeb ? 0.62 : 0.58,
       detectionSpeed: DetectionSpeed.unrestricted,
@@ -189,15 +189,8 @@ Barcode? pickBestBarcode(
         !isBarcodeInScanWindow(barcode, scanWindow, profile)) {
       continue;
     }
-    if (profile.isStockEntry) {
-      final normalized = normalizeStockBarcodeValue(value);
-      if (!isStrongStockBarcodeRead(normalized, barcode.format)) continue;
-    }
 
-    final scoreValue =
-        profile.isStockEntry ? normalizeStockBarcodeValue(value) : value;
-    final score = _barcodeScore(barcode, layoutSize, profile) +
-        stockBarcodeValueScore(scoreValue, format: barcode.format);
+    final score = _barcodeScore(barcode, layoutSize, profile);
     if (score > bestScore) {
       bestScore = score;
       best = barcode;
@@ -232,25 +225,26 @@ bool isBarcodeLargeEnough(
   return extent / layoutSize.shortestSide >= profile.minBarcodeHeightRatio;
 }
 
-/// Picks the best stock barcode value from a camera frame.
-String? pickBestStockBarcodeValue(
-  List<Barcode> barcodes, {
-  required Size layoutSize,
-}) {
-  final barcode = pickBestBarcode(
-    barcodes,
-    layoutSize: layoutSize,
-    profile: BarcodeScanProfile.stockEntry,
-  );
+/// Reads [Barcode.rawValue] from the first valid 1D barcode in a camera frame.
+String? extractStockBarcodeValue(List<Barcode> barcodes) {
+  final formats = BarcodeScanProfile.stockEntry.formats;
 
-  final raw = barcode?.rawValue?.trim();
-  if (raw == null || raw.isEmpty) return null;
+  for (final barcode in barcodes) {
+    final raw = barcode.rawValue?.trim();
+    if (raw == null || raw.isEmpty) continue;
+    if (barcode.format == BarcodeFormat.qrCode) continue;
+    if (barcode.format != BarcodeFormat.unknown &&
+        !formats.contains(barcode.format)) {
+      continue;
+    }
 
-  final normalized = normalizeStockBarcodeValue(raw);
-  if (normalized.isEmpty) return null;
-  if (!isStrongStockBarcodeRead(normalized, barcode!.format)) return null;
+    final normalized = normalizeStockBarcodeValue(raw);
+    if (normalized.isNotEmpty && normalized.length <= 100) {
+      return normalized;
+    }
+  }
 
-  return normalized;
+  return null;
 }
 
 bool isBarcodeInScanWindow(
@@ -290,10 +284,6 @@ String normalizeStockBarcodeValue(String raw) {
   return trimmed.replaceAll(RegExp(r'\s+'), ' ').trim().toUpperCase();
 }
 
-bool isKnownStockBarcodeFormat(BarcodeFormat format) {
-  return format != BarcodeFormat.unknown && format != BarcodeFormat.qrCode;
-}
-
 bool isLikelyStockBarcodeValue(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty || trimmed.length > 100) return false;
@@ -330,48 +320,6 @@ bool isLikelyStockBarcodeValue(String value) {
 
   return RegExp(r'^[A-Z][A-Z0-9\s\-]{3,14}$', caseSensitive: false)
       .hasMatch(trimmed);
-}
-
-int stockBarcodeValueScore(String value, {BarcodeFormat? format}) {
-  final compact = value.replaceAll(' ', '');
-  var score = 0;
-
-  if (RegExp(r'^\d{6,14}$').hasMatch(compact)) {
-    score += 100;
-    final len = compact.length;
-    if (len >= 8 && len <= 10) score += 30;
-    if (compact.startsWith('0')) score += 10;
-  }
-
-  if (RegExp(r'^[A-Z][A-Z0-9\s\-]{3,14}$', caseSensitive: false)
-      .hasMatch(value)) {
-    score += 80;
-  }
-
-  if (format != null) {
-    if (format == BarcodeFormat.code128) score += 40;
-    if (format == BarcodeFormat.code39) score += 35;
-    if (format == BarcodeFormat.ean13 || format == BarcodeFormat.ean8) {
-      score += 30;
-    }
-    if (format == BarcodeFormat.upcA) score += 30;
-    if (format == BarcodeFormat.unknown) score -= 50;
-  }
-
-  return score;
-}
-
-/// Whether a camera read is strong enough to count toward acceptance.
-bool isStrongStockBarcodeRead(String value, BarcodeFormat format) {
-  if (!isLikelyStockBarcodeValue(value)) return false;
-
-  if (isKnownStockBarcodeFormat(format)) {
-    return true;
-  }
-
-  // Unknown format: only trust well-shaped numeric vendor codes.
-  final compact = value.replaceAll(' ', '');
-  return RegExp(r'^\d{8,14}$').hasMatch(compact);
 }
 
 Size _barcodeBoundingSize(Barcode barcode) {
