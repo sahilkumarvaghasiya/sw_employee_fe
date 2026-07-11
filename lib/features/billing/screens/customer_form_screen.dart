@@ -12,6 +12,7 @@ import '../providers/billing_provider.dart';
 import '../services/billing_service.dart';
 import '../widgets/product_item_widget.dart';
 import '../widgets/billing_ui.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import 'bill_preview_screen.dart';
 import '../../products/models/product.dart';
@@ -769,9 +770,25 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
               );
             }
 
-            final breakdownDiscount = provider.billSavingsForPayable(payable);
-            final breakdownDiscountPercent =
-                provider.billSavingsPercentForPayable(payable);
+            final itemSubtotal = baseAmount;
+            final itemDelta = itemSubtotal - provider.originalSubtotal;
+            final itemDiscount =
+                itemDelta < -0.0001 ? (-itemDelta).toDouble() : 0.0;
+            final itemDiscountPercent = provider.originalSubtotal > 0 &&
+                    itemDiscount > 0.0001
+                ? (itemDiscount / provider.originalSubtotal) * 100
+                : 0.0;
+            final priceAdjustment =
+                itemDelta > 0.0001 ? itemDelta.toDouble() : 0.0;
+            final billDiscount =
+                (itemSubtotal - payable).clamp(0, double.infinity).toDouble();
+            final billDiscountPercent =
+                itemSubtotal > 0.0001 && billDiscount > 0.0001
+                    ? (billDiscount / itemSubtotal) * 100
+                    : 0.0;
+            final showBreakdown = itemDiscount > 0.0001 ||
+                priceAdjustment > 0.0001 ||
+                billDiscount > 0.0001;
 
             return SafeArea(
               child: Padding(
@@ -858,8 +875,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                               .toList(),
                         ),
                       ),
-                      if (breakdownDiscount > 0.0001 ||
-                          provider.originalSubtotal != payable) ...[
+                      if (showBreakdown) ...[
                         const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -878,20 +894,35 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                 label: 'Original',
                                 value: _money(provider.originalSubtotal),
                               ),
-                              if (breakdownDiscount > 0.0001)
+                              BillingSummaryLine(
+                                label: 'Subtotal',
+                                value: _money(itemSubtotal),
+                              ),
+                              if (itemDiscount > 0.0001)
                                 BillingSummaryLine(
-                                  label: 'Discount',
+                                  label: 'Item discount',
                                   value: BillingProvider.formatDiscountSummary(
-                                    breakdownDiscount,
-                                    breakdownDiscountPercent,
+                                    itemDiscount,
+                                    itemDiscountPercent,
                                   ),
                                   valueColor: colorScheme.tertiary,
                                 ),
-                              BillingSummaryLine(
-                                label: 'Subtotal',
-                                value: _money(payable),
-                                bold: true,
-                              ),
+                              if (priceAdjustment > 0.0001)
+                                BillingSummaryLine(
+                                  label: 'Price adjustment',
+                                  value:
+                                      '+ ₹${priceAdjustment.toStringAsFixed(2)}',
+                                  valueColor: AppColors.warning,
+                                ),
+                              if (billDiscount > 0.0001)
+                                BillingSummaryLine(
+                                  label: 'Bill discount',
+                                  value: BillingProvider.formatDiscountSummary(
+                                    billDiscount,
+                                    billDiscountPercent,
+                                  ),
+                                  valueColor: colorScheme.tertiary,
+                                ),
                             ],
                           ),
                         ),
