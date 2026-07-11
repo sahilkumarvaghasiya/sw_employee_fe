@@ -21,6 +21,7 @@ class BarcodeScanProfile {
     required this.minBarcodeHeightRatio,
     required this.scanWindowWidthFactor,
     required this.scanWindowHeightFactor,
+    this.scanWindowCenterYFactor = 0.5,
     required this.detectionSpeed,
     required this.detectionTimeoutMs,
     this.enableSecondaryDecode = false,
@@ -34,6 +35,9 @@ class BarcodeScanProfile {
   final double minBarcodeHeightRatio;
   final double scanWindowWidthFactor;
   final double scanWindowHeightFactor;
+  /// Vertical center of the scan frame, 0 = top, 1 = bottom. Hang-tag barcodes
+  /// sit below tag center, so stock entry uses ~0.58.
+  final double scanWindowCenterYFactor;
   final DetectionSpeed detectionSpeed;
   final int detectionTimeoutMs;
   final bool enableSecondaryDecode;
@@ -71,7 +75,8 @@ class BarcodeScanProfile {
       maxGapBetweenReads: const Duration(milliseconds: 1200),
       minBarcodeHeightRatio: 0.0,
       scanWindowWidthFactor: 0.88,
-      scanWindowHeightFactor: 0.20,
+      scanWindowHeightFactor: 0.24,
+      scanWindowCenterYFactor: 0.58,
       detectionSpeed: DetectionSpeed.unrestricted,
       detectionTimeoutMs: kIsWeb ? 200 : 300,
       enableSecondaryDecode: false,
@@ -235,6 +240,12 @@ bool isBarcodeLargeEnough(
   return extent / layoutSize.shortestSide >= profile.minBarcodeHeightRatio;
 }
 
+/// All 1D symbologies supported by [mobile_scanner] for stock entry.
+/// 2D types (QR, DataMatrix, PDF417, Aztec) are intentionally excluded.
+bool isSupportedStock1dBarcodeFormat(BarcodeFormat format) {
+  return isStock1dBarcodeFormat(format);
+}
+
 /// True when [format] is a supported 1D stock barcode symbology.
 bool isStock1dBarcodeFormat(BarcodeFormat format) {
   return BarcodeScanProfile.stockEntry1dFormats.contains(format);
@@ -258,7 +269,21 @@ String? pickStockBarcodeValue(
 }) {
   Barcode? best;
   var bestScore = -1.0;
-  final soleCandidate = barcodes.length == 1;
+
+  var validKnownCount = 0;
+  for (final barcode in barcodes) {
+    final raw = barcode.rawValue?.trim();
+    if (raw == null || raw.isEmpty) continue;
+    if (is2dBarcodeFormat(barcode.format)) continue;
+    if (!isStock1dBarcodeFormat(barcode.format) &&
+        barcode.format != BarcodeFormat.unknown) {
+      continue;
+    }
+    final normalized = normalizeStockBarcodeValue(raw);
+    if (normalized.isEmpty || normalized.length > 100) continue;
+    if (isStock1dBarcodeFormat(barcode.format)) validKnownCount++;
+  }
+  final relaxWindowFilter = validKnownCount == 1;
 
   for (final barcode in barcodes) {
     final raw = barcode.rawValue?.trim();
@@ -274,7 +299,8 @@ String? pickStockBarcodeValue(
           scanWindow,
           layoutSize: layoutSize,
           textureSize: textureSize,
-          allowWithoutPosition: soleCandidate,
+          allowWithoutPosition:
+              barcodes.length == 1 || relaxWindowFilter,
         )) {
       continue;
     }
@@ -326,7 +352,19 @@ bool isBarcodeInsideScanWindow(
   if (barcodeArea <= 0) return true;
 
   final overlapArea = intersection.width * intersection.height;
-  return overlapArea / barcodeArea >= 0.2;
+  if (overlapArea / barcodeArea >= 0.08) return true;
+
+  // Thin 1D strips (like EAN-8 on hang tags): enough width inside frame.
+  if (bounds.width > 0 && intersection.width / bounds.width >= 0.45) {
+    return true;
+  }
+
+  // Vertical 1D barcodes: enough height inside frame.
+  if (bounds.height > 0 && intersection.height / bounds.height >= 0.45) {
+    return true;
+  }
+
+  return false;
 }
 
 Rect? _barcodeBoundsInWidget(
@@ -490,7 +528,8 @@ String normalizeStockBarcodeValue(String raw) {
   if (trimmed.isEmpty) return trimmed;
 
   final compact = trimmed.replaceAll(RegExp(r'\s+'), '');
-  if (RegExp(r'^\d{6,14}$').hasMatch(compact)) {
+  // Any numeric 1D barcode up to backend limit (100 chars).
+  if (RegExp(r'^\d+$').hasMatch(compact) && compact.length <= 100) {
     return compact;
   }
 
@@ -591,9 +630,10 @@ Rect computeBarcodeScanWindow(
 ]) {
   final width = layoutSize.width * profile.scanWindowWidthFactor;
   final height = layoutSize.height * profile.scanWindowHeightFactor;
+  final centerY = layoutSize.height * profile.scanWindowCenterYFactor;
 
   return Rect.fromCenter(
-    center: layoutSize.center(Offset.zero),
+    center: Offset(layoutSize.width / 2, centerY),
     width: width.clamp(0, layoutSize.width),
     height: height.clamp(0, layoutSize.height),
   );
