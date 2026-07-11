@@ -76,6 +76,45 @@ void main() {
       );
     });
 
+    test('ignores barcodes outside the scan frame', () {
+      const layoutSize = Size(400, 800);
+      final scanWindow = computeBarcodeScanWindow(
+        layoutSize,
+        BarcodeScanProfile.stockEntry,
+      );
+      const barcodes = [
+        Barcode(
+          rawValue: '8320105110',
+          format: BarcodeFormat.code128,
+          corners: [
+            Offset(20, 40),
+            Offset(120, 40),
+            Offset(120, 60),
+            Offset(20, 60),
+          ],
+        ),
+        Barcode(
+          rawValue: '2510077869',
+          format: BarcodeFormat.code128,
+          corners: [
+            Offset(160, 360),
+            Offset(240, 360),
+            Offset(240, 400),
+            Offset(160, 400),
+          ],
+        ),
+      ];
+
+      expect(
+        pickStockBarcodeValue(
+          barcodes,
+          layoutSize: layoutSize,
+          scanWindow: scanWindow,
+        ),
+        '2510077869',
+      );
+    });
+
     test('supports Code93 and UPC-E', () {
       expect(
         pickStockBarcodeValue(const [

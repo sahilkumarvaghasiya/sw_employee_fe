@@ -1,6 +1,8 @@
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 /// Preset tuning for different barcode scanning contexts.
@@ -68,8 +70,8 @@ class BarcodeScanProfile {
       requiredConsecutiveReads: 2,
       maxGapBetweenReads: const Duration(milliseconds: 1200),
       minBarcodeHeightRatio: 0.0,
-      scanWindowWidthFactor: 0.88,
-      scanWindowHeightFactor: kIsWeb ? 0.62 : 0.58,
+      scanWindowWidthFactor: 0.84,
+      scanWindowHeightFactor: 0.42,
       detectionSpeed: DetectionSpeed.unrestricted,
       detectionTimeoutMs: kIsWeb ? 200 : 300,
       enableSecondaryDecode: false,
@@ -242,14 +244,17 @@ bool is2dBarcodeFormat(BarcodeFormat format) {
       format == BarcodeFormat.aztec;
 }
 
-/// Picks the best 1D barcode in a frame. Prefers a known symbology and the
-/// largest barcode box so crowded labels do not return the wrong number.
+/// Picks the best 1D barcode inside [scanWindow]. Prefers a known symbology and
+/// the largest barcode box so crowded labels do not return the wrong number.
 String? pickStockBarcodeValue(
   List<Barcode> barcodes, {
   Size layoutSize = Size.zero,
+  Size textureSize = Size.zero,
+  Rect? scanWindow,
 }) {
   Barcode? best;
   var bestScore = -1.0;
+  final soleCandidate = barcodes.length == 1;
 
   for (final barcode in barcodes) {
     final raw = barcode.rawValue?.trim();
@@ -258,6 +263,17 @@ String? pickStockBarcodeValue(
 
     final knownFormat = isStock1dBarcodeFormat(barcode.format);
     if (!knownFormat && barcode.format != BarcodeFormat.unknown) continue;
+
+    if (scanWindow != null &&
+        !isBarcodeCenterInsideScanWindow(
+          barcode,
+          scanWindow,
+          layoutSize: layoutSize,
+          textureSize: textureSize,
+          allowWithoutPosition: soleCandidate,
+        )) {
+      continue;
+    }
 
     final normalized = normalizeStockBarcodeValue(raw);
     if (normalized.isEmpty || normalized.length > 100) continue;
@@ -280,6 +296,106 @@ String? pickStockBarcodeValue(
 
   if (best == null) return null;
   return normalizeStockBarcodeValue(best.rawValue!.trim());
+}
+
+/// Whether the barcode center lies inside [scanWindow] in widget coordinates.
+bool isBarcodeCenterInsideScanWindow(
+  Barcode barcode,
+  Rect scanWindow, {
+  required Size layoutSize,
+  Size textureSize = Size.zero,
+  bool allowWithoutPosition = false,
+}) {
+  final corners = barcode.corners;
+  if (corners.isEmpty) return allowWithoutPosition;
+
+  var sumX = 0.0;
+  var sumY = 0.0;
+  for (final corner in corners) {
+    sumX += corner.dx;
+    sumY += corner.dy;
+  }
+
+  var center = Offset(sumX / corners.length, sumY / corners.length);
+  if (_shouldMapBarcodeCornersToWidget(
+    corners: corners,
+    layoutSize: layoutSize,
+    textureSize: textureSize,
+  )) {
+    center = mapTextureOffsetToWidget(
+      center,
+      textureSize: textureSize,
+      widgetSize: layoutSize,
+    );
+  }
+
+  return scanWindow.contains(center);
+}
+
+bool _shouldMapBarcodeCornersToWidget({
+  required List<Offset> corners,
+  required Size layoutSize,
+  required Size textureSize,
+}) {
+  if (textureSize.width <= 0 || textureSize.height <= 0) return false;
+  if (layoutSize.width <= 0 || layoutSize.height <= 0) return false;
+  if (kIsWeb) return true;
+
+  for (final corner in corners) {
+    if (corner.dx > layoutSize.width * 1.05 ||
+        corner.dy > layoutSize.height * 1.05) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/// Maps a point from camera texture space to on-screen widget space.
+Offset mapTextureOffsetToWidget(
+  Offset texturePoint, {
+  required Size textureSize,
+  required Size widgetSize,
+  BoxFit fit = BoxFit.cover,
+}) {
+  final fittedTextureSize = applyBoxFit(fit, textureSize, widgetSize);
+
+  var sx = fittedTextureSize.destination.width / textureSize.width;
+  var sy = fittedTextureSize.destination.height / textureSize.height;
+
+  switch (fit) {
+    case BoxFit.fill:
+      break;
+    case BoxFit.contain:
+      final s = min(sx, sy);
+      sx = s;
+      sy = s;
+    case BoxFit.cover:
+      final s = max(sx, sy);
+      sx = s;
+      sy = s;
+    case BoxFit.fitWidth:
+      sy = sx;
+    case BoxFit.fitHeight:
+      sx = sy;
+    case BoxFit.none:
+      sx = 1.0;
+      sy = 1.0;
+    case BoxFit.scaleDown:
+      final s = min(sx, sy);
+      sx = s;
+      sy = s;
+  }
+
+  final textureWindow = Alignment.center.inscribe(
+    Size(textureSize.width * sx, textureSize.height * sy),
+    Rect.fromLTWH(0, 0, widgetSize.width, widgetSize.height),
+  );
+
+  return Offset(
+    textureWindow.left + sx * texturePoint.dx,
+    textureWindow.top + sy * texturePoint.dy,
+  );
 }
 
 /// Light guard for unknown-format reads on web. Known 1D formats are trusted.
@@ -321,11 +437,6 @@ bool isBarcodeInScanWindow(
 ]) {
   final corners = barcode.corners;
   if (corners.isEmpty) return true;
-
-  // Stock entry uses the scan window as a visual guide only.
-  if (profile.isStockEntry) {
-    return true;
-  }
 
   var sumX = 0.0;
   var sumY = 0.0;
