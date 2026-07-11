@@ -257,6 +257,69 @@ void main() {
       expect(pickStockBarcodeValue(barcodes), '01126087');
     });
 
+    test('accepts known 1D read without position data (small web barcodes)', () {
+      const layoutSize = Size(400, 800);
+      final scanWindow = computeBarcodeScanWindow(
+        layoutSize,
+        BarcodeScanProfile.stockEntry,
+      );
+      const barcodes = [
+        Barcode(
+          rawValue: '9892749192',
+          format: BarcodeFormat.code128,
+        ),
+      ];
+
+      expect(
+        pickStockBarcodeValue(
+          barcodes,
+          layoutSize: layoutSize,
+          scanWindow: scanWindow,
+        ),
+        '9892749192',
+      );
+    });
+
+    test('falls back to expanded frame for slightly misaligned small barcode', () {
+      const layoutSize = Size(400, 800);
+      final scanWindow = computeBarcodeScanWindow(
+        layoutSize,
+        BarcodeScanProfile.stockEntry,
+      );
+      const barcodes = [
+        Barcode(
+          rawValue: '9892749192',
+          format: BarcodeFormat.ean13,
+          corners: [
+            Offset(40, 520),
+            Offset(360, 520),
+            Offset(360, 536),
+            Offset(40, 536),
+          ],
+        ),
+      ];
+
+      expect(
+        pickStockBarcodeValue(
+          barcodes,
+          layoutSize: layoutSize,
+          scanWindow: scanWindow,
+        ),
+        '9892749192',
+      );
+    });
+
+    test('uses full-frame fallback when exactly one known 1D is detected', () {
+      const barcodes = [
+        Barcode(
+          rawValue: '3061',
+          format: BarcodeFormat.code128,
+        ),
+      ];
+
+      expect(pickStockBarcodeValue(barcodes), '3061');
+    });
+
     test('supports long numeric Code128 values', () {
       const value = '12345678901234567890';
       expect(

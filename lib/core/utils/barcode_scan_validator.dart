@@ -78,7 +78,7 @@ class BarcodeScanProfile {
       scanWindowHeightFactor: 0.24,
       scanWindowCenterYFactor: 0.58,
       detectionSpeed: DetectionSpeed.unrestricted,
-      detectionTimeoutMs: kIsWeb ? 200 : 300,
+      detectionTimeoutMs: kIsWeb ? 400 : 300,
       enableSecondaryDecode: false,
       returnImage: false,
     );
@@ -259,39 +259,114 @@ bool is2dBarcodeFormat(BarcodeFormat format) {
       format == BarcodeFormat.aztec;
 }
 
-/// Picks the best 1D barcode inside [scanWindow]. Prefers a known symbology and
-/// the largest barcode box so crowded labels do not return the wrong number.
+/// Picks the best 1D barcode for stock entry. Tries the scan frame first, then
+/// an expanded area, then a single known 1D read — so small barcodes without
+/// printed numbers below the bars still decode from the pattern alone.
 String? pickStockBarcodeValue(
   List<Barcode> barcodes, {
   Size layoutSize = Size.zero,
   Size textureSize = Size.zero,
   Rect? scanWindow,
 }) {
+  if (barcodes.isEmpty) return null;
+
+  final strict = _pickBestStockBarcodeCandidate(
+    barcodes,
+    layoutSize: layoutSize,
+    textureSize: textureSize,
+    scanWindow: scanWindow,
+  );
+  if (strict != null) return strict;
+
+  if (scanWindow != null) {
+    final pad = max(scanWindow.width, scanWindow.height) * 0.3;
+    final expanded = scanWindow.inflate(pad);
+    final relaxed = _pickBestStockBarcodeCandidate(
+      barcodes,
+      layoutSize: layoutSize,
+      textureSize: textureSize,
+      scanWindow: expanded,
+      relaxPosition: true,
+    );
+    if (relaxed != null) return relaxed;
+  }
+
+  final knownCount = _countKnownStock1dCandidates(barcodes);
+  if (knownCount == 1) {
+    return _pickBestStockBarcodeCandidate(
+      barcodes,
+      layoutSize: layoutSize,
+      textureSize: textureSize,
+      relaxPosition: true,
+    );
+  }
+
+  return null;
+}
+
+int _countKnownStock1dCandidates(List<Barcode> barcodes) {
+  var count = 0;
+  for (final barcode in barcodes) {
+    if (!_isValidStockBarcodeCandidate(barcode)) continue;
+    if (isStock1dBarcodeFormat(barcode.format)) count++;
+  }
+  return count;
+}
+
+bool _isValidStockBarcodeCandidate(Barcode barcode) {
+  final raw = barcode.rawValue?.trim();
+  if (raw == null || raw.isEmpty) return false;
+  if (is2dBarcodeFormat(barcode.format)) return false;
+
+  final knownFormat = isStock1dBarcodeFormat(barcode.format);
+  if (!knownFormat && barcode.format != BarcodeFormat.unknown) return false;
+
+  final normalized = normalizeStockBarcodeValue(raw);
+  if (normalized.isEmpty || normalized.length > 100) return false;
+  if (!knownFormat && !isPlausibleStockBarcodePayload(normalized)) return false;
+
+  return true;
+}
+
+bool _isSmallStockBarcode(Barcode barcode, Size layoutSize) {
+  if (layoutSize.shortestSide <= 0) return false;
+  final extent = _barcodeExtent(barcode);
+  return extent > 0 && extent / layoutSize.shortestSide < 0.04;
+}
+
+bool _shouldRelaxWindowForBarcode(
+  Barcode barcode, {
+  required bool relaxPosition,
+  required Size layoutSize,
+  required int knownCandidateCount,
+  required int totalCandidateCount,
+}) {
+  if (relaxPosition) return true;
+  if (barcode.corners.isEmpty && isStock1dBarcodeFormat(barcode.format)) {
+    return true;
+  }
+  if (_isSmallStockBarcode(barcode, layoutSize)) return true;
+  if (knownCandidateCount == 1) return true;
+  if (totalCandidateCount == 1) return true;
+  return false;
+}
+
+String? _pickBestStockBarcodeCandidate(
+  List<Barcode> barcodes, {
+  required Size layoutSize,
+  Size textureSize = Size.zero,
+  Rect? scanWindow,
+  bool relaxPosition = false,
+}) {
   Barcode? best;
   var bestScore = -1.0;
 
-  var validKnownCount = 0;
-  for (final barcode in barcodes) {
-    final raw = barcode.rawValue?.trim();
-    if (raw == null || raw.isEmpty) continue;
-    if (is2dBarcodeFormat(barcode.format)) continue;
-    if (!isStock1dBarcodeFormat(barcode.format) &&
-        barcode.format != BarcodeFormat.unknown) {
-      continue;
-    }
-    final normalized = normalizeStockBarcodeValue(raw);
-    if (normalized.isEmpty || normalized.length > 100) continue;
-    if (isStock1dBarcodeFormat(barcode.format)) validKnownCount++;
-  }
-  final relaxWindowFilter = validKnownCount == 1;
+  final candidates = barcodes.where(_isValidStockBarcodeCandidate).toList();
+  final knownCount =
+      candidates.where((b) => isStock1dBarcodeFormat(b.format)).length;
 
-  for (final barcode in barcodes) {
-    final raw = barcode.rawValue?.trim();
-    if (raw == null || raw.isEmpty) continue;
-    if (is2dBarcodeFormat(barcode.format)) continue;
-
+  for (final barcode in candidates) {
     final knownFormat = isStock1dBarcodeFormat(barcode.format);
-    if (!knownFormat && barcode.format != BarcodeFormat.unknown) continue;
 
     if (scanWindow != null &&
         !isBarcodeInsideScanWindow(
@@ -299,17 +374,16 @@ String? pickStockBarcodeValue(
           scanWindow,
           layoutSize: layoutSize,
           textureSize: textureSize,
-          allowWithoutPosition:
-              barcodes.length == 1 || relaxWindowFilter,
+          allowWithoutPosition: _shouldRelaxWindowForBarcode(
+            barcode,
+            relaxPosition: relaxPosition,
+            layoutSize: layoutSize,
+            knownCandidateCount: knownCount,
+            totalCandidateCount: candidates.length,
+          ),
         )) {
       continue;
     }
-
-    final normalized = normalizeStockBarcodeValue(raw);
-    if (normalized.isEmpty || normalized.length > 100) continue;
-
-    // Known 1D symbology: trust the library decoder on [rawValue].
-    if (!knownFormat && !isPlausibleStockBarcodePayload(normalized)) continue;
 
     var score = knownFormat ? 100000.0 : 1000.0;
     score += _barcodeExtent(barcode) * 2;
