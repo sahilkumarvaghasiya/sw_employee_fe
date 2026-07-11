@@ -30,6 +30,7 @@ class SalesLineItem {
     required this.productName,
     required this.quantity,
     required this.unitPrice,
+    required this.finalUnitPrice,
     required this.lineTotal,
     required this.discountAmount,
     required this.enteredDiscountPercent,
@@ -39,11 +40,18 @@ class SalesLineItem {
   final String productName;
   final int quantity;
 
-  /// Unit price used for displaying in sales-history details.
+  /// Original (actual) unit price shown on the bill.
   ///
   /// Note: This is derived from backend values and should be treated as
   /// informational only.
   final double unitPrice;
+
+  /// Per-unit price actually charged after item discount / custom price.
+  final double finalUnitPrice;
+
+  /// Whether this line was sold below its original price.
+  bool get hasUnitPriceReduction =>
+      (unitPrice - finalUnitPrice).abs() > 0.0001;
 
   /// Amount for this line as returned by the API.
   final double lineTotal;
@@ -72,6 +80,7 @@ class SalesBill {
     required this.paymentMethod,
     this.whatsappStatus = WhatsAppBillStatus.pending,
     this.listAmount,
+    this.originalTotalAmount,
     this.subtotalAmount,
     this.discountAmount,
     this.totalAmount,
@@ -85,6 +94,7 @@ class SalesBill {
   final BillingPaymentMethod paymentMethod;
   final WhatsAppBillStatus whatsappStatus;
   final double? listAmount;
+  final double? originalTotalAmount;
   final double? subtotalAmount;
   final double? discountAmount;
   final double? totalAmount;
@@ -144,6 +154,7 @@ class SalesBill {
         json['whatsapp_status']?.toString(),
       ),
       listAmount: _parseNullableDouble(json['total_amount']),
+      originalTotalAmount: _parseNullableDouble(json['original_total']),
       subtotalAmount: _parseNullableDouble(json['subtotal']),
       discountAmount: _parseNullableDouble(json['discount_rs']),
       totalAmount: _parseNullableDouble(json['total_amount']),
@@ -165,7 +176,10 @@ class SalesBill {
         final safeQuantity = quantity <= 0 ? 1 : quantity;
 
           final rawUnitPrice = _parseNullableDouble(
-            item['amount'] ?? item['unit_price'] ?? item['rate'],
+            item['original_amount'] ??
+                item['amount'] ??
+                item['unit_price'] ??
+                item['rate'],
           );
 
           final lineTotal = _parseNullableDouble(
@@ -173,8 +187,9 @@ class SalesBill {
               ) ??
               0;
 
+          final rawFinalUnitPrice = _parseNullableDouble(item['final_amount']);
+
       final discountAmount = _parseNullableDouble(
-        item['custom_amount'] ??
         item['discount_amount'] ??
         item['discount_rs'] ??
         item['discount'],
@@ -193,16 +208,19 @@ class SalesBill {
             ? null
             : rawDiscountPercent.clamp(0, 100).toDouble();
 
-          final unitPrice = rawUnitPrice ??
+          final finalUnitPrice = rawFinalUnitPrice ??
             (safeQuantity <= 0
               ? lineTotal
               : (lineTotal / safeQuantity).toDouble());
+
+          final unitPrice = rawUnitPrice ?? finalUnitPrice;
 
         return SalesLineItem(
         id: (item['id'] ?? item['type_name'] ?? '').toString(),
         productName: (item['type_name'] ?? '-').toString(),
         quantity: safeQuantity,
         unitPrice: unitPrice,
+        finalUnitPrice: finalUnitPrice,
         lineTotal: lineTotal,
         discountAmount: discountAmount.clamp(0, double.infinity).toDouble(),
         enteredDiscountPercent: enteredDiscountPercent,
@@ -247,6 +265,14 @@ class SalesBill {
   }
 
   int get itemsCount => items.fold<int>(0, (sum, i) => sum + i.quantity);
+
+  /// Sum of each item's original (actual) price x quantity, before any discount.
+  double get originalTotal =>
+      originalTotalAmount ??
+      items.fold<double>(0, (sum, i) => sum + i.unitPrice * i.quantity);
+
+  /// Whether the original product total is higher than the subtotal charged.
+  bool get hasItemSavings => (originalTotal - subtotal) > 0.0001;
 
     double get subtotal =>
       subtotalAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineTotal);

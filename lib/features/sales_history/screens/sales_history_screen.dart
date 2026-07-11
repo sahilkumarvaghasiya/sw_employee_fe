@@ -677,13 +677,13 @@ class _BillDetailsSheet extends StatelessWidget {
   }
 
   String _itemMeta(SalesLineItem item) {
-    final parts = <String>[
-      'Qty ${item.quantity}',
-      '${money(item.unitPrice)} each',
-    ];
-    if ((item.enteredDiscountPercent ?? 0) > 0) {
-      parts.add('${item.enteredDiscountPercent!.toStringAsFixed(0)}% off');
-    } else if (item.discountAmount > 0) {
+    final parts = <String>['Qty ${item.quantity}'];
+    if (item.hasUnitPriceReduction) {
+      parts.add('${money(item.unitPrice)} → ${money(item.finalUnitPrice)} each');
+    } else {
+      parts.add('${money(item.unitPrice)} each');
+    }
+    if (item.discountAmount > 0.0001) {
       parts.add('${money(item.discountAmount)} off');
     }
     return parts.join(' · ');
@@ -821,13 +821,27 @@ class _BillDetailsSheet extends StatelessWidget {
                 padding: const EdgeInsets.all(14),
                 child: Column(
                   children: [
+                    // Original product total: sum of catalog prices × qty
                     BillingSummaryLine(
-                      label: 'Subtotal',
+                      label: 'Original product total',
+                      value: money(bill.originalTotal),
+                    ),
+                    // Item savings: how much was saved/lost on individual items
+                    if (bill.hasItemSavings)
+                      BillingSummaryLine(
+                        label: 'Item savings',
+                        value: '- ${money(bill.originalTotal - bill.subtotal)}',
+                        valueColor: colorScheme.tertiary,
+                      ),
+                    // Bill item subtotal: what items actually totalled to
+                    BillingSummaryLine(
+                      label: 'Bill item subtotal',
                       value: money(bill.subtotal),
                     ),
+                    // Bill-level discount on top of item subtotal
                     if (bill.totalDiscount > 0.0001)
                       BillingSummaryLine(
-                        label: 'Discount',
+                        label: 'Bill discount',
                         value: '- ${money(bill.totalDiscount)}',
                         valueColor: colorScheme.tertiary,
                       ),

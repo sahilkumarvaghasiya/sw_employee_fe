@@ -45,7 +45,11 @@ dependencies:
   flutter_secure_storage: ^9.2.2
 
   # Barcode scanning
-  mobile_scanner: ^5.2.3
+  mobile_scanner: ^6.0.11
+
+  # Secondary 1D barcode decode from camera frames (web + mobile)
+  zxing_lib: ^1.1.4
+  image: ^4.5.4
 
   # Barcode rendering + saving
   barcode_widget: ^2.0.4

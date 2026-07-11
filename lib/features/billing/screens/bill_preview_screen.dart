@@ -523,15 +523,28 @@ class BillPreviewScreen extends StatelessWidget {
   }
 
   String _productMeta(BillingLineItem item) {
-    final parts = <String>[
-      'Qty ${item.quantity}',
-      '${_money(item.unitPrice)} each',
-    ];
-    if (item.discountPercent > 0) {
-      parts.add('${item.discountPercent.toStringAsFixed(0)}% off');
-    } else if (item.isUnitPriceOverride &&
-        (item.unitPrice - item.originalUnitPrice).abs() > 0.0001) {
-      parts.add('was ${_money(item.originalUnitPrice)}');
+    final parts = <String>['Qty ${item.quantity}'];
+    final diff = item.unitPrice - item.originalUnitPrice;
+    final priceChanged = diff.abs() > 0.0001;
+
+    if (priceChanged) {
+      parts.add(
+        '${_money(item.originalUnitPrice)} → ${_money(item.unitPrice)} each',
+      );
+    } else {
+      parts.add('${_money(item.unitPrice)} each');
+    }
+
+    // Savings from discount% OR custom price reduction (whichever applies).
+    final discountSavings = item.lineDiscount; // discount_percent path
+    final customSavings = diff < -0.0001    // custom price < original path
+        ? (item.originalUnitPrice - item.unitPrice) * item.quantity
+        : 0.0;
+    final savings =
+        discountSavings > 0.0001 ? discountSavings : customSavings;
+
+    if (savings > 0.0001) {
+      parts.add('${_money(savings)} off');
     }
     return parts.join(' · ');
   }

@@ -135,11 +135,10 @@ class BillingService {
       if (item.discountPercent > 0) {
         row['discount_percent'] = money(item.discountPercent);
       } else if (item.isUnitPriceOverride || item.unitPrice != item.originalUnitPrice) {
-        final customAmount = (item.unitPrice * item.quantity)
-            .clamp(0, double.infinity)
-            .toDouble();
-        if (customAmount > 0.0001) {
-          row['custom_amount'] = money(customAmount);
+        // custom_amount is the per-unit final price; backend multiplies by qty.
+        final customUnitPrice = item.unitPrice.clamp(0, double.infinity).toDouble();
+        if (customUnitPrice > 0.0001) {
+          row['custom_amount'] = money(customUnitPrice);
         }
       }
 
