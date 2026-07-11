@@ -39,6 +39,8 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   static const _secondaryDecodeIdleDelay = Duration(seconds: 2);
   static const _secondaryDecodeInterval = Duration(milliseconds: 1200);
   static const _secondaryDecodeCooldown = Duration(milliseconds: 900);
+  static const _secondaryDecodeTimeout = Duration(seconds: 3);
+  static const _scanWarmupDuration = Duration(milliseconds: 700);
 
   late final BarcodeScanValidator _validator = BarcodeScanValidator(
     profile: widget.profile,
@@ -50,7 +52,10 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   DateTime? _lastSuccessfulDetectAt;
   DateTime? _lastSecondaryAttemptAt;
   DateTime? _scanSessionStartedAt;
+  DateTime? _scanWarmupEndsAt;
   bool _secondaryDecodeInFlight = false;
+  bool _hasDeliveredBarcode = false;
+  bool _isDisposing = false;
   Timer? _secondaryDecodeTimer;
   int _hintIndex = 0;
   Timer? _hintTimer;
@@ -63,7 +68,9 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   @override
   void initState() {
     super.initState();
-    _scanSessionStartedAt = DateTime.now();
+    final now = DateTime.now();
+    _scanSessionStartedAt = now;
+    _scanWarmupEndsAt = now.add(_scanWarmupDuration);
     _startHintRotation();
     _scheduleSecondaryDecode();
   }
@@ -72,6 +79,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   void didUpdateWidget(covariant BarcodeScannerView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!widget.enabled && oldWidget.enabled) {
+      _stopSecondaryDecode();
       _resetScanState();
     }
     if (widget.profile != oldWidget.profile) {
@@ -81,9 +89,28 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
 
   @override
   void dispose() {
+    _isDisposing = true;
     _secondaryDecodeTimer?.cancel();
     _hintTimer?.cancel();
     super.dispose();
+  }
+
+  bool get _canAcceptScans =>
+      widget.enabled &&
+      !_hasDeliveredBarcode &&
+      !_isDisposing &&
+      mounted &&
+      _awaitingConfirmValue == null;
+
+  bool get _isWarmingUp {
+    final warmupEndsAt = _scanWarmupEndsAt;
+    if (warmupEndsAt == null) return false;
+    return DateTime.now().isBefore(warmupEndsAt);
+  }
+
+  void _stopSecondaryDecode() {
+    _secondaryDecodeTimer?.cancel();
+    _secondaryDecodeTimer = null;
   }
 
   void _startHintRotation() {
@@ -129,17 +156,34 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     _lastSecondaryAttemptAt = null;
     _secondaryDecodeInFlight = false;
     _latestFrameBytes = null;
-    _scanSessionStartedAt = DateTime.now();
+    final now = DateTime.now();
+    _scanSessionStartedAt = now;
+    _scanWarmupEndsAt = now.add(_scanWarmupDuration);
     if (_awaitingConfirmValue != null || _confirmSourceLabel != null) {
-      setState(() {
+      if (mounted) {
+        setState(() {
+          _awaitingConfirmValue = null;
+          _confirmSourceLabel = null;
+        });
+      } else {
         _awaitingConfirmValue = null;
         _confirmSourceLabel = null;
-      });
+      }
     }
   }
 
+  void _deliverBarcode(String value) {
+    if (_hasDeliveredBarcode || _isDisposing || !mounted) return;
+
+    _hasDeliveredBarcode = true;
+    _stopSecondaryDecode();
+    _secondaryDecodeInFlight = false;
+
+    widget.onBarcodeConfirmed(value);
+  }
+
   void _handleDetect(BarcodeCapture capture, Size layoutSize) {
-    if (!widget.enabled || _awaitingConfirmValue != null) return;
+    if (!_canAcceptScans || _isWarmingUp) return;
 
     if (capture.image != null && capture.image!.isNotEmpty) {
       _latestFrameBytes = capture.image;
@@ -194,15 +238,14 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
       return;
     }
 
-    widget.onBarcodeConfirmed(value);
-    _resetScanState();
+    _deliverBarcode(value);
   }
 
   Future<void> _maybeRunSecondaryDecode() async {
-    if (!widget.enabled ||
+    if (!_canAcceptScans ||
         !widget.profile.enableSecondaryDecode ||
-        _awaitingConfirmValue != null ||
-        _secondaryDecodeInFlight) {
+        _secondaryDecodeInFlight ||
+        _isWarmingUp) {
       return;
     }
 
@@ -222,20 +265,24 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
 
     try {
       final layoutSize = _layoutSize;
-      if (layoutSize == null) return;
+      if (layoutSize == null || !_canAcceptScans) return;
 
       final scanWindow = computeBarcodeScanWindow(layoutSize, widget.profile);
       final cropRect = normalizedCropFromScanWindow(scanWindow, layoutSize);
 
       Uint8List? frameBytes = _latestFrameBytes;
       frameBytes ??= await captureCameraPreviewFrame(cropRect: cropRect);
-      if (frameBytes == null || frameBytes.isEmpty) return;
+      if (!_canAcceptScans || frameBytes == null || frameBytes.isEmpty) return;
 
-      final decoded = await _frameDecoder.decodeFromImageBytes(
-        frameBytes,
-        cropRect: cropRect,
-        live: true,
-      );
+      final decoded = await _frameDecoder
+          .decodeFromImageBytes(
+            frameBytes,
+            cropRect: cropRect,
+            live: true,
+          )
+          .timeout(_secondaryDecodeTimeout, onTimeout: () => null);
+      if (!_canAcceptScans) return;
+
       if (decoded != null) {
         final accepted = _validator.registerRead(decoded.value);
         if (accepted != null) {
@@ -249,44 +296,44 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
         return;
       }
 
-      final printed = await readPrintedBarcodeNumber(frameBytes);
-      if (printed == null || printed.isEmpty) return;
+      final printed = await readPrintedBarcodeNumber(frameBytes)
+          .timeout(_secondaryDecodeTimeout, onTimeout: () => null);
+      if (!_canAcceptScans || printed == null || printed.isEmpty) return;
 
       final normalized = normalizeStockBarcodeValue(printed);
       if (!isLikelyStockBarcodeValue(normalized)) return;
 
-      final accepted = _presentPrintedCandidate(normalized);
-      if (accepted != null) {
-        return;
-      }
-
+      _presentPrintedCandidate(normalized);
       if (mounted) setState(() {});
+    } on Object {
+      // Ignore decode failures/timeouts and keep the live scanner responsive.
     } finally {
       _secondaryDecodeInFlight = false;
     }
   }
 
-  String? _presentPrintedCandidate(String value) {
+  void _presentPrintedCandidate(String value) {
+    if (!_canAcceptScans) return;
+
     final accepted = _validator.registerRead(value);
     if (accepted != null) {
       _presentCandidate(
         accepted,
         fromPrintedText: true,
       );
-      return accepted;
+      return;
     }
 
     _presentCandidate(
       value.trim(),
       fromPrintedText: true,
     );
-    return value.trim();
   }
 
   void _confirmPending() {
     final value = _awaitingConfirmValue;
-    if (value == null) return;
-    widget.onBarcodeConfirmed(value);
+    if (value == null || !_canAcceptScans) return;
+    _deliverBarcode(value);
     _resetScanState();
   }
 
@@ -354,11 +401,13 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
               child: _buildBottomPanel(theme, colorScheme),
             ),
             if (_awaitingConfirmValue != null)
-              _ConfirmOverlay(
-                value: _awaitingConfirmValue!,
-                sourceLabel: _confirmSourceLabel,
-                onConfirm: _confirmPending,
-                onRescan: _rejectPending,
+              Positioned.fill(
+                child: _ConfirmOverlay(
+                  value: _awaitingConfirmValue!,
+                  sourceLabel: _confirmSourceLabel,
+                  onConfirm: _confirmPending,
+                  onRescan: _rejectPending,
+                ),
               ),
           ],
         );
