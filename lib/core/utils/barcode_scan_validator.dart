@@ -70,8 +70,8 @@ class BarcodeScanProfile {
       requiredConsecutiveReads: 2,
       maxGapBetweenReads: const Duration(milliseconds: 1200),
       minBarcodeHeightRatio: 0.0,
-      scanWindowWidthFactor: 0.84,
-      scanWindowHeightFactor: 0.42,
+      scanWindowWidthFactor: 0.88,
+      scanWindowHeightFactor: 0.20,
       detectionSpeed: DetectionSpeed.unrestricted,
       detectionTimeoutMs: kIsWeb ? 200 : 300,
       enableSecondaryDecode: false,
@@ -265,7 +265,7 @@ String? pickStockBarcodeValue(
     if (!knownFormat && barcode.format != BarcodeFormat.unknown) continue;
 
     if (scanWindow != null &&
-        !isBarcodeCenterInsideScanWindow(
+        !isBarcodeInsideScanWindow(
           barcode,
           scanWindow,
           layoutSize: layoutSize,
@@ -298,38 +298,69 @@ String? pickStockBarcodeValue(
   return normalizeStockBarcodeValue(best.rawValue!.trim());
 }
 
-/// Whether the barcode center lies inside [scanWindow] in widget coordinates.
-bool isBarcodeCenterInsideScanWindow(
+/// Whether the barcode overlaps [scanWindow] in widget coordinates.
+bool isBarcodeInsideScanWindow(
   Barcode barcode,
   Rect scanWindow, {
   required Size layoutSize,
   Size textureSize = Size.zero,
   bool allowWithoutPosition = false,
 }) {
+  final bounds = _barcodeBoundsInWidget(
+    barcode,
+    layoutSize: layoutSize,
+    textureSize: textureSize,
+  );
+  if (bounds == null) return allowWithoutPosition;
+
+  if (scanWindow.contains(bounds.center)) return true;
+
+  final intersection = scanWindow.intersect(bounds);
+  if (intersection.isEmpty) return false;
+
+  final barcodeArea = bounds.width * bounds.height;
+  if (barcodeArea <= 0) return true;
+
+  final overlapArea = intersection.width * intersection.height;
+  return overlapArea / barcodeArea >= 0.2;
+}
+
+Rect? _barcodeBoundsInWidget(
+  Barcode barcode, {
+  required Size layoutSize,
+  Size textureSize = Size.zero,
+}) {
   final corners = barcode.corners;
-  if (corners.isEmpty) return allowWithoutPosition;
+  if (corners.isEmpty) return null;
 
-  var sumX = 0.0;
-  var sumY = 0.0;
-  for (final corner in corners) {
-    sumX += corner.dx;
-    sumY += corner.dy;
-  }
-
-  var center = Offset(sumX / corners.length, sumY / corners.length);
-  if (_shouldMapBarcodeCornersToWidget(
+  final mapped = _shouldMapBarcodeCornersToWidget(
     corners: corners,
     layoutSize: layoutSize,
     textureSize: textureSize,
-  )) {
-    center = mapTextureOffsetToWidget(
-      center,
-      textureSize: textureSize,
-      widgetSize: layoutSize,
-    );
+  )
+      ? corners
+          .map(
+            (corner) => mapTextureOffsetToWidget(
+              corner,
+              textureSize: textureSize,
+              widgetSize: layoutSize,
+            ),
+          )
+          .toList(growable: false)
+      : corners;
+
+  var minX = mapped.first.dx;
+  var maxX = mapped.first.dx;
+  var minY = mapped.first.dy;
+  var maxY = mapped.first.dy;
+  for (final corner in mapped) {
+    if (corner.dx < minX) minX = corner.dx;
+    if (corner.dx > maxX) maxX = corner.dx;
+    if (corner.dy < minY) minY = corner.dy;
+    if (corner.dy > maxY) maxY = corner.dy;
   }
 
-  return scanWindow.contains(center);
+  return Rect.fromLTRB(minX, minY, maxX, maxY);
 }
 
 bool _shouldMapBarcodeCornersToWidget({
