@@ -790,19 +790,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                 priceAdjustment > 0.0001 ||
                 billDiscount > 0.0001;
 
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  4,
-                  20,
-                  16 + MediaQuery.of(sheetContext).viewInsets.bottom,
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+            return BillingKeyboardSheetBody(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                       Text(
                         'Confirm bill',
                         style: theme.textTheme.titleSmall?.copyWith(
@@ -1020,8 +1012,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                       ),
                     ],
                   ),
-                ),
-              ),
             );
           },
         );

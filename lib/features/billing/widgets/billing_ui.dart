@@ -458,3 +458,39 @@ class BillingPaymentMethodTile extends StatelessWidget {
     );
   }
 }
+
+/// Keeps modal bottom sheets at a stable height when the keyboard opens.
+///
+/// Caps visible height and puts keyboard inset inside scroll padding so the
+/// sheet does not grow to full screen when a field is focused.
+class BillingKeyboardSheetBody extends StatelessWidget {
+  const BillingKeyboardSheetBody({
+    super.key,
+    required this.child,
+    this.maxHeightFactor = 0.85,
+    this.padding = const EdgeInsets.fromLTRB(20, 4, 20, 16),
+  });
+
+  final Widget child;
+  final double maxHeightFactor;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final keyboardInset = media.viewInsets.bottom;
+    final maxHeight = media.size.height * maxHeightFactor;
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SingleChildScrollView(
+          padding: padding.copyWith(
+            bottom: padding.bottom + keyboardInset,
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
