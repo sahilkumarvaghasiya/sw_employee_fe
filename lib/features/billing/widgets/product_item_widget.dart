@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../models/billing_models.dart';
+import 'billing_ui.dart';
 
 class ProductItemWidget extends StatefulWidget {
   const ProductItemWidget({
@@ -493,10 +494,9 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + bottom),
+    return BillingKeyboardSheetBody(
+      maxHeightFactor: 0.75,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -538,7 +538,6 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
           if (_mode == 1)
             TextField(
               controller: _priceController,
-              autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: widget.priceEntryAsUnitPrice
@@ -553,7 +552,6 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
           else if (_mode == 2)
             TextField(
               controller: _discountController,
-              autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: 'Discount percentage',
