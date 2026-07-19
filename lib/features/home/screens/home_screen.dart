@@ -295,6 +295,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             amount: bill.amountDisplay,
                             method: bill.paymentMethodLabel,
                             accentColor: billAccents[index % billAccents.length],
+                            isRefund: bill.amountValue < -0.0001,
                             onTap: null,
                           ),
                         );

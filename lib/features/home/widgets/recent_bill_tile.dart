@@ -11,6 +11,7 @@ class RecentBillTile extends StatelessWidget {
     required this.method,
     this.onTap,
     this.accentColor,
+    this.isRefund = false,
   });
 
   final String billNo;
@@ -18,6 +19,7 @@ class RecentBillTile extends StatelessWidget {
   final String method;
   final VoidCallback? onTap;
   final Color? accentColor;
+  final bool isRefund;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +27,9 @@ class RecentBillTile extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    final accent = accentColor ?? AppColors.slate500;
+    final accent = isRefund
+        ? AppColors.error
+        : (accentColor ?? AppColors.slate500);
 
     return Material(
       color: isDark ? colorScheme.surface : Colors.white,
@@ -88,16 +92,26 @@ class RecentBillTile extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.slate800 : AppColors.slate100,
+                  color: isRefund
+                      ? AppColors.error.withValues(alpha: isDark ? 0.22 : 0.12)
+                      : (isDark ? AppColors.slate800 : AppColors.slate100),
                   borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                  border: isRefund
+                      ? Border.all(
+                          color: AppColors.error.withValues(alpha: 0.35),
+                        )
+                      : null,
                 ),
                 child: Text(
                   '₹$amount',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: isDark ? AppColors.slate200 : AppColors.slate700,
+                    color: isRefund
+                        ? AppColors.error
+                        : (isDark ? AppColors.slate200 : AppColors.slate700),
                   ),
                 ),
               ),
