@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_surface_card.dart';
 import '../../billing/models/billing_models.dart';
+import '../../billing/services/billing_service.dart';
 import '../../billing/widgets/billing_ui.dart';
 import '../models/sales_bill.dart';
 import '../providers/sales_history_provider.dart';
@@ -458,10 +459,16 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => _BillDetailsSheet(
+      builder: (sheetContext) => _BillDetailsSheet(
         bill: details,
         money: _money,
         methodLabel: _methodLabel,
+        onWhatsAppStatusChanged: (status) {
+          context.read<SalesHistoryProvider>().updateWhatsAppStatus(
+            details.id,
+            status,
+          );
+        },
       ),
     );
   }
@@ -644,6 +651,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                       amountLabel: bill.listAmount != null
                           ? _money(bill.listAmount!)
                           : null,
+                      isRefund: (bill.listAmount ?? 0) < -0.0001,
                       onTap: () => _openBillDetails(bill),
                     );
                   },
@@ -657,16 +665,32 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   }
 }
 
-class _BillDetailsSheet extends StatelessWidget {
+class _BillDetailsSheet extends StatefulWidget {
   const _BillDetailsSheet({
     required this.bill,
     required this.money,
     required this.methodLabel,
+    required this.onWhatsAppStatusChanged,
   });
 
   final SalesBill bill;
   final String Function(double) money;
   final String Function(BillingPaymentMethod) methodLabel;
+  final ValueChanged<WhatsAppBillStatus> onWhatsAppStatusChanged;
+
+  @override
+  State<_BillDetailsSheet> createState() => _BillDetailsSheetState();
+}
+
+class _BillDetailsSheetState extends State<_BillDetailsSheet> {
+  late WhatsAppBillStatus _whatsappStatus;
+  bool _isSendingWhatsApp = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _whatsappStatus = widget.bill.whatsappStatus;
+  }
 
   IconData _methodIcon(BillingPaymentMethod method) {
     return switch (method) {
@@ -679,14 +703,89 @@ class _BillDetailsSheet extends StatelessWidget {
   String _itemMeta(SalesLineItem item) {
     final parts = <String>['Qty ${item.quantity}'];
     if (item.hasUnitPriceReduction) {
-      parts.add('${money(item.unitPrice)} → ${money(item.finalUnitPrice)} each');
+      parts.add(
+        '${widget.money(item.unitPrice)} → ${widget.money(item.finalUnitPrice)} each',
+      );
     } else {
-      parts.add('${money(item.unitPrice)} each');
+      parts.add('${widget.money(item.unitPrice)} each');
     }
     if (item.discountAmount > 0.0001) {
-      parts.add('${money(item.discountAmount)} off');
+      parts.add('${widget.money(item.discountAmount)} off');
     }
     return parts.join(' · ');
+  }
+
+  String _whatsAppErrorMessage(Object error) {
+    final message = error.toString().trim();
+    if (message.startsWith('Exception: ')) {
+      return message.substring('Exception: '.length);
+    }
+    return message.isEmpty ? 'Failed to send WhatsApp invoice.' : message;
+  }
+
+  Future<void> _resendWhatsApp() async {
+    if (_isSendingWhatsApp) return;
+
+    final phone = widget.bill.customer.phone.trim();
+    if (phone.isEmpty || phone == '-') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Customer phone is missing')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          ),
+          title: const Text('Resend bill on WhatsApp?'),
+          content: Text(
+            'Send invoice ${widget.bill.billNo} again to $phone?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Send'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isSendingWhatsApp = true);
+
+    try {
+      final statusRaw = await BillingService().sendWhatsAppInvoice(
+        billId: widget.bill.id,
+      );
+      final status = WhatsAppBillStatus.fromRaw(statusRaw);
+      if (!mounted) return;
+      setState(() => _whatsappStatus = status);
+      widget.onWhatsAppStatusChanged(status);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invoice sent on WhatsApp to $phone')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _whatsappStatus = WhatsAppBillStatus.failed);
+      widget.onWhatsAppStatusChanged(WhatsAppBillStatus.failed);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_whatsAppErrorMessage(e))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingWhatsApp = false);
+      }
+    }
   }
 
   @override
@@ -697,10 +796,15 @@ class _BillDetailsSheet extends StatelessWidget {
     final screenHeight = MediaQuery.sizeOf(context).height;
 
     final loc = MaterialLocalizations.of(context);
-    final date = loc.formatShortDate(bill.createdAt);
-    final time = loc.formatTimeOfDay(TimeOfDay.fromDateTime(bill.createdAt));
-    final itemCount = bill.itemsCount;
-    final paymentLabel = methodLabel(bill.paymentMethod);
+    final date = loc.formatShortDate(widget.bill.createdAt);
+    final time = loc.formatTimeOfDay(
+      TimeOfDay.fromDateTime(widget.bill.createdAt),
+    );
+    final itemCount = widget.bill.itemsCount;
+    final paymentLabel = widget.methodLabel(widget.bill.paymentMethod);
+    final bill = widget.bill;
+    final money = widget.money;
+    final isRefund = bill.total < -0.0001;
 
     return SafeArea(
       child: SizedBox(
@@ -727,14 +831,61 @@ class _BillDetailsSheet extends StatelessWidget {
                       ),
                     ),
                   ),
-                  WhatsAppStatusChip(status: bill.whatsappStatus),
+                  const SizedBox(width: 8),
+                  Material(
+                    color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: _isSendingWhatsApp ? null : _resendWhatsApp,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_isSendingWhatsApp)
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF128C7E),
+                                ),
+                              )
+                            else
+                              const Icon(
+                                Icons.replay_rounded,
+                                size: 15,
+                                color: Color(0xFF128C7E),
+                              ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isSendingWhatsApp ? 'Sending…' : 'Resend bill',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF128C7E),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  WhatsAppStatusChip(status: _whatsappStatus),
                 ],
               ),
               const SizedBox(height: 12),
               BillingPayableHero(
-                label: 'Bill total',
+                label: isRefund ? 'Refund due' : 'Bill total',
                 amount: money(bill.total),
-                subtitle: '$itemCount item${itemCount == 1 ? '' : 's'} · $paymentLabel',
+                isRefund: isRefund,
+                subtitle: isRefund
+                    ? '$itemCount item${itemCount == 1 ? '' : 's'} · $paymentLabel refund'
+                    : '$itemCount item${itemCount == 1 ? '' : 's'} · $paymentLabel',
               ),
               const SizedBox(height: 12),
               AppSurfaceCard(
@@ -743,14 +894,19 @@ class _BillDetailsSheet extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 22,
-                      backgroundColor: AppColors.emerald.withValues(alpha: 0.12),
+                      backgroundColor: (isRefund
+                              ? AppColors.error
+                              : AppColors.emerald)
+                          .withValues(alpha: 0.12),
                       child: Text(
                         bill.customer.name.trim().isNotEmpty
                             ? bill.customer.name.trim()[0].toUpperCase()
                             : '?',
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: AppColors.emeraldDark,
+                          color: isRefund
+                              ? AppColors.error
+                              : AppColors.emeraldDark,
                         ),
                       ),
                     ),
@@ -788,10 +944,16 @@ class _BillDetailsSheet extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.emerald.withValues(alpha: 0.08),
+                        color: (isRefund
+                                ? AppColors.error
+                                : AppColors.emerald)
+                            .withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: AppColors.emerald.withValues(alpha: 0.2),
+                          color: (isRefund
+                                  ? AppColors.error
+                                  : AppColors.emerald)
+                              .withValues(alpha: 0.2),
                         ),
                       ),
                       child: Row(
@@ -800,14 +962,18 @@ class _BillDetailsSheet extends StatelessWidget {
                           Icon(
                             _methodIcon(bill.paymentMethod),
                             size: 14,
-                            color: AppColors.emeraldDark,
+                            color: isRefund
+                                ? AppColors.error
+                                : AppColors.emeraldDark,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             paymentLabel,
                             style: theme.textTheme.labelSmall?.copyWith(
                               fontWeight: FontWeight.w700,
-                              color: AppColors.emeraldDark,
+                              color: isRefund
+                                  ? AppColors.error
+                                  : AppColors.emeraldDark,
                             ),
                           ),
                         ],
@@ -850,9 +1016,10 @@ class _BillDetailsSheet extends StatelessWidget {
                       child: Divider(height: 1),
                     ),
                     BillingSummaryLine(
-                      label: 'Total',
+                      label: isRefund ? 'Refund due' : 'Total',
                       value: money(bill.total),
                       bold: true,
+                      valueColor: isRefund ? AppColors.error : null,
                     ),
                   ],
                 ),
@@ -921,7 +1088,9 @@ class _BillDetailsSheet extends StatelessWidget {
                                   money(item.lineTotal),
                                   style: theme.textTheme.labelLarge?.copyWith(
                                     fontWeight: FontWeight.w800,
-                                    color: AppColors.emeraldDark,
+                                    color: item.lineTotal < -0.0001
+                                        ? AppColors.error
+                                        : AppColors.emeraldDark,
                                   ),
                                 ),
                               ],

@@ -310,6 +310,7 @@ class SalesHistoryBillTile extends StatelessWidget {
     required this.amountLabel,
     required this.whatsappStatus,
     required this.onTap,
+    this.isRefund = false,
   });
 
   final String billNo;
@@ -320,6 +321,7 @@ class SalesHistoryBillTile extends StatelessWidget {
   final String? amountLabel;
   final WhatsAppBillStatus whatsappStatus;
   final VoidCallback onTap;
+  final bool isRefund;
 
   @override
   Widget build(BuildContext context) {
@@ -364,24 +366,25 @@ class SalesHistoryBillTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      billNo,
+                      customerName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelLarge?.copyWith(
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      customerName,
+                      billNo,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    WhatsAppStatusChip(status: whatsappStatus),
                     const SizedBox(height: 2),
                     Text(
                       '$customerPhone · $dateLabel $timeLabel',
@@ -395,14 +398,24 @@ class SalesHistoryBillTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if (amountLabel != null)
-                Text(
-                  amountLabel!,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.emeraldDark,
-                  ),
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  WhatsAppStatusChip(status: whatsappStatus),
+                  if (amountLabel != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      amountLabel!,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: isRefund
+                            ? AppColors.error
+                            : AppColors.emeraldDark,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
               Icon(
                 Icons.chevron_right_rounded,
                 size: 20,

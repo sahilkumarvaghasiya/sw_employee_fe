@@ -99,6 +99,36 @@ class SalesBill {
   final double? discountAmount;
   final double? totalAmount;
 
+  SalesBill copyWith({
+    String? id,
+    String? billNo,
+    DateTime? createdAt,
+    BillingCustomer? customer,
+    List<SalesLineItem>? items,
+    BillingPaymentMethod? paymentMethod,
+    WhatsAppBillStatus? whatsappStatus,
+    double? listAmount,
+    double? originalTotalAmount,
+    double? subtotalAmount,
+    double? discountAmount,
+    double? totalAmount,
+  }) {
+    return SalesBill(
+      id: id ?? this.id,
+      billNo: billNo ?? this.billNo,
+      createdAt: createdAt ?? this.createdAt,
+      customer: customer ?? this.customer,
+      items: items ?? this.items,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      whatsappStatus: whatsappStatus ?? this.whatsappStatus,
+      listAmount: listAmount ?? this.listAmount,
+      originalTotalAmount: originalTotalAmount ?? this.originalTotalAmount,
+      subtotalAmount: subtotalAmount ?? this.subtotalAmount,
+      discountAmount: discountAmount ?? this.discountAmount,
+      totalAmount: totalAmount ?? this.totalAmount,
+    );
+  }
+
   static final DateFormat _apiCreatedTimeFormat = DateFormat(
     'MMM d, yyyy, hh:mm a',
     'en_US',

@@ -86,7 +86,31 @@ class SalesHistoryProvider extends ChangeNotifier {
     if (cached != null) return cached;
 
     final details = await _service.fetchSalesHistoryDetails(normalizedId);
-    _detailsCache[normalizedId] = details;
-    return details;
+    // Prefer the requested UUID when detail payload omits/overwrites id.
+    final resolved = details.id.trim().isEmpty || details.id == details.billNo
+        ? details.copyWith(id: normalizedId)
+        : details;
+    _detailsCache[normalizedId] = resolved;
+    return resolved;
+  }
+
+  void updateWhatsAppStatus(String billId, WhatsAppBillStatus status) {
+    final normalizedId = billId.trim();
+    if (normalizedId.isEmpty) return;
+
+    _bills = [
+      for (final bill in _bills)
+        if (bill.id == normalizedId)
+          bill.copyWith(whatsappStatus: status)
+        else
+          bill,
+    ];
+
+    final cached = _detailsCache[normalizedId];
+    if (cached != null) {
+      _detailsCache[normalizedId] = cached.copyWith(whatsappStatus: status);
+    }
+
+    notifyListeners();
   }
 }

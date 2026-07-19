@@ -94,7 +94,9 @@ class ProductsProvider extends ChangeNotifier {
   }
 
   Future<void> init() async {
-    await Future.wait([_loadSizes(), _loadColors()]);
+    // Load filter options in the background; start the product list immediately
+    // so the screen does not wait on sizes/colors (same feel as Sales).
+    unawaited(Future.wait([_loadSizes(), _loadColors()]));
     await refresh();
   }
 
@@ -102,11 +104,15 @@ class ProductsProvider extends ChangeNotifier {
     final requestGeneration = ++_requestGeneration;
     _isLoadingInitial = true;
     _error = null;
-    _resetPaging(notify: false);
+    _preparePaging(notify: false);
     notifyListeners();
 
     try {
-      await _fetchNextPage(requestGeneration: requestGeneration, notify: false);
+      await _fetchNextPage(
+        requestGeneration: requestGeneration,
+        notify: false,
+        replace: true,
+      );
     } catch (_) {
       if (_isCurrentRequest(requestGeneration)) {
         _error = 'Failed to load products';
@@ -219,9 +225,10 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
-  void _resetPaging({bool notify = true}) {
+  /// Resets paging for a new list fetch without clearing visible items
+  /// (stale-while-revalidate — matches Sales history behaviour).
+  void _preparePaging({bool notify = true}) {
     _page = 1;
-    _items.clear();
     _hasMore = true;
     _isLoadingMore = false;
     if (notify) notifyListeners();
@@ -231,11 +238,14 @@ class ProductsProvider extends ChangeNotifier {
     final requestGeneration = ++_requestGeneration;
     _error = null;
     _isLoadingInitial = true;
-    _resetPaging(notify: false);
+    _preparePaging(notify: false);
     notifyListeners();
     unawaited(() async {
       try {
-        await _fetchNextPage(requestGeneration: requestGeneration);
+        await _fetchNextPage(
+          requestGeneration: requestGeneration,
+          replace: true,
+        );
       } catch (_) {
         if (_isCurrentRequest(requestGeneration)) {
           _error = 'Failed to load products';
@@ -297,8 +307,9 @@ class ProductsProvider extends ChangeNotifier {
   Future<void> _fetchNextPage({
     required int requestGeneration,
     bool notify = true,
+    bool replace = false,
   }) async {
-    if (!_hasMore) return;
+    if (!_hasMore && !replace) return;
 
     final page = await _service.fetchProductVariants(
       page: _page,
@@ -308,7 +319,13 @@ class ProductsProvider extends ChangeNotifier {
 
     if (!_isCurrentRequest(requestGeneration)) return;
 
-    _items.addAll(page.items);
+    if (replace) {
+      _items
+        ..clear()
+        ..addAll(page.items);
+    } else {
+      _items.addAll(page.items);
+    }
     _hasMore = page.hasMore;
     _page += 1;
 

@@ -42,7 +42,7 @@ class PaymentSection extends StatelessWidget {
     final dueColor = isFullyPaid ? AppColors.emerald : AppColors.error;
 
     final deadlineLabel = deadline == null
-        ? 'Pick a date'
+        ? 'Optional'
         : MaterialLocalizations.of(context).formatMediumDate(deadline!);
 
     return Container(

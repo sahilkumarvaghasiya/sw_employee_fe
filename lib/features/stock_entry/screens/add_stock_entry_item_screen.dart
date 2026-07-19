@@ -775,9 +775,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     if (size.isEmpty) {
       return false;
     }
-    if (colour.isEmpty) {
-      return false;
-    }
     if (qty <= 0) {
       return false;
     }
@@ -798,7 +795,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       final next = _VariantEntry(
         sizeId: _sizeIdByName[size.toLowerCase()],
         size: size,
-        colourId: _colourIdByName[colour.toLowerCase()],
+        colourId: colour.isEmpty
+            ? null
+            : _colourIdByName[colour.toLowerCase()],
         colour: colour,
         qty: qty,
         purchaseUnit: purchase,
@@ -991,7 +990,8 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
         .map(
           (e) => <String, dynamic>{
             'size': e.size,
-            'colour': e.colour,
+            'colour': e.colourId ??
+                (e.colour.trim().isEmpty ? null : e.colour.trim()),
             'pieces': e.qty,
             'purchase_price': e.purchaseUnit.toStringAsFixed(2),
             'sellprice': e.sellUnit.toStringAsFixed(2),
@@ -2412,11 +2412,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                               _draftRow.resolvedSize.trim().isEmpty
                           ? 'Required field'
                           : null;
-                      final colourError =
-                          _showItemFieldErrors &&
-                              _draftRow.resolvedColour.trim().isEmpty
-                          ? 'Required field'
-                          : null;
                       final qtyError =
                           _showItemFieldErrors && _draftRow.qty <= 0
                           ? 'Required field'
@@ -2484,7 +2479,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                               menuDropdown(
                                 label: 'Colour',
                                 icon: Icons.palette_outlined,
-                                hint: 'Colour',
+                                hint: 'Optional',
                                 addHint: 'Add new colour',
                                 addController: _draftRow.colourController,
                                 onAddChanged: (raw) {
@@ -2513,7 +2508,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                 scrollController: _colourPaged.scrollController,
                                 isLoadingOptions: _colourPaged.isLoading,
                                 menuWidth: width - 32,
-                                errorText: colourError,
                                 onSelected: (v) {
                                   setState(() {
                                     _draftRow.colourSelection = v;
