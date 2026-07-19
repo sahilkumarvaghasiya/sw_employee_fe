@@ -387,15 +387,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
               HomeRadialAction(
-                label: 'Payable',
+                label: 'Pay Vendor',
                 icon: Icons.account_balance_wallet_outlined,
                 accentColor: AppColors.homeAccentRose,
                 enabled: canPayable,
-                disabledHint: 'Payable access is locked by your manager.',
+                disabledHint: 'Pay Vendor access is locked by your manager.',
                 onTap: () => _openAndRefresh(
                   VendorsHubScreen.route(),
                   featureKey: 'payable',
-                  lockedMessage: 'Payable access is locked by your manager.',
+                  lockedMessage: 'Pay Vendor access is locked by your manager.',
                 ),
               ),
             ],

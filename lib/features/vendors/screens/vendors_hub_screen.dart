@@ -29,6 +29,7 @@ class VendorsHubScreen extends StatefulWidget {
 
 class _VendorsHubScreenState extends State<VendorsHubScreen> {
   static final DateFormat _dateFmt = DateFormat('dd MMM yyyy');
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -37,6 +38,12 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
       if (!mounted) return;
       context.read<VendorsProvider>().refresh();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _pickDateRange() async {
@@ -53,7 +60,6 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
 
   Future<void> _openFilterSheet() async {
     final provider = context.read<VendorsProvider>();
-    final searchController = TextEditingController(text: provider.searchQuery);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -82,15 +88,6 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                TextField(
-                  controller: searchController,
-                  decoration: const InputDecoration(
-                    labelText: 'Vendor name',
-                    prefixIcon: Icon(Icons.search_rounded),
-                    filled: true,
-                  ),
-                ),
-                const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: () async {
                     Navigator.pop(sheetContext);
@@ -111,22 +108,12 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
                     },
                     child: const Text('Clear dates'),
                   ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () async {
-                    Navigator.pop(sheetContext);
-                    await provider.updateSearchQuery(searchController.text);
-                  },
-                  child: const Text('Apply'),
-                ),
               ],
             ),
           ),
         );
       },
     );
-
-    searchController.dispose();
   }
 
   @override
@@ -134,13 +121,12 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final provider = context.watch<VendorsProvider>();
-    final hasFilter =
-        provider.searchQuery.isNotEmpty || provider.dateRange != null;
+    final hasFilter = provider.dateRange != null;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Payable'),
+        title: const Text('Pay Vendor'),
         actions: [
           IconButton(
             tooltip: 'Filter',
@@ -173,7 +159,16 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            if (provider.dateRange != null || provider.searchQuery.isNotEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              sliver: SliverToBoxAdapter(
+                child: VendorsSearchBar(
+                  controller: _searchController,
+                  onChanged: provider.setSearchQuery,
+                ),
+              ),
+            ),
+            if (provider.dateRange != null)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 sliver: SliverToBoxAdapter(
@@ -181,20 +176,13 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      if (provider.searchQuery.isNotEmpty)
-                        InputChip(
-                          label: Text(provider.searchQuery),
-                          onDeleted: () => provider.updateSearchQuery(''),
-                          visualDensity: VisualDensity.compact,
+                      InputChip(
+                        label: Text(
+                          '${_dateFmt.format(provider.dateRange!.start)} – ${_dateFmt.format(provider.dateRange!.end)}',
                         ),
-                      if (provider.dateRange != null)
-                        InputChip(
-                          label: Text(
-                            '${_dateFmt.format(provider.dateRange!.start)} – ${_dateFmt.format(provider.dateRange!.end)}',
-                          ),
-                          onDeleted: () => provider.setDateRange(null),
-                          visualDensity: VisualDensity.compact,
-                        ),
+                        onDeleted: () => provider.setDateRange(null),
+                        visualDensity: VisualDensity.compact,
+                      ),
                     ],
                   ),
                 ),
@@ -216,7 +204,7 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: VendorsEmptyState(
-                  title: 'Couldn’t load payables',
+                  title: 'Couldn’t load vendors',
                   subtitle: 'Pull down to try again',
                   actionLabel: 'Retry',
                   onAction: provider.refresh,
@@ -227,7 +215,7 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
               const SliverFillRemaining(
                 hasScrollBody: false,
                 child: VendorsEmptyState(
-                  title: 'Nothing payable',
+                  title: 'Nothing to pay',
                   subtitle: 'No open vendor balances right now',
                 ),
               )

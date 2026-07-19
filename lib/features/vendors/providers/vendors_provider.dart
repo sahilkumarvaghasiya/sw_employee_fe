@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -20,6 +22,7 @@ class VendorsProvider extends ChangeNotifier {
   String _searchQuery = '';
   DateTimeRange? _dateRange;
   int _requestGeneration = 0;
+  Timer? _searchDebounce;
 
   VendorPaymentSummary get summary => _summary;
   List<VendorPayableGroup> get vendors => List.unmodifiable(_vendors);
@@ -52,7 +55,7 @@ class VendorsProvider extends ChangeNotifier {
       _vendors = _groupByVendor(_openBills);
     } catch (_) {
       if (requestGeneration == _requestGeneration) {
-        _error = 'Failed to load payables';
+        _error = 'Failed to load vendors';
       }
     } finally {
       if (requestGeneration == _requestGeneration) {
@@ -92,7 +95,17 @@ class VendorsProvider extends ChangeNotifier {
     return groups;
   }
 
+  void setSearchQuery(String value) {
+    _searchQuery = value.trim();
+    notifyListeners();
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      refresh();
+    });
+  }
+
   Future<void> updateSearchQuery(String value) async {
+    _searchDebounce?.cancel();
     _searchQuery = value.trim();
     await refresh();
   }
@@ -200,5 +213,11 @@ class VendorsProvider extends ChangeNotifier {
       endDate: endDate,
     );
     return bytes;
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 }
