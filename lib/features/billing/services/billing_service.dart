@@ -102,6 +102,7 @@ class BillingService {
     }
 
     for (final item in items) {
+      if (item.isReturn) continue;
       final maxQuantity = item.availableQuantity;
       if (maxQuantity == null) continue;
       if (maxQuantity <= 0) {
@@ -132,11 +133,17 @@ class BillingService {
         'quantity': item.quantity,
       };
 
+      if (item.isReturn) {
+        row['is_return'] = true;
+      }
+
       if (item.discountPercent > 0) {
         row['discount_percent'] = money(item.discountPercent);
-      } else if (item.isUnitPriceOverride || item.unitPrice != item.originalUnitPrice) {
+      } else if (item.isUnitPriceOverride ||
+          item.unitPrice != item.originalUnitPrice) {
         // custom_amount is the per-unit final price; backend multiplies by qty.
-        final customUnitPrice = item.unitPrice.clamp(0, double.infinity).toDouble();
+        final customUnitPrice =
+            item.unitPrice.clamp(0, double.infinity).toDouble();
         if (customUnitPrice > 0.0001) {
           row['custom_amount'] = money(customUnitPrice);
         }
@@ -145,9 +152,11 @@ class BillingService {
       lineItems.add(row);
     }
 
-  final customBillAmount = (finalAmount - calculatedFinalAmount).abs() > 0.0001
-    ? finalAmount.clamp(0, double.infinity).toDouble()
-    : 0.0;
+    final hasReturnItems = items.any((item) => item.isReturn);
+    final customBillAmount =
+        hasReturnItems || (finalAmount - calculatedFinalAmount).abs() > 0.0001
+            ? finalAmount
+            : 0.0;
 
     final paymentMethodValue = switch (paymentMethod) {
       BillingPaymentMethod.cash => 'cash',

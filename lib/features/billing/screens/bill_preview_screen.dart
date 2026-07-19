@@ -27,6 +27,11 @@ class BillPreviewScreen extends StatelessWidget {
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
+  String _signedMoney(double value) {
+    if (value < -0.0001) return '-₹${(-value).toStringAsFixed(2)}';
+    return _money(value);
+  }
+
   void _showSnack(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
@@ -256,10 +261,12 @@ class BillPreviewScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           BillingPayableHero(
-            label: 'Bill total',
-            amount: _money(provider.finalAmount),
-            subtitle:
-                '$itemCount item${itemCount == 1 ? '' : 's'} · Paid via $paymentLabel',
+            label: provider.isRefundDue ? 'Refund due' : 'Bill total',
+            amount: _signedMoney(provider.finalAmount),
+            isRefund: provider.isRefundDue,
+            subtitle: provider.isRefundDue
+                ? 'Pay this amount back to customer · $itemCount item${itemCount == 1 ? '' : 's'} · $paymentLabel'
+                : '$itemCount item${itemCount == 1 ? '' : 's'} · Paid via $paymentLabel',
           ),
           const SizedBox(height: 12),
           AppSurfaceCard(
@@ -391,10 +398,12 @@ class BillPreviewScreen extends StatelessWidget {
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          _money(item.lineTotal),
+                          _signedMoney(item.signedLineTotal),
                           style: theme.textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: AppColors.emeraldDark,
+                            color: item.isReturn
+                                ? AppColors.error
+                                : AppColors.emeraldDark,
                           ),
                         ),
                       ],
@@ -426,11 +435,11 @@ class BillPreviewScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 BillingSummaryLine(
                   label: 'Original total',
-                  value: _money(provider.originalSubtotal),
+                  value: _signedMoney(provider.originalSubtotal),
                 ),
                 BillingSummaryLine(
                   label: 'Subtotal',
-                  value: _money(provider.calculatedFinalAmount),
+                  value: _signedMoney(provider.calculatedFinalAmount),
                 ),
                 if (provider.hasBillLevelSavings)
                   BillingSummaryLine(
@@ -446,9 +455,10 @@ class BillPreviewScreen extends StatelessWidget {
                   child: Divider(height: 1),
                 ),
                 BillingSummaryLine(
-                  label: 'Total payable',
-                  value: _money(provider.finalAmount),
+                  label: provider.isRefundDue ? 'Refund due' : 'Total payable',
+                  value: _signedMoney(provider.finalAmount),
                   bold: true,
+                  valueColor: provider.isRefundDue ? AppColors.error : null,
                 ),
               ],
             ),
@@ -457,12 +467,18 @@ class BillPreviewScreen extends StatelessWidget {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: isDark ? AppColors.slate900 : Colors.white,
+          color: provider.isRefundDue
+              ? (isDark
+                  ? AppColors.error.withValues(alpha: 0.16)
+                  : AppColors.error.withValues(alpha: 0.08))
+              : (isDark ? AppColors.slate900 : Colors.white),
           border: Border(
             top: BorderSide(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.06)
-                  : AppColors.slate200,
+              color: provider.isRefundDue
+                  ? AppColors.error.withValues(alpha: 0.35)
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : AppColors.slate200),
             ),
           ),
         ),
@@ -478,16 +494,22 @@ class BillPreviewScreen extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _money(provider.finalAmount),
+                        _signedMoney(provider.finalAmount),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: AppColors.emeraldDark,
+                          color: provider.isRefundDue
+                              ? AppColors.error
+                              : AppColors.emeraldDark,
                         ),
                       ),
                       Text(
-                        '$itemCount item${itemCount == 1 ? '' : 's'} · $paymentLabel',
+                        provider.isRefundDue
+                            ? 'Refund due · $itemCount item${itemCount == 1 ? '' : 's'} · $paymentLabel'
+                            : '$itemCount item${itemCount == 1 ? '' : 's'} · $paymentLabel',
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
+                          color: provider.isRefundDue
+                              ? AppColors.error
+                              : colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -508,6 +530,8 @@ class BillPreviewScreen extends StatelessWidget {
                         : 'Finish bill',
                   ),
                   style: FilledButton.styleFrom(
+                    backgroundColor:
+                        provider.isRefundDue ? AppColors.error : null,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 14,
@@ -523,7 +547,11 @@ class BillPreviewScreen extends StatelessWidget {
   }
 
   String _productMeta(BillingLineItem item) {
-    final parts = <String>['Qty ${item.quantity}'];
+    final parts = <String>[];
+    if (item.isReturn) {
+      parts.add('Return');
+    }
+    parts.add('Qty ${item.quantity}');
     final diff = item.unitPrice - item.originalUnitPrice;
     final priceChanged = diff.abs() > 0.0001;
 
@@ -537,7 +565,7 @@ class BillPreviewScreen extends StatelessWidget {
 
     // Savings from discount% OR custom price reduction (whichever applies).
     final discountSavings = item.lineDiscount; // discount_percent path
-    final customSavings = diff < -0.0001    // custom price < original path
+    final customSavings = diff < -0.0001 // custom price < original path
         ? (item.originalUnitPrice - item.unitPrice) * item.quantity
         : 0.0;
     final savings =

@@ -7,7 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/home_dashboard_provider.dart';
-import '../widgets/quick_action_card.dart';
+import '../widgets/home_radial_menu.dart';
 import '../widgets/recent_bill_tile.dart';
 import '../widgets/section_header.dart';
 import '../widgets/summary_metric_card.dart';
@@ -17,6 +17,7 @@ import '../../stock_alerts/providers/stock_alerts_provider.dart';
 import '../../stock_alerts/screens/stock_alerts_screen.dart';
 import '../../stock_entry/screens/stock_entry_main_screen.dart';
 import '../../sales_history/screens/sales_history_screen.dart';
+import '../../vendors/screens/vendors_hub_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -74,107 +75,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await _openAndRefresh(CustomerFormScreen.route());
-        },
-        backgroundColor: AppColors.indigo,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        icon: const Icon(Icons.qr_code_scanner_rounded),
-        label: const Text('Scan & Bill'),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refreshDashboard,
-        color: AppColors.indigo,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: _HomeHeroHeader(
-                greeting: greetingForIndianTime(),
-                employeeName: firstName.isNotEmpty ? firstName : 'there',
-                branchName: branchName,
-                isDark: isDark,
-                onAlertsTap: () async {
-                  await _openAndRefresh(StockAlertsScreen.route());
-                },
-                onThemeToggle: () => context.read<ThemeProvider>().toggle(),
-                isDarkMode: context.watch<ThemeProvider>().isDark,
-                alertCount: context.watch<StockAlertsProvider>().unseenCount,
-                employeeChip: _EmployeeChip(name: employeeName),
-              ),
-            ),
-
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-              sliver: SliverToBoxAdapter(
-                child: SectionHeader(
-                  title: 'Quick actions',
-                  subtitle: 'Everything you need in one tap',
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _refreshDashboard,
+            color: AppColors.indigo,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _HomeHeroHeader(
+                    greeting: greetingForIndianTime(),
+                    employeeName: firstName.isNotEmpty ? firstName : 'there',
+                    branchName: branchName,
+                    isDark: isDark,
+                    onAlertsTap: () async {
+                      await _openAndRefresh(StockAlertsScreen.route());
+                    },
+                    onThemeToggle: () => context.read<ThemeProvider>().toggle(),
+                    isDarkMode: context.watch<ThemeProvider>().isDark,
+                    alertCount: context.watch<StockAlertsProvider>().unseenCount,
+                    employeeChip: _EmployeeChip(name: employeeName),
+                  ),
                 ),
-              ),
-            ),
 
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 1.15,
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                  sliver: const SliverToBoxAdapter(
+                    child: SectionHeader(
+                      title: 'Today at a glance',
+                      subtitle: 'Live stats from your store',
+                    ),
+                  ),
                 ),
-                delegate: SliverChildListDelegate.fixed([
-                  QuickActionCard(
-                    title: 'Start Billing',
-                    subtitle: 'Scan & checkout',
-                    icon: Icons.qr_code_scanner_rounded,
-                    isPrimary: true,
-                    onTap: () async {
-                      await _openAndRefresh(CustomerFormScreen.route());
-                    },
-                  ),
-                  QuickActionCard(
-                    title: 'Stock Entry',
-                    subtitle: 'Receive inventory',
-                    icon: Icons.inventory_2_outlined,
-                    accentColor: AppColors.homeAccentAmber,
-                    onTap: () async {
-                      await _openAndRefresh(StockEntryMainScreen.route());
-                    },
-                  ),
-                  QuickActionCard(
-                    title: 'Products',
-                    subtitle: 'Browse catalog',
-                    icon: Icons.grid_view_rounded,
-                    accentColor: AppColors.homeAccentViolet,
-                    onTap: () async {
-                      await _openAndRefresh(ProductsScreen.route());
-                    },
-                  ),
-                  QuickActionCard(
-                    title: 'Sales History',
-                    subtitle: 'Past bills',
-                    icon: Icons.receipt_long_outlined,
-                    accentColor: AppColors.homeAccentSky,
-                    onTap: () async {
-                      await _openAndRefresh(SalesHistoryScreen.route());
-                    },
-                  ),
-                ]),
-              ),
-            ),
-
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-              sliver: const SliverToBoxAdapter(
-                child: SectionHeader(
-                  title: 'Today at a glance',
-                  subtitle: 'Live stats from your store',
-                ),
-              ),
-            ),
 
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
@@ -372,9 +305,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
-        ),
+                const SliverToBoxAdapter(child: SizedBox(height: 108)),
+              ],
+            ),
+          ),
+          HomeRadialMenu(
+            actions: [
+              HomeRadialAction(
+                label: 'Billing',
+                icon: Icons.qr_code_scanner_rounded,
+                accentColor: AppColors.indigo,
+                onTap: () => _openAndRefresh(CustomerFormScreen.route()),
+              ),
+              HomeRadialAction(
+                label: 'Stock',
+                icon: Icons.inventory_2_outlined,
+                accentColor: AppColors.homeAccentAmber,
+                onTap: () => _openAndRefresh(StockEntryMainScreen.route()),
+              ),
+              HomeRadialAction(
+                label: 'Products',
+                icon: Icons.grid_view_rounded,
+                accentColor: AppColors.homeAccentViolet,
+                onTap: () => _openAndRefresh(ProductsScreen.route()),
+              ),
+              HomeRadialAction(
+                label: 'Sales',
+                icon: Icons.receipt_long_outlined,
+                accentColor: AppColors.homeAccentSky,
+                onTap: () => _openAndRefresh(SalesHistoryScreen.route()),
+              ),
+              HomeRadialAction(
+                label: 'Payable',
+                icon: Icons.account_balance_wallet_outlined,
+                accentColor: AppColors.homeAccentRose,
+                onTap: () => _openAndRefresh(VendorsHubScreen.route()),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

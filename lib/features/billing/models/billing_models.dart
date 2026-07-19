@@ -46,6 +46,7 @@ class BillingLineItem {
     required this.isUnitPriceOverride,
     this.availableQuantity,
     this.size,
+    this.isReturn = false,
   });
 
   final String id;
@@ -57,6 +58,7 @@ class BillingLineItem {
   final bool isUnitPriceOverride;
   final int? availableQuantity;
   final String? size;
+  final bool isReturn;
 
   double get lineSubtotal => unitPrice * quantity;
 
@@ -65,6 +67,14 @@ class BillingLineItem {
 
   double get lineTotal =>
       (lineSubtotal - lineDiscount).clamp(0, double.infinity);
+
+  /// Positive for sale lines, negative for return lines.
+  double get signedLineTotal => isReturn ? -lineTotal : lineTotal;
+
+  double get signedOriginalLineTotal {
+    final original = originalUnitPrice * quantity;
+    return isReturn ? -original : original;
+  }
 
   BillingLineItem copyWith({
     String? id,
@@ -76,6 +86,7 @@ class BillingLineItem {
     bool? isUnitPriceOverride,
     int? availableQuantity,
     String? size,
+    bool? isReturn,
   }) {
     return BillingLineItem(
       id: id ?? this.id,
@@ -87,6 +98,7 @@ class BillingLineItem {
       isUnitPriceOverride: isUnitPriceOverride ?? this.isUnitPriceOverride,
       availableQuantity: availableQuantity ?? this.availableQuantity,
       size: size ?? this.size,
+      isReturn: isReturn ?? this.isReturn,
     );
   }
 }

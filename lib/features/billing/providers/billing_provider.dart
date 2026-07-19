@@ -140,16 +140,25 @@ class BillingProvider extends ChangeNotifier {
 
   int get totalItems => _items.fold<int>(0, (sum, i) => sum + i.quantity);
 
-  double get subtotal =>
-      _items.fold<double>(0, (sum, i) => sum + i.lineSubtotal);
+  bool get hasReturnItems => _items.any((i) => i.isReturn);
+
+  bool get isRefundDue => finalAmount < -0.0001;
+
+  /// Signed subtotal of unit×qty (sale +, return −) before percent discounts.
+  double get subtotal => _items.fold<double>(0, (sum, i) {
+    final value = i.lineSubtotal;
+    return sum + (i.isReturn ? -value : value);
+  });
 
   double get originalSubtotal => _items.fold<double>(
     0,
-    (sum, i) => sum + (i.originalUnitPrice * i.quantity),
+    (sum, i) => sum + i.signedOriginalLineTotal,
   );
 
-  double get totalDiscount =>
-      _items.fold<double>(0, (sum, i) => sum + i.lineDiscount);
+  double get totalDiscount => _items.fold<double>(0, (sum, i) {
+    final value = i.lineDiscount;
+    return sum + (i.isReturn ? -value : value);
+  });
 
   double get customPriceAdjustment => _items.fold<double>(0, (sum, i) {
     if (!i.isUnitPriceOverride &&
@@ -174,13 +183,17 @@ class BillingProvider extends ChangeNotifier {
   double get totalItemSavings =>
       _items.fold<double>(0, (sum, item) => sum + _lineSavings(item));
 
-  double get totalItemSavingsPercent => originalSubtotal > 0
-      ? (totalItemSavings / originalSubtotal) * 100
-      : 0;
+  double get totalItemSavingsPercent {
+    final absOriginal = originalSubtotal.abs();
+    if (absOriginal <= 0) return 0;
+    return (totalItemSavings / absOriginal) * 100;
+  }
 
   /// Additional savings applied in the payment popup (price / discount offer).
-  double get billLevelSavings =>
-      (calculatedFinalAmount - finalAmount).clamp(0, double.infinity);
+  double get billLevelSavings {
+    if (calculatedFinalAmount <= 0) return 0;
+    return (calculatedFinalAmount - finalAmount).clamp(0, double.infinity);
+  }
 
   double get billLevelSavingsPercent => calculatedFinalAmount > 0
       ? (billLevelSavings / calculatedFinalAmount) * 100
@@ -191,9 +204,11 @@ class BillingProvider extends ChangeNotifier {
   /// Total savings from original list price to the final payable amount.
   double get totalBillSavings => totalItemSavings + billLevelSavings;
 
-  double get totalBillSavingsPercent => originalSubtotal > 0
-      ? (totalBillSavings / originalSubtotal) * 100
-      : 0;
+  double get totalBillSavingsPercent {
+    final absOriginal = originalSubtotal.abs();
+    if (absOriginal <= 0) return 0;
+    return (totalBillSavings / absOriginal) * 100;
+  }
 
   static String formatDiscountPercent(double percent) {
     if (percent.abs() < 0.05) return '0%';
@@ -207,22 +222,28 @@ class BillingProvider extends ChangeNotifier {
   static String formatDiscountSummary(double amount, double percent) =>
       '- ₹${amount.toStringAsFixed(2)} (${formatDiscountPercent(percent)})';
 
-  double billSavingsForPayable(double payable) =>
-      totalItemSavings +
-      (calculatedFinalAmount - payable).clamp(0, double.infinity);
+  double billSavingsForPayable(double payable) {
+    if (calculatedFinalAmount <= 0) return totalItemSavings;
+    return totalItemSavings +
+        (calculatedFinalAmount - payable).clamp(0, double.infinity);
+  }
 
-  double billSavingsPercentForPayable(double payable) => originalSubtotal > 0
-      ? (billSavingsForPayable(payable) / originalSubtotal) * 100
-      : 0;
+  double billSavingsPercentForPayable(double payable) {
+    final absOriginal = originalSubtotal.abs();
+    if (absOriginal <= 0) return 0;
+    return (billSavingsForPayable(payable) / absOriginal) * 100;
+  }
 
+  /// Net of sale lines minus return lines; may be negative (refund due).
   double get calculatedFinalAmount =>
-      (subtotal - totalDiscount).clamp(0, double.infinity);
+      _items.fold<double>(0, (sum, i) => sum + i.signedLineTotal);
 
-  double get finalAmount =>
-      (_manualFinalAmount ?? calculatedFinalAmount).clamp(0, double.infinity);
+  double get finalAmount => _manualFinalAmount ?? calculatedFinalAmount;
 
-  double get remainingAmount =>
-      (finalAmount - _paidAmount).clamp(0, double.infinity);
+  double get remainingAmount {
+    if (finalAmount <= 0) return 0;
+    return (finalAmount - _paidAmount).clamp(0, double.infinity);
+  }
 
   void setCustomer(BillingCustomer customer) {
     _customer = customer;
@@ -249,7 +270,9 @@ class BillingProvider extends ChangeNotifier {
       final existing = _items[existingIndex];
       final maxQuantity =
           existing.availableQuantity ?? product.availableQuantity;
-      if (maxQuantity != null && existing.quantity >= maxQuantity) {
+      if (!existing.isReturn &&
+          maxQuantity != null &&
+          existing.quantity >= maxQuantity) {
         return existing;
       }
       final nextQty = existing.quantity + 1;
@@ -311,8 +334,12 @@ class BillingProvider extends ChangeNotifier {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
     final item = _items[index];
+    if (item.isReturn) return;
+    final nextUnitPrice = unitPrice == null
+        ? item.originalUnitPrice
+        : unitPrice.clamp(0, item.originalUnitPrice).toDouble();
     _items[index] = _items[index].copyWith(
-      unitPrice: unitPrice ?? item.originalUnitPrice,
+      unitPrice: nextUnitPrice,
       discountPercent: 0,
       isUnitPriceOverride: false,
     );
@@ -324,7 +351,10 @@ class BillingProvider extends ChangeNotifier {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
     final item = _items[index];
-    final nextUnitPrice = unitPrice ?? item.originalUnitPrice;
+    if (item.isReturn) return;
+    final nextUnitPrice = unitPrice == null
+        ? item.originalUnitPrice
+        : unitPrice.clamp(0, item.originalUnitPrice).toDouble();
     _items[index] = _items[index].copyWith(
       unitPrice: nextUnitPrice,
       discountPercent: 0,
@@ -334,24 +364,11 @@ class BillingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateItemBasePrice(String id, double? unitPrice) {
-    final index = _items.indexWhere((i) => i.id == id);
-    if (index < 0) return;
-    final item = _items[index];
-    final nextUnitPrice = unitPrice ?? item.originalUnitPrice;
-    _items[index] = _items[index].copyWith(
-      originalUnitPrice: nextUnitPrice,
-      unitPrice: nextUnitPrice,
-      discountPercent: 0,
-    );
-    _manualFinalAmount = null;
-    notifyListeners();
-  }
-
   void updateItemDiscountPercent(String id, double? percent) {
     final index = _items.indexWhere((i) => i.id == id);
     if (index < 0) return;
     final item = _items[index];
+    if (item.isReturn) return;
     _items[index] = _items[index].copyWith(
       unitPrice: item.originalUnitPrice,
       discountPercent: percent == null ? 0 : percent.clamp(0, 100),
@@ -366,7 +383,11 @@ class BillingProvider extends ChangeNotifier {
     if (index < 0) return;
     final item = _items[index];
     final maxQuantity = item.availableQuantity;
-    if (maxQuantity != null && item.quantity >= maxQuantity) return;
+    if (!item.isReturn &&
+        maxQuantity != null &&
+        item.quantity >= maxQuantity) {
+      return;
+    }
     final nextQty = item.quantity + 1;
     final nextUnitPrice = _unitPriceKeepingTotalReduction(
       item: item,
@@ -440,6 +461,27 @@ class BillingProvider extends ChangeNotifier {
       _scannedBarcodes.removeWhere((value) => value == barcode);
     }
 
+    _manualFinalAmount = null;
+    notifyListeners();
+  }
+
+  void toggleItemReturn(String id) {
+    final index = _items.indexWhere((i) => i.id == id);
+    if (index < 0) return;
+    final item = _items[index];
+    final enablingReturn = !item.isReturn;
+    final hasOffer = item.discountPercent > 0 ||
+        item.isUnitPriceOverride ||
+        (item.unitPrice - item.originalUnitPrice).abs() > 0.0001;
+    // Offer and return are mutually exclusive.
+    if (enablingReturn && hasOffer) return;
+    _items[index] = item.copyWith(
+      isReturn: enablingReturn,
+      // Offers are not allowed on return lines — reset to list price.
+      unitPrice: enablingReturn ? item.originalUnitPrice : item.unitPrice,
+      discountPercent: enablingReturn ? 0 : item.discountPercent,
+      isUnitPriceOverride: enablingReturn ? false : item.isUnitPriceOverride,
+    );
     _manualFinalAmount = null;
     notifyListeners();
   }

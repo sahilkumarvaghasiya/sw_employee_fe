@@ -39,13 +39,6 @@ class ResponsiveThemeConfig {
     return width;
   }
 
-  /// Get floating action button size
-  static Size getFABSize(BuildContext context) {
-    return context.isSmallScreen
-        ? const Size(48, 48) // Regular FAB on small screens
-        : const Size(56, 56); // Extended FAB size on larger screens
-  }
-
   /// Get app bar height
   static double getAppBarHeight(BuildContext context) {
     return context.isSmallScreen ? 56.0 : 64.0;
