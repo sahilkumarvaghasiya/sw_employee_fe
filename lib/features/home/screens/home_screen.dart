@@ -35,7 +35,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ]);
   }
 
-  Future<void> _openAndRefresh(Route<dynamic> route) async {
+  Future<void> _openAndRefresh(
+    Route<dynamic> route, {
+    required String featureKey,
+    required String lockedMessage,
+  }) async {
+    final allowed =
+        context.read<AuthProvider>().canAccessFeature(featureKey);
+    if (!allowed) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(lockedMessage)));
+      return;
+    }
     await Navigator.of(context).push(route);
     if (!mounted) return;
     await _refreshDashboard();
@@ -69,9 +81,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    final employeeName = context.watch<AuthProvider>().employeeName;
-    final branchName = context.watch<AuthProvider>().branchName;
+    final auth = context.watch<AuthProvider>();
+    final employeeName = auth.employeeName;
+    final branchName = auth.branchName;
     final firstName = employeeName.trim().split(' ').first;
+    final canBilling = auth.canAccessFeature('billing');
+    final canStock = auth.canAccessFeature('stock');
+    final canProducts = auth.canAccessFeature('products');
+    final canSales = auth.canAccessFeature('sales');
+    final canPayable = auth.canAccessFeature('payable');
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -311,36 +329,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
           HomeRadialMenu(
+            key: ValueKey(
+              'radial-$canBilling-$canStock-$canProducts-$canSales-$canPayable',
+            ),
             actions: [
               HomeRadialAction(
                 label: 'Billing',
                 icon: Icons.qr_code_scanner_rounded,
                 accentColor: AppColors.indigo,
-                onTap: () => _openAndRefresh(CustomerFormScreen.route()),
+                enabled: canBilling,
+                disabledHint: 'Billing access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  CustomerFormScreen.route(),
+                  featureKey: 'billing',
+                  lockedMessage: 'Billing access is locked by your manager.',
+                ),
               ),
               HomeRadialAction(
                 label: 'Stock',
                 icon: Icons.inventory_2_outlined,
                 accentColor: AppColors.homeAccentAmber,
-                onTap: () => _openAndRefresh(StockEntryMainScreen.route()),
+                enabled: canStock,
+                disabledHint: 'Stock access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  StockEntryMainScreen.route(),
+                  featureKey: 'stock',
+                  lockedMessage: 'Stock access is locked by your manager.',
+                ),
               ),
               HomeRadialAction(
                 label: 'Products',
                 icon: Icons.grid_view_rounded,
                 accentColor: AppColors.homeAccentViolet,
-                onTap: () => _openAndRefresh(ProductsScreen.route()),
+                enabled: canProducts,
+                disabledHint: 'Products access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  ProductsScreen.route(),
+                  featureKey: 'products',
+                  lockedMessage: 'Products access is locked by your manager.',
+                ),
               ),
               HomeRadialAction(
                 label: 'Sales',
                 icon: Icons.receipt_long_outlined,
                 accentColor: AppColors.homeAccentSky,
-                onTap: () => _openAndRefresh(SalesHistoryScreen.route()),
+                enabled: canSales,
+                disabledHint: 'Sales access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  SalesHistoryScreen.route(),
+                  featureKey: 'sales',
+                  lockedMessage: 'Sales access is locked by your manager.',
+                ),
               ),
               HomeRadialAction(
                 label: 'Payable',
                 icon: Icons.account_balance_wallet_outlined,
                 accentColor: AppColors.homeAccentRose,
-                onTap: () => _openAndRefresh(VendorsHubScreen.route()),
+                enabled: canPayable,
+                disabledHint: 'Payable access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  VendorsHubScreen.route(),
+                  featureKey: 'payable',
+                  lockedMessage: 'Payable access is locked by your manager.',
+                ),
               ),
             ],
           ),

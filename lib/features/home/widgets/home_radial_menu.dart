@@ -11,12 +11,16 @@ class HomeRadialAction {
     required this.icon,
     required this.accentColor,
     required this.onTap,
+    this.enabled = true,
+    this.disabledHint,
   });
 
   final String label;
   final IconData icon;
   final Color accentColor;
   final VoidCallback onTap;
+  final bool enabled;
+  final String? disabledHint;
 }
 
 /// Bottom-center 3D hub that expands into a floating action dock.
@@ -76,6 +80,23 @@ class _HomeRadialMenuState extends State<HomeRadialMenu>
   }
 
   void _onActionTap(HomeRadialAction action) {
+    // Locked sections: never navigate — only show a short message.
+    if (!action.enabled) {
+      HapticFeedback.heavyImpact();
+      final hint = (action.disabledHint ?? '').trim();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              hint.isEmpty
+                  ? '${action.label} access is locked by your manager.'
+                  : hint,
+            ),
+          ),
+        );
+      return;
+    }
     HapticFeedback.selectionClick();
     _controller.reverse();
     action.onTap();
@@ -256,21 +277,55 @@ class _DockAction extends StatelessWidget {
     final theme = Theme.of(context);
     final scale = 0.65 + (0.35 * Curves.easeOutBack.transform(localProgress));
 
+    final enabled = action.enabled;
+    final orb = _AccentOrb(
+      icon: action.icon,
+      accent: action.accentColor,
+      size: 44,
+    );
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Opacity(
-        opacity: localProgress.clamp(0.0, 1.0),
+        opacity: localProgress.clamp(0.0, 1.0) * (enabled ? 1.0 : 0.45),
         child: Transform.scale(
           scale: scale.clamp(0.0, 1.08),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _AccentOrb(
-                icon: action.icon,
-                accent: action.accentColor,
-                size: 44,
-              ),
+              if (enabled)
+                orb
+              else
+                ColorFiltered(
+                  colorFilter: const ColorFilter.mode(
+                    Color(0x99000000),
+                    BlendMode.saturation,
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      ImageFiltered(
+                        imageFilter:
+                            ImageFilter.blur(sigmaX: 1.6, sigmaY: 1.6),
+                        child: orb,
+                      ),
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.65),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.lock_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 7),
               Text(
                 action.label,
@@ -282,7 +337,11 @@ class _DockAction extends StatelessWidget {
                   fontSize: 11,
                   height: 1.1,
                   letterSpacing: -0.1,
-                  color: isDark ? Colors.white : AppColors.slate800,
+                  color: enabled
+                      ? (isDark ? Colors.white : AppColors.slate800)
+                      : (isDark
+                          ? Colors.white.withValues(alpha: 0.45)
+                          : AppColors.slate800.withValues(alpha: 0.45)),
                 ),
               ),
             ],

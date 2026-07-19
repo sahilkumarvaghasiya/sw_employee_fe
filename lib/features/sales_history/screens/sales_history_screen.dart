@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_surface_card.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../billing/models/billing_models.dart';
 import '../../billing/services/billing_service.dart';
 import '../../billing/widgets/billing_ui.dart';
@@ -59,6 +60,16 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Safety: if Sales is locked, leave immediately (button should already block).
+      if (!context.read<AuthProvider>().canAccessFeature('sales')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sales access is locked by your manager.'),
+          ),
+        );
+        Navigator.of(context).maybePop();
+        return;
+      }
       context.read<SalesHistoryProvider>().refresh();
     });
   }
