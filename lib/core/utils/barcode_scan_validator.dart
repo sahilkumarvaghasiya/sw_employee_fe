@@ -43,18 +43,7 @@ class BarcodeScanProfile {
   final bool enableSecondaryDecode;
   final bool returnImage;
 
-  static const billing = BarcodeScanProfile(
-    kind: BarcodeScanProfileKind.billing,
-    formats: [BarcodeFormat.code128],
-    requiredConsecutiveReads: 3,
-    maxGapBetweenReads: Duration(milliseconds: 900),
-    minBarcodeHeightRatio: 0.06,
-    scanWindowWidthFactor: 0.88,
-    scanWindowHeightFactor: 0.38,
-    detectionSpeed: DetectionSpeed.normal,
-    detectionTimeoutMs: 300,
-  );
-
+  /// All supported 1D symbologies for stock entry and smart billing.
   static const stockEntry1dFormats = [
     BarcodeFormat.code128,
     BarcodeFormat.code39,
@@ -66,6 +55,23 @@ class BarcodeScanProfile {
     BarcodeFormat.upcA,
     BarcodeFormat.upcE,
   ];
+
+  /// Same robust 1D pipeline as stock entry — multi-format, hang-tag frame,
+  /// unrestricted detection, and two stable reads with gap forgiveness.
+  static const billing = BarcodeScanProfile(
+    kind: BarcodeScanProfileKind.billing,
+    formats: stockEntry1dFormats,
+    requiredConsecutiveReads: 2,
+    maxGapBetweenReads: Duration(milliseconds: 1200),
+    minBarcodeHeightRatio: 0.0,
+    scanWindowWidthFactor: 0.88,
+    scanWindowHeightFactor: 0.24,
+    scanWindowCenterYFactor: 0.58,
+    detectionSpeed: DetectionSpeed.unrestricted,
+    detectionTimeoutMs: 300,
+    enableSecondaryDecode: false,
+    returnImage: false,
+  );
 
   static BarcodeScanProfile get stockEntry {
     return BarcodeScanProfile(
@@ -85,6 +91,11 @@ class BarcodeScanProfile {
   }
 
   bool get isStockEntry => kind == BarcodeScanProfileKind.stockEntry;
+
+  /// Billing and stock share the hang-tag–tuned 1D scan pipeline.
+  bool get usesRobust1dPipeline =>
+      kind == BarcodeScanProfileKind.billing ||
+      kind == BarcodeScanProfileKind.stockEntry;
 
   List<String> get webScanHints => const [
         'Horizontal or vertical barcode — any angle works',
@@ -121,7 +132,7 @@ class BarcodeScanValidator {
     BarcodeScanProfile profile = BarcodeScanProfile.billing,
   })  : requiredReads = profile.requiredConsecutiveReads,
         maxGap = profile.maxGapBetweenReads,
-        _forgiveReadGap = profile.isStockEntry;
+        _forgiveReadGap = profile.usesRobust1dPipeline;
 
   BarcodeScanValidator.legacy({
     int? requiredReads,

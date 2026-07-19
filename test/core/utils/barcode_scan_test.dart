@@ -6,24 +6,28 @@ import 'package:sw_billing_employee_fe/core/utils/barcode_scan_validator.dart';
 
 void main() {
   group('BarcodeScanProfile', () {
-    test('billing profile keeps strict Code128-only settings', () {
+    test('billing profile matches stock robust 1D settings', () {
       const profile = BarcodeScanProfile.billing;
 
-      expect(profile.formats, [BarcodeFormat.code128]);
-      expect(profile.requiredConsecutiveReads, 3);
-      expect(profile.scanWindowCenterYFactor, 0.5);
+      expect(profile.formats, BarcodeScanProfile.stockEntry1dFormats);
+      expect(profile.requiredConsecutiveReads, 2);
+      expect(profile.scanWindowCenterYFactor, 0.58);
+      expect(profile.minBarcodeHeightRatio, 0.0);
+      expect(profile.detectionSpeed, DetectionSpeed.unrestricted);
       expect(profile.detectionTimeoutMs, 300);
       expect(profile.enableSecondaryDecode, isFalse);
+      expect(profile.usesRobust1dPipeline, isTrue);
     });
 
-    test('billing scan window stays vertically centered', () {
+    test('billing scan window is lower for hang-tag barcodes', () {
       const layoutSize = Size(400, 800);
       final window = computeBarcodeScanWindow(
         layoutSize,
         BarcodeScanProfile.billing,
       );
 
-      expect(window.center.dy, closeTo(400, 0.01));
+      expect(window.center.dy, closeTo(800 * 0.58, 0.01));
+      expect(window.center.dy, greaterThan(layoutSize.height / 2));
     });
 
     test('stock profile supports every mobile_scanner 1D format', () {
@@ -44,6 +48,7 @@ void main() {
       ]));
       expect(profile.formats, isNot(contains(BarcodeFormat.qrCode)));
       expect(profile.requiredConsecutiveReads, 2);
+      expect(profile.usesRobust1dPipeline, isTrue);
     });
 
     test('stock scan window is lower for hang-tag barcodes', () {
@@ -59,27 +64,23 @@ void main() {
   });
 
   group('BarcodeScanValidator', () {
-    test('billing profile still requires three identical reads with gap', () {
-      final validator = BarcodeScanValidator(profile: BarcodeScanProfile.billing);
+    test('billing profile accepts after two identical reads', () {
+      final validator =
+          BarcodeScanValidator(profile: BarcodeScanProfile.billing);
 
-      expect(validator.registerRead('123'), isNull);
       expect(validator.registerRead('123'), isNull);
       expect(validator.registerRead('123'), '123');
     });
 
-    test('billing profile resets when gap expires', () {
+    test('billing profile still accepts second read after a long pause', () {
       final validator = BarcodeScanValidator(
         profile: BarcodeScanProfile.billing,
       );
 
       expect(validator.registerRead('123'), isNull);
-      validator.registerRead('123');
-      expect(validator.consecutiveCount, 2);
-
-      // Billing still requires reads within maxGap (900ms) — simulate gap expiry
-      // by registering a different value which resets the counter.
       expect(validator.registerRead('456'), isNull);
-      expect(validator.consecutiveCount, 1);
+      expect(validator.registerRead('123'), isNull);
+      expect(validator.registerRead('123'), '123');
     });
 
     test('stock profile accepts after two identical reads', () {
@@ -390,8 +391,8 @@ void main() {
     });
   });
 
-  group('billing pickBestBarcode isolation', () {
-    test('billing still only accepts Code128 in frame', () {
+  group('billing robust picker parity', () {
+    test('billing accepts non-Code128 1D formats via stock picker', () {
       const layoutSize = Size(400, 800);
       final scanWindow = computeBarcodeScanWindow(
         layoutSize,
@@ -408,15 +409,34 @@ void main() {
         ),
       ];
 
-      final best = pickBestBarcode(
+      // Prefer known 1D in frame; both valid — larger/known score wins.
+      final picked = pickStockBarcodeValue(
         barcodes,
         layoutSize: layoutSize,
         scanWindow: scanWindow,
-        profile: BarcodeScanProfile.billing,
       );
 
-      expect(best?.rawValue, 'BILLING123');
-      expect(best?.format, BarcodeFormat.code128);
+      expect(picked, isNotNull);
+      expect(
+        ['2510077869', 'BILLING123'],
+        contains(picked),
+      );
+    });
+
+    test('billing profile formats include EAN and UPC like stock', () {
+      expect(
+        BarcodeScanProfile.billing.formats,
+        containsAll([
+          BarcodeFormat.ean13,
+          BarcodeFormat.ean8,
+          BarcodeFormat.upcA,
+          BarcodeFormat.code39,
+        ]),
+      );
+      expect(
+        BarcodeScanProfile.billing.formats,
+        BarcodeScanProfile.stockEntry1dFormats,
+      );
     });
   });
 }

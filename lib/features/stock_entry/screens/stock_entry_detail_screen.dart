@@ -185,47 +185,107 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
     );
   }
 
-  Widget _variantRow(BuildContext context, StockEntryDetailVariant variant) {
+  String _moneyOrDash(double? value) => value == null ? '—' : _money(value);
+
+  Widget _variantTile(BuildContext context, StockEntryDetailVariant variant) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     final size = variant.size.trim();
     final color = variant.color.trim();
-    final meta = [
-      if (size.isNotEmpty && size != '—') 'Size $size',
-      if (color.isNotEmpty && color != '—') color,
-      'Qty ${variant.quantity}',
+    final sizeLabel =
+        (size.isNotEmpty && size != '—') ? 'Size $size' : null;
+    final colorLabel =
+        (color.isNotEmpty && color != '—') ? color : null;
+    final title = [
+      if (sizeLabel != null) sizeLabel,
+      if (colorLabel != null) colorLabel,
     ].join(' · ');
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.04)
+            : AppColors.slate50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : AppColors.slate200,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Text(
-              meta,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title.isEmpty ? 'Variant' : title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : AppColors.slate200,
+                  ),
+                ),
+                child: Text(
+                  'Qty ${variant.quantity}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
           ),
-          Text(
-            variant.actualPrice == null ? '—' : _money(variant.actualPrice!),
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.emeraldDark,
-            ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(
+                'Purchase price',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _moneyOrDash(variant.actualPrice),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.emeraldDark,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _productCard(
+  Widget _productBlock(
     BuildContext context,
     int index,
-    StockEntryDetailProduct product,
-  ) {
+    StockEntryDetailProduct product, {
+    required bool showDividerAbove,
+  }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -242,57 +302,85 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
     final visibleVariants =
         isExpanded ? variants : variants.take(3).toList(growable: false);
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showDividerAbove)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Divider(
+              height: 1,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : AppColors.slate200,
+            ),
+          ),
+        Text(
+          product.productName.isEmpty ? 'Product' : product.productName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            height: 1.2,
+          ),
+        ),
+        if (meta.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            meta,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        if (variants.isNotEmpty) ...[
+          ...visibleVariants.map((v) => _variantTile(context, v)),
+          if (variants.length > 3)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 0),
+                  minimumSize: const Size(0, 28),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _expandedProducts[index] = !isExpanded;
+                  });
+                },
+                child: Text(
+                  isExpanded
+                      ? 'Show less'
+                      : 'Show ${variants.length - 3} more',
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _productsCard(
+    BuildContext context,
+    List<StockEntryDetailProduct> products,
+  ) {
     return AppSurfaceCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            product.productName.isEmpty ? 'Product' : product.productName,
-            style: theme.textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w800,
+          ...products.asMap().entries.map(
+            (entry) => _productBlock(
+              context,
+              entry.key,
+              entry.value,
+              showDividerAbove: entry.key > 0,
             ),
           ),
-          if (meta.isNotEmpty)
-            Text(
-              meta,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          if (variants.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            ...visibleVariants.map(
-              (v) => Column(
-                children: [
-                  _variantRow(context, v),
-                  if (v != visibleVariants.last)
-                    Divider(
-                      height: 1,
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.06)
-                          : AppColors.slate200,
-                    ),
-                ],
-              ),
-            ),
-            if (variants.length > 3)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _expandedProducts[index] = !isExpanded;
-                    });
-                  },
-                  child: Text(
-                    isExpanded
-                        ? 'Show less'
-                        : 'Show ${variants.length - 3} more',
-                  ),
-                ),
-              ),
-          ],
         ],
       ),
     );
@@ -351,12 +439,8 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        ...details.products.asMap().entries.map(
-          (entry) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _productCard(context, entry.key, entry.value),
-          ),
-        ),
+        if (details.products.isNotEmpty)
+          _productsCard(context, details.products),
       ],
     );
   }

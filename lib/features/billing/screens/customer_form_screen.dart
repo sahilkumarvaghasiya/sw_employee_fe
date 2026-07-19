@@ -57,7 +57,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   bool _startingScanner = false;
 
   final MobileScannerController _scannerController =
-      createBarcodeScannerController(autoStart: false);
+      createBarcodeScannerController(
+    autoStart: false,
+    profile: BarcodeScanProfile.billing,
+  );
 
   Timer? _phoneLookupDebounce;
   Timer? _productSearchDebounce;
@@ -299,7 +302,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _handlingBarcode = true;
 
     final provider = context.read<BillingProvider>();
-    final normalizedBarcode = barcode.trim();
+    final normalizedBarcode = normalizeStockBarcodeValue(barcode);
 
     try {
       if (normalizedBarcode.isEmpty) return;
@@ -2062,9 +2065,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                       aspectRatio: 4 / 3,
                                       child: BarcodeScannerView(
                                         controller: _scannerController,
+                                        profile: BarcodeScanProfile.billing,
                                         enabled: _canAcceptBarcodeScans,
                                         hintText:
-                                            'Align the barcode inside the frame and hold steady.',
+                                            'Align barcode bars in the green frame — move closer if small',
                                         onBarcodeConfirmed: (value) {
                                           unawaited(_handleBarcode(value));
                                         },

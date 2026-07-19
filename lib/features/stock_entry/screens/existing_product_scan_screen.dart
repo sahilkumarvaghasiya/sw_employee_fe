@@ -19,14 +19,19 @@ import '../widgets/stock_entry_ui.dart';
 /// Find an existing catalog product (search or scan), review read-only details,
 /// then restock with quantity + optional price overrides.
 class ExistingProductScanScreen extends StatefulWidget {
-  const ExistingProductScanScreen({super.key});
+  const ExistingProductScanScreen({super.key, this.initialDraft});
+
+  /// When set, opens in edit mode with this restock draft prefilled.
+  final StockEntryDraftItem? initialDraft;
 
   static const String routeName = '/stock-entry/existing-product';
 
-  static Route<List<StockEntryDraftItem>?> route() {
+  static Route<List<StockEntryDraftItem>?> route({
+    StockEntryDraftItem? initialDraft,
+  }) {
     return MaterialPageRoute<List<StockEntryDraftItem>?>(
       settings: const RouteSettings(name: routeName),
-      builder: (_) => const ExistingProductScanScreen(),
+      builder: (_) => ExistingProductScanScreen(initialDraft: initialDraft),
     );
   }
 
@@ -63,6 +68,9 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
 
   ExistingStockProduct? _selected;
   int _selectedVariantIndex = 0;
+  bool _isPrefilling = false;
+
+  bool get _isEditing => widget.initialDraft != null;
 
   bool get _canAcceptBarcodeScans =>
       _scannerActive && !_handlingBarcode && _selected == null;
@@ -70,7 +78,113 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
   @override
   void initState() {
     super.initState();
-    unawaited(_startScanner());
+    final draft = widget.initialDraft;
+    if (draft != null) {
+      unawaited(_prefillFromDraft(draft));
+    } else {
+      unawaited(_startScanner());
+    }
+  }
+
+  Future<void> _prefillFromDraft(StockEntryDraftItem draft) async {
+    setState(() => _isPrefilling = true);
+
+    try {
+      final normalized = normalizeStockBarcodeValue(draft.barcode);
+      if (normalized.isNotEmpty) {
+        final matches =
+            await _billingService.fetchProductsByBarcode(normalized);
+        if (!mounted) return;
+
+        if (matches.isNotEmpty) {
+          final details = await _productsService.fetchProductDetails(
+            productId: matches.first.id,
+          );
+          if (!mounted) return;
+
+          _applySelection(ExistingStockProduct.fromProduct(details));
+          _applyDraftFieldValues(draft);
+          return;
+        }
+      }
+    } catch (_) {
+      // Fall through to local reconstruction.
+    }
+
+    if (!mounted) return;
+    _applySelectionFromDraft(draft);
+  }
+
+  void _applyDraftFieldValues(StockEntryDraftItem draft) {
+    final product = _selected;
+    if (product != null && draft.variantId != null) {
+      final idx = product.variants.indexWhere(
+        (v) => v.variantId == draft.variantId,
+      );
+      if (idx >= 0) {
+        _selectedVariantIndex = idx;
+      }
+    }
+
+    setState(() {
+      _qtyController.text = draft.quantity.toString();
+      _purchaseController.text = draft.costPriceOverride != null
+          ? draft.costPriceOverride!.toStringAsFixed(2)
+          : '';
+      _sellController.text = draft.sellingPriceOverride != null
+          ? draft.sellingPriceOverride!.toStringAsFixed(2)
+          : '';
+      _isPrefilling = false;
+    });
+  }
+
+  void _applySelectionFromDraft(StockEntryDraftItem draft) {
+    final variantId = draft.variantId;
+    if (variantId == null) {
+      setState(() => _isPrefilling = false);
+      _showSnack('Cannot edit this item — missing variant.');
+      unawaited(_startScanner());
+      return;
+    }
+
+    unawaited(_stopScanner());
+
+    setState(() {
+      _selected = ExistingStockProduct(
+        barcode: draft.barcode,
+        barcodeUrl: draft.barcodeUrl,
+        brandId: draft.brandId,
+        brandName: draft.brandName,
+        gender: draft.gender,
+        isPair: draft.isPair,
+        itemTypeId: draft.itemTypeId,
+        itemType1: draft.itemType1,
+        itemType2: draft.itemType2,
+        variants: [
+          ExistingStockProductVariant(
+            variantId: variantId,
+            sizeId: draft.sizeId,
+            size: draft.size,
+            colourId: draft.colourId,
+            colour: draft.colour,
+            purchasePrice: draft.costPrice,
+            sellPrice: draft.sellingPrice,
+          ),
+        ],
+      );
+      _selectedVariantIndex = 0;
+      _searchController.clear();
+      _searchResults = const [];
+      _searchError = null;
+      _qtyController.text = draft.quantity.toString();
+      _purchaseController.text = draft.costPriceOverride != null
+          ? draft.costPriceOverride!.toStringAsFixed(2)
+          : '';
+      _sellController.text = draft.sellingPriceOverride != null
+          ? draft.sellingPriceOverride!.toStringAsFixed(2)
+          : '';
+      _isPrefilling = false;
+    });
   }
 
   @override
@@ -336,116 +450,30 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
     Navigator.of(context).pop(<StockEntryDraftItem>[draft]);
   }
 
-  InputDecoration _fieldDecoration({
+  InputDecoration _simpleFieldDecoration({
     required String label,
-    required IconData icon,
     String? hint,
-    String? helperText,
-    Widget? suffix,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      helperText: helperText,
-      prefixIcon: Icon(icon),
-      suffixIcon: suffix,
       filled: true,
-      fillColor: colorScheme.surfaceContainerHighest,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      fillColor: isDark ? colorScheme.surfaceContainerHighest : Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: isDark
+              ? colorScheme.outlineVariant
+              : const Color(0xFFD7E2DF),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: colorScheme.primary, width: 1.4),
-      ),
-    );
-  }
-
-  Widget _readOnlyField({
-    required String label,
-    required String value,
-    required IconData icon,
-  }) {
-    return TextFormField(
-      key: ValueKey('$label-$value'),
-      initialValue: value,
-      readOnly: true,
-      enableInteractiveSelection: true,
-      decoration: _fieldDecoration(label: label, icon: icon),
-      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-    );
-  }
-
-  Widget _sectionCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required List<Widget> children,
-    Color? accent,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final color = accent ?? colorScheme.primary;
-
-    return Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      elevation: 1,
-      shadowColor: colorScheme.shadow.withValues(alpha: 0.10),
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  height: 36,
-                  width: 36,
-                  decoration: BoxDecoration(
-                    color: color.withAlpha(28),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: color.withAlpha(64)),
-                  ),
-                  child: Icon(icon, color: color),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            ...children,
-          ],
-        ),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.emerald, width: 1.4),
       ),
     );
   }
@@ -563,7 +591,7 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
                   profile: BarcodeScanProfile.stockEntry,
                   enabled: _canAcceptBarcodeScans,
                   hintText:
-                      'Align the barcode inside the frame and hold steady.',
+                      'Align barcode bars in the green frame — move closer if small',
                   onBarcodeConfirmed: (value) {
                     unawaited(_handleBarcode(value));
                   },
@@ -608,214 +636,162 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
   Widget _buildProductDetails(ThemeData theme, ColorScheme colorScheme) {
     final product = _selected!;
     final variant = _activeVariant!;
+    final isDark = theme.brightness == Brightness.dark;
     String money(double v) => formatInr(v, decimalDigits: 0);
+
+    final itemType = product.itemType2 != null &&
+            product.itemType2!.trim().isNotEmpty
+        ? '${product.itemType1} / ${product.itemType2}'
+        : product.itemType1;
+    final brand = product.brandName.trim().isEmpty
+        ? 'No brand'
+        : product.brandName.trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Matched product',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: _clearSelection,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Search again'),
-            ),
-          ],
+        Text(
+          'Selected product',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const SizedBox(height: 8),
-        _sectionCard(
-          icon: Icons.inventory_2_outlined,
-          title: 'Product details',
-          subtitle: 'Existing catalog values — view only',
-          accent: AppColors.homeAccentTeal,
-          children: [
-            _readOnlyField(
-              label: 'Barcode',
-              value: product.barcode,
-              icon: Icons.qr_code_2,
+
+        // Soft read-only summary — clearly not editable.
+        Opacity(
+          opacity: 0.72,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.55)
+                  : const Color(0xFFECF4F3),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isDark
+                    ? colorScheme.outlineVariant.withValues(alpha: 0.5)
+                    : const Color(0xFFB7D4CF),
+              ),
             ),
-            const SizedBox(height: 12),
-            _readOnlyField(
-              label: 'Brand',
-              value: product.brandName.trim().isEmpty
-                  ? 'No brand'
-                  : product.brandName,
-              icon: Icons.storefront_outlined,
-            ),
-            const SizedBox(height: 12),
-            _readOnlyField(
-              label: 'Item type',
-              value: product.itemType2 != null &&
-                      product.itemType2!.trim().isNotEmpty
-                  ? '${product.itemType1} / ${product.itemType2}'
-                  : product.itemType1,
-              icon: Icons.category_outlined,
-            ),
-            const SizedBox(height: 12),
-            _readOnlyField(
-              label: 'Gender',
-              value: product.gender.label,
-              icon: Icons.wc_outlined,
-            ),
-            const SizedBox(height: 12),
-            Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _readOnlyField(
-                    label: 'Size',
-                    value: variant.size,
-                    icon: Icons.straighten_rounded,
+                Text(
+                  'Catalog details · view only',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: isDark
+                        ? colorScheme.onSurfaceVariant
+                        : const Color(0xFF5F7A76),
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _readOnlyField(
-                    label: 'Colour',
-                    value: variant.colour,
-                    icon: Icons.palette_outlined,
-                  ),
+                const SizedBox(height: 10),
+                _mutedRow('Barcode', product.barcode, theme, isDark),
+                _mutedRow('Brand', brand, theme, isDark),
+                _mutedRow('Item', itemType, theme, isDark),
+                _mutedRow(
+                  'Variant',
+                  '${variant.size} · ${variant.colour} · ${product.gender.label}',
+                  theme,
+                  isDark,
+                ),
+                _mutedRow(
+                  'In stock',
+                  '${variant.inStock} pcs',
+                  theme,
+                  isDark,
+                ),
+                _mutedRow(
+                  'Purchase',
+                  money(variant.purchasePrice),
+                  theme,
+                  isDark,
+                ),
+                _mutedRow(
+                  'Sell',
+                  money(variant.sellPrice),
+                  theme,
+                  isDark,
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _infoChip(
-                  theme: theme,
-                  colorScheme: colorScheme,
-                  icon: Icons.inventory_outlined,
-                  label: 'In stock ${variant.inStock}',
-                ),
-                _infoChip(
-                  theme: theme,
-                  colorScheme: colorScheme,
-                  icon: Icons.shopping_bag_outlined,
-                  label: 'Purchase ${money(variant.purchasePrice)}',
-                ),
-                _infoChip(
-                  theme: theme,
-                  colorScheme: colorScheme,
-                  icon: Icons.sell_outlined,
-                  label: 'Sell ${money(variant.sellPrice)}',
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: 14),
-        _sectionCard(
-          icon: Icons.add_box_outlined,
-          title: 'Add stock',
-          subtitle: 'Quantity required · prices optional',
-          accent: AppColors.emerald,
-          children: [
-            TextFormField(
-              controller: _qtyController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: _fieldDecoration(
-                label: 'Quantity',
-                icon: Icons.pin_outlined,
-                hint: 'Pieces to add',
-                suffix: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: 'Decrease',
-                      onPressed: () {
-                        final current =
-                            int.tryParse(_qtyController.text.trim()) ?? 1;
-                        if (current <= 1) return;
-                        setState(() {
-                          _qtyController.text = '${current - 1}';
-                        });
-                      },
-                      icon: const Icon(Icons.remove_circle_outline),
-                    ),
-                    IconButton(
-                      tooltip: 'Increase',
-                      onPressed: () {
-                        final current =
-                            int.tryParse(_qtyController.text.trim()) ?? 0;
-                        setState(() {
-                          _qtyController.text = '${current + 1}';
-                        });
-                      },
-                      icon: const Icon(Icons.add_circle_outline),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _purchaseController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
-              decoration: _fieldDecoration(
-                label: 'Purchase price (optional)',
-                icon: Icons.currency_rupee_rounded,
-                hint: money(variant.purchasePrice),
-                helperText:
-                    'Leave blank to keep ${money(variant.purchasePrice)}',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _sellController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
-              decoration: _fieldDecoration(
-                label: 'Sell price (optional)',
-                icon: Icons.sell_outlined,
-                hint: money(variant.sellPrice),
-                helperText: 'Leave blank to keep ${money(variant.sellPrice)}',
-              ),
-            ),
+
+        const SizedBox(height: 20),
+        Text(
+          'Add stock',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _qtyController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: _simpleFieldDecoration(
+            label: 'Quantity',
+            hint: 'Pieces to add',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _purchaseController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
           ],
+          decoration: _simpleFieldDecoration(
+            label: 'Purchase price (optional)',
+            hint: money(variant.purchasePrice),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _sellController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+          ],
+          decoration: _simpleFieldDecoration(
+            label: 'Sell price (optional)',
+            hint: money(variant.sellPrice),
+          ),
         ),
       ],
     );
   }
 
-  Widget _infoChip({
-    required ThemeData theme,
-    required ColorScheme colorScheme,
-    required IconData icon,
-    required String label,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
+  Widget _mutedRow(String label, String value, ThemeData theme, bool isDark) {
+    final labelColor =
+        isDark ? theme.colorScheme.onSurfaceVariant : const Color(0xFF6B8581);
+    final valueColor =
+        isDark ? theme.colorScheme.onSurface.withValues(alpha: 0.78) : const Color(0xFF3D5551);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w700,
+          SizedBox(
+            width: 88,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: labelColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: valueColor,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -832,50 +808,50 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(
-          'Existing product',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Text(
+          _isEditing ? 'Edit existing product' : 'Existing product',
+          style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
           if (hasProduct)
             IconButton(
-              tooltip: 'Clear',
+              tooltip: 'Change product',
               onPressed: _clearSelection,
               icon: const Icon(Icons.close_rounded),
             ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-        children: [
-          Text(
-            hasProduct
-                ? 'Review details and add stock for this entry'
-                : 'Search by product or brand, or scan a catalog barcode',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
+      body: _isPrefilling
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+              children: [
+                if (!hasProduct) ...[
+                  Text(
+                    'Search by product or brand, or scan a catalog barcode',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildSearchAndScanner(theme, colorScheme),
+                  if (!_scannerActive &&
+                      _searchResults.isEmpty &&
+                      !_isSearching) ...[
+                    const SizedBox(height: 28),
+                    const StockEntryEmptyState(
+                      icon: Icons.inventory_2_outlined,
+                      title: 'Find an existing product',
+                      message:
+                          'Search by product name or brand, or scan a barcode, then add quantity.',
+                    ),
+                  ],
+                ] else
+                  _buildProductDetails(theme, colorScheme),
+              ],
             ),
-          ),
-          const SizedBox(height: 14),
-          _buildSearchAndScanner(theme, colorScheme),
-          if (hasProduct) ...[
-            const SizedBox(height: 18),
-            _buildProductDetails(theme, colorScheme),
-          ] else if (!_scannerActive &&
-              _searchResults.isEmpty &&
-              !_isSearching) ...[
-            const SizedBox(height: 28),
-            const StockEntryEmptyState(
-              icon: Icons.inventory_2_outlined,
-              title: 'Find an existing product',
-              message:
-                  'Search by product name or brand, or scan a barcode, then add quantity.',
-            ),
-          ],
-        ],
-      ),
-      bottomNavigationBar: hasProduct
+      bottomNavigationBar: hasProduct && !_isPrefilling
           ? StockEntryBottomBar(
               label: 'Update',
               icon: Icons.check_rounded,

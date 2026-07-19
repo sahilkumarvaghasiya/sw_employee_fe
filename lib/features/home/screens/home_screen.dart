@@ -108,7 +108,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     branchName: branchName,
                     isDark: isDark,
                     onAlertsTap: () async {
-                      await _openAndRefresh(StockAlertsScreen.route());
+                      await _openAndRefresh(
+                        StockAlertsScreen.route(),
+                        featureKey: 'stock',
+                        lockedMessage:
+                            'Stock access is locked by your manager.',
+                      );
                     },
                     onThemeToggle: () => context.read<ThemeProvider>().toggle(),
                     isDarkMode: context.watch<ThemeProvider>().isDark,

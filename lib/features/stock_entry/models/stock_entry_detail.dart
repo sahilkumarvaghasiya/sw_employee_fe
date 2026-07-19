@@ -65,17 +65,21 @@ class StockEntryDetailVariant {
     required this.size,
     required this.color,
     required this.actualPrice,
+    required this.sellPrice,
     required this.quantity,
   });
 
   final String size;
   final String color;
   final double? actualPrice;
+  final double? sellPrice;
   final int quantity;
 
   factory StockEntryDetailVariant.fromJson(Map<String, dynamic> json) {
     final actualRaw = json['actual_price'];
     final actual = actualRaw == null ? null : _toDouble(actualRaw);
+    final sellRaw = json['sell_price'] ?? json['selling_price'] ?? json['price'];
+    final sell = sellRaw == null ? null : _toDouble(sellRaw);
 
     return StockEntryDetailVariant(
       size: formatProductSize(
@@ -83,6 +87,7 @@ class StockEntryDetailVariant {
       ),
       color: (json['color'] ?? json['colour'] ?? '—').toString(),
       actualPrice: actual,
+      sellPrice: sell,
       quantity: _toInt(json['quantity'] ?? json['pieces']),
     );
   }

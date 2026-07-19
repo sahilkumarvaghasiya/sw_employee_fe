@@ -266,9 +266,10 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   Future<void> _removeBlockByBarcode(String barcode) async {
     if (_itemsLocked) return;
 
+    final normalizedBarcode = barcode.trim();
     final indices = <int>[];
     for (var i = 0; i < _items.length; i++) {
-      if (_items[i].draft.barcode == barcode) {
+      if (_items[i].draft.barcode.trim() == normalizedBarcode) {
         indices.add(i);
       }
     }
@@ -304,12 +305,13 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   Future<void> _editBlockByBarcode(String barcode) async {
     if (_itemsLocked) return;
 
+    final normalizedBarcode = barcode.trim();
     final indices = <int>[];
     final draftsToEdit = <StockEntryDraftItem>[];
 
     for (var i = 0; i < _items.length; i++) {
       final item = _items[i];
-      if (item.draft.barcode != barcode) continue;
+      if (item.draft.barcode.trim() != normalizedBarcode) continue;
 
       indices.add(i);
       draftsToEdit.add(
@@ -340,35 +342,36 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     if (draftsToEdit.isEmpty) return;
 
-    if (draftsToEdit.any((d) => d.isExisting)) {
-      _showSnack(
-        'Existing products cannot be edited here. Remove and re-add to change.',
-      );
-      return;
-    }
-
     final insertAt = indices.first;
+    final List<StockEntryDraftItem>? drafts;
 
-    final drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
-      AddStockEntryItemScreen.route(
-        initialBarcode: barcode,
-        allowBarcodeEdit: false,
-        initialDrafts: draftsToEdit,
-      ),
-    );
+    if (draftsToEdit.any((d) => d.isExisting)) {
+      drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
+        ExistingProductScanScreen.route(initialDraft: draftsToEdit.first),
+      );
+    } else {
+      drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
+        AddStockEntryItemScreen.route(
+          initialBarcode: barcode,
+          allowBarcodeEdit: false,
+          initialDrafts: draftsToEdit,
+        ),
+      );
+    }
 
     if (!mounted) return;
     if (drafts == null) return;
 
+    final updatedDrafts = drafts;
     setState(() {
       for (var i = indices.length - 1; i >= 0; i--) {
         final removed = _items.removeAt(indices[i]);
         removed.dispose();
       }
 
-      if (drafts.isNotEmpty) {
-        for (var i = drafts.length - 1; i >= 0; i--) {
-          final next = _EditableDraftItem.fromDraft(drafts[i]);
+      if (updatedDrafts.isNotEmpty) {
+        for (var i = updatedDrafts.length - 1; i >= 0; i--) {
+          final next = _EditableDraftItem.fromDraft(updatedDrafts[i]);
           next.attachOnChanged(() {
             _syncTotalsFromControllers();
           });
