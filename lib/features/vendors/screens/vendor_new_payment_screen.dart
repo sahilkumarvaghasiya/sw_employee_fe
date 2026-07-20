@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/app_surface_card.dart';
 import '../models/vendor_bill.dart';
 import '../providers/vendors_provider.dart';
 import '../widgets/vendors_ui.dart';
@@ -258,7 +257,7 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
           Row(
             children: [
               Text(
-                'Pending Amount',
+                'Pending amount',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -269,24 +268,7 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
                 _inr.format(_adjustedPending),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF97316),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Pay Vendor',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  color: AppColors.emeraldDark,
                 ),
               ),
             ],
@@ -318,7 +300,7 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (_) => setState(() => _error = null),
             decoration: InputDecoration(
-              labelText: 'Paid Amount',
+              labelText: 'Paid amount',
               prefixText: '₹ ',
               filled: true,
               errorText: _error,
@@ -326,7 +308,7 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Remained: ₹ ${_inr.format(_remained)}',
+            'Remaining: ₹ ${_inr.format(_remained)}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
@@ -352,8 +334,8 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
                   ),
                   Icon(
                     _transactionsExpanded
-                        ? Icons.remove_rounded
-                        : Icons.add_rounded,
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
                     color: AppColors.emerald,
                   ),
                 ],
@@ -362,86 +344,24 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
           ),
           if (_transactionsExpanded) ...[
             const SizedBox(height: 8),
-            ...widget.bills.map((bill) {
-              final selected = _selectedIds.contains(bill.id);
-              final daysLabel = bill.due.days != null
-                  ? 'Days: ${bill.due.days}'
-                  : bill.due.label;
-              return Padding(
+            ...widget.bills.map(
+              (bill) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: AppSurfaceCard(
-                  onTap: () => _toggleBill(bill.id),
-                  padding: const EdgeInsets.fromLTRB(8, 10, 12, 10),
-                  borderColor: selected
-                      ? AppColors.homeAccentTeal.withValues(alpha: 0.55)
-                      : null,
-                  child: Row(
-                    children: [
-                      Checkbox(
-                        value: selected,
-                        onChanged: (_) => _toggleBill(bill.id),
+                child: VendorBillSelectTile(
+                  bill: bill,
+                  selected: _selectedIds.contains(bill.id),
+                  onToggle: () => _toggleBill(bill.id),
+                  onOpenDetails: () {
+                    Navigator.of(context).push(
+                      VendorBillDetailScreen.route(
+                        bill: bill,
+                        provider: provider,
                       ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Purchase#${bill.stkNo}',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${bill.billDate} ($daysLabel)',
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: bill.due.isOverdue
-                                    ? AppColors.error
-                                    : colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Details',
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            VendorBillDetailScreen.route(
-                              bill: bill,
-                              provider: provider,
-                            ),
-                          );
-                        },
-                        icon: Icon(
-                          Icons.edit_outlined,
-                          size: 18,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          InrAmountText(
-                            bill.pendingDisplay,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFFC2410C),
-                            ),
-                          ),
-                          const Icon(
-                            Icons.arrow_upward_rounded,
-                            size: 16,
-                            color: Color(0xFFF97316),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
-              );
-            }),
+              ),
+            ),
           ],
           const SizedBox(height: 4),
           Align(
@@ -454,20 +374,22 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              child: const Text('+ Add Discount / Surcharge'),
+              child: const Text('+ Add discount / surcharge'),
             ),
           ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: isDark ? colorScheme.surfaceContainerHighest : AppColors.slate100,
+              color: isDark
+                  ? colorScheme.surfaceContainerHighest
+                  : AppColors.slate100,
               borderRadius: BorderRadius.circular(AppTheme.radiusMd),
             ),
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
-                'Print PDF of Payment',
+                'Print PDF of payment',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),

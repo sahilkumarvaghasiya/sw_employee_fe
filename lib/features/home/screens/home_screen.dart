@@ -329,7 +329,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 108)),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: HomeRadialMenu.scrollClearance(context) + 12,
+                  ),
+                ),
               ],
             ),
           ),
@@ -352,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               HomeRadialAction(
                 label: 'Stock',
-                icon: Icons.inventory_2_outlined,
+                icon: Icons.inventory_2_rounded,
                 accentColor: AppColors.homeAccentAmber,
                 enabled: canStock,
                 disabledHint: 'Stock access is locked by your manager.',
@@ -376,7 +380,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               HomeRadialAction(
                 label: 'Sales',
-                icon: Icons.receipt_long_outlined,
+                icon: Icons.receipt_long_rounded,
                 accentColor: AppColors.homeAccentSky,
                 enabled: canSales,
                 disabledHint: 'Sales access is locked by your manager.',
@@ -387,15 +391,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
               HomeRadialAction(
-                label: 'Pay Vendor',
-                icon: Icons.account_balance_wallet_outlined,
+                label: 'Vendors',
+                icon: Icons.account_balance_wallet_rounded,
                 accentColor: AppColors.homeAccentRose,
                 enabled: canPayable,
-                disabledHint: 'Pay Vendor access is locked by your manager.',
+                disabledHint: 'Vendors access is locked by your manager.',
                 onTap: () => _openAndRefresh(
                   VendorsHubScreen.route(),
                   featureKey: 'payable',
-                  lockedMessage: 'Pay Vendor access is locked by your manager.',
+                  lockedMessage: 'Vendors access is locked by your manager.',
                 ),
               ),
             ],

@@ -299,26 +299,31 @@ class _VendorReportScreenState extends State<VendorReportScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            FilledButton.icon(
+            FilledButton(
               onPressed: _isSharingPdf ? null : _sharePdf,
-              icon: _isSharingPdf
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.share_rounded),
-              label: Text(
-                _isSharingPdf ? 'Preparing PDF…' : 'Download / Share PDF',
-              ),
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.homeAccentRose,
+                backgroundColor: AppColors.emerald,
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(52),
               ),
+              child: _isSharingPdf
+                  ? const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text('Preparing PDF…'),
+                      ],
+                    )
+                  : const Text('Download'),
             ),
           ],
         ],
@@ -345,13 +350,10 @@ class _PreviewRow extends StatelessWidget {
   const _PreviewRow({
     required this.label,
     required this.value,
-    // ignore: unused_element_parameter
-    this.emphasize = false,
   });
 
   final String label;
   final String value;
-  final bool emphasize;
 
   @override
   Widget build(BuildContext context) {
@@ -372,7 +374,6 @@ class _PreviewRow extends StatelessWidget {
           value,
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: emphasize ? const Color(0xFFBE185D) : null,
           ),
         ),
       ],
@@ -410,7 +411,7 @@ class _PreviewMoneyRow extends StatelessWidget {
           amount,
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: emphasize ? const Color(0xFFBE185D) : null,
+            color: emphasize ? AppColors.emeraldDark : null,
           ),
         ),
       ],

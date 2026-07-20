@@ -119,9 +119,9 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final provider = context.watch<VendorsProvider>();
     final hasFilter = provider.dateRange != null;
+    final summary = provider.summary;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -129,22 +129,13 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
         title: const Text('Pay Vendor'),
         actions: [
           IconButton(
-            tooltip: 'Filter',
-            onPressed: _openFilterSheet,
-            icon: Badge(
-              isLabelVisible: hasFilter,
-              smallSize: 8,
-              child: const Icon(Icons.filter_list_rounded),
-            ),
-          ),
-          IconButton(
             tooltip: 'Download report',
             onPressed: () {
               Navigator.of(context).push(
                 VendorReportScreen.route(provider: provider),
               );
             },
-            icon: const Icon(Icons.download_rounded),
+            icon: const Icon(Icons.picture_as_pdf_outlined),
           ),
           IconButton(
             tooltip: 'Refresh',
@@ -162,39 +153,68 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               sliver: SliverToBoxAdapter(
-                child: VendorsSearchBar(
-                  controller: _searchController,
-                  onChanged: provider.setSearchQuery,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: VendorsSearchBar(
+                        controller: _searchController,
+                        onChanged: provider.setSearchQuery,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    VendorsFilterButton(
+                      active: hasFilter,
+                      onTap: _openFilterSheet,
+                    ),
+                  ],
                 ),
               ),
             ),
             if (provider.dateRange != null)
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                 sliver: SliverToBoxAdapter(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      InputChip(
-                        label: Text(
-                          '${_dateFmt.format(provider.dateRange!.start)} – ${_dateFmt.format(provider.dateRange!.end)}',
-                        ),
-                        onDeleted: () => provider.setDateRange(null),
-                        visualDensity: VisualDensity.compact,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: InputChip(
+                      label: Text(
+                        '${_dateFmt.format(provider.dateRange!.start)} – ${_dateFmt.format(provider.dateRange!.end)}',
                       ),
-                    ],
+                      onDeleted: () => provider.setDateRange(null),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor:
+                          AppColors.emerald.withValues(alpha: 0.08),
+                      side: BorderSide(
+                        color: AppColors.emerald.withValues(alpha: 0.2),
+                      ),
+                    ),
                   ),
                 ),
               ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               sliver: SliverToBoxAdapter(
                 child: PayableTotalCard(
-                  totalDisplay: provider.summary.totalPendingDisplay,
+                  totalDisplay: summary.totalPendingDisplay,
+                  pendingBills: summary.pendingBills,
+                  overdue: summary.overdue,
+                  dueThisWeek: summary.dueThisWeek,
                 ),
               ),
             ),
+            if (provider.vendors.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                sliver: SliverToBoxAdapter(
+                  child: Text(
+                    'Vendors to pay',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
             if (provider.isLoading && provider.vendors.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -221,13 +241,10 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                 sliver: SliverList.separated(
                   itemCount: provider.vendors.length,
-                  separatorBuilder: (_, _) => Divider(
-                    height: 1,
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-                  ),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final group = provider.vendors[index];
                     return VendorPayableTile(

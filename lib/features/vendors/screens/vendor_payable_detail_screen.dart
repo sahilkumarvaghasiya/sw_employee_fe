@@ -50,6 +50,7 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
   bool _loadingInfo = true;
 
   List<VendorBill> _statementBills = const [];
+  final List<VendorStatementPayment> _sessionPayments = [];
   bool _loadingStatement = true;
   String? _statementError;
 
@@ -209,12 +210,28 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
             amount: result.amount,
           );
       if (!mounted) return;
-      setState(() => _selectedIds.clear());
-      await _loadStatement();
-      if (!mounted) return;
 
       final paidBills =
           bills.where((b) => result.billIds.contains(b.id)).toList();
+      final payment = VendorStatementPayment(
+        id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+        paidAt: result.paymentDate,
+        amount: result.amount,
+        amountDisplay: _inr.format(result.amount),
+        bills: List.unmodifiable(paidBills),
+        discount: result.discount,
+        surcharge: result.surcharge,
+      );
+
+      setState(() {
+        _selectedIds.clear();
+        _sessionPayments.insert(0, payment);
+      });
+      await _loadStatement();
+      if (!mounted) return;
+
+      _tabController.animateTo(2);
+
       await showPaymentReceiptSheet(
         context: context,
         vendorName: widget.group.displayName,
@@ -238,6 +255,38 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
         SnackBar(content: Text(message)),
       );
     }
+  }
+
+  DateTime _parseBillSortDate(String raw) {
+    final formats = [
+      DateFormat('yyyy-MM-dd'),
+      DateFormat('dd-MM-yyyy'),
+      DateFormat('dd/MM/yyyy'),
+      DateFormat('dd MMM yyyy'),
+    ];
+    for (final format in formats) {
+      try {
+        return format.parse(raw);
+      } catch (_) {}
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  List<VendorStatementEntry> get _statementEntries {
+    final entries = <VendorStatementEntry>[
+      for (final payment in _sessionPayments)
+        VendorStatementEntry.payment(
+          payment: payment,
+          sortAt: payment.paidAt,
+        ),
+      for (final bill in _statementBills)
+        VendorStatementEntry.purchase(
+          bill: bill,
+          sortAt: _parseBillSortDate(bill.billDate),
+        ),
+    ];
+    entries.sort((a, b) => b.sortAt.compareTo(a.sortAt));
+    return entries;
   }
 
   @override
@@ -270,32 +319,49 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
             ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(108),
+          preferredSize: const Size.fromHeight(110),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        live.displayName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: AppSurfaceCard(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              live.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Outstanding balance',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    InrAmountText(
-                      live.pendingDisplay,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                      InrAmountText(
+                        live.pendingDisplay,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.emeraldDark,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               TabBar(
@@ -307,16 +373,16 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
                 indicatorColor: AppColors.emerald,
                 labelStyle: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
+                  letterSpacing: 0.4,
                 ),
                 unselectedLabelStyle: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
                 ),
                 tabs: const [
-                  Tab(text: 'INFORMATION'),
-                  Tab(text: 'PENDING PAYMENTS'),
-                  Tab(text: 'STATEMENT'),
+                  Tab(text: 'Info'),
+                  Tab(text: 'Pending'),
+                  Tab(text: 'Statement'),
                 ],
               ),
             ],
@@ -326,14 +392,21 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
       bottomNavigationBar: showPayBar
           ? SafeArea(
               child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 decoration: BoxDecoration(
-                  color: theme.scaffoldBackgroundColor,
+                  color: theme.colorScheme.surface,
                   border: Border(
                     top: BorderSide(
                       color: colorScheme.outlineVariant.withValues(alpha: 0.5),
                     ),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -400,10 +473,24 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
             },
           ),
           _StatementTab(
-            bills: _statementBills,
+            entries: _statementEntries,
             loading: _loadingStatement,
             error: _statementError,
             onRetry: _loadStatement,
+            onOpenPurchase: (bill) async {
+              await Navigator.of(context).push(
+                VendorBillDetailScreen.route(
+                  bill: bill,
+                  provider: provider,
+                ),
+              );
+            },
+            onOpenPayment: (payment) {
+              showStatementPaymentDetailSheet(
+                context: context,
+                payment: payment,
+              );
+            },
             onViewFull: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -546,7 +633,7 @@ class _PendingPaymentsTab extends StatelessWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
         Text(
           'Select bills to pay',
@@ -562,80 +649,17 @@ class _PendingPaymentsTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        ...bills.map((bill) {
-          final selected = selectedIds.contains(bill.id);
-          final daysLabel = bill.due.days != null
-              ? 'Days: ${bill.due.days}'
-              : bill.due.label;
-
-          return Padding(
+        ...bills.map(
+          (bill) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: AppSurfaceCard(
-              onTap: () => onToggle(bill.id),
-              padding: const EdgeInsets.fromLTRB(8, 10, 12, 10),
-              borderColor: selected
-                  ? AppColors.emerald.withValues(alpha: 0.45)
-                  : null,
-              child: Row(
-                children: [
-                  Checkbox(
-                    value: selected,
-                    onChanged: (_) => onToggle(bill.id),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Purchase#${bill.stkNo}',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${bill.billDate}  ($daysLabel)',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: bill.due.isOverdue
-                                ? AppColors.error
-                                : colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Edit / details',
-                    onPressed: () => onOpenDetails(bill),
-                    icon: Icon(
-                      Icons.edit_outlined,
-                      size: 18,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      InrAmountText(
-                        bill.pendingDisplay,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFFC2410C),
-                        ),
-                      ),
-                      Icon(
-                        Icons.arrow_upward_rounded,
-                        size: 16,
-                        color: const Color(0xFFF97316),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            child: VendorBillSelectTile(
+              bill: bill,
+              selected: selectedIds.contains(bill.id),
+              onToggle: () => onToggle(bill.id),
+              onOpenDetails: () => onOpenDetails(bill),
             ),
-          );
-        }),
+          ),
+        ),
       ],
     );
   }
@@ -643,18 +667,24 @@ class _PendingPaymentsTab extends StatelessWidget {
 
 class _StatementTab extends StatelessWidget {
   const _StatementTab({
-    required this.bills,
+    required this.entries,
     required this.loading,
     required this.error,
     required this.onRetry,
+    required this.onOpenPurchase,
+    required this.onOpenPayment,
     required this.onViewFull,
   });
 
-  final List<VendorBill> bills;
+  final List<VendorStatementEntry> entries;
   final bool loading;
   final String? error;
   final VoidCallback onRetry;
+  final ValueChanged<VendorBill> onOpenPurchase;
+  final ValueChanged<VendorStatementPayment> onOpenPayment;
   final VoidCallback onViewFull;
+
+  static final DateFormat _paymentDateFmt = DateFormat('dd MMM yyyy · hh:mm a');
 
   @override
   Widget build(BuildContext context) {
@@ -665,7 +695,7 @@ class _StatementTab extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (error != null) {
+    if (error != null && entries.isEmpty) {
       return VendorsEmptyState(
         title: error!,
         subtitle: 'Pull to retry or tap below',
@@ -675,7 +705,7 @@ class _StatementTab extends StatelessWidget {
       );
     }
 
-    if (bills.isEmpty) {
+    if (entries.isEmpty) {
       return const VendorsEmptyState(
         title: 'No statement entries',
         subtitle: 'Purchases and payments will show here',
@@ -686,34 +716,52 @@ class _StatementTab extends StatelessWidget {
       children: [
         Expanded(
           child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            itemCount: bills.length + 1,
-            separatorBuilder: (_, _) => Divider(
-              height: 1,
-              color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            itemCount: entries.length + 1,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               if (index == 0) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8, top: 4),
-                  child: Text(
-                    'Purchases from bills. Payment ledger needs a dedicated API.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
+                return Text(
+                  'Tap a payment to see which bills were settled.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 );
               }
 
-              final bill = bills[index - 1];
+              final entry = entries[index - 1];
+              if (entry.kind == VendorStatementKind.payment) {
+                final payment = entry.payment!;
+                final billLabel =
+                    '${payment.billCount} bill${payment.billCount == 1 ? '' : 's'}';
+                final adjustmentBits = <String>[
+                  if (payment.discount > 0) 'Discount',
+                  if (payment.surcharge > 0) 'Surcharge',
+                ];
+
+                return StatementEntryTile(
+                  title: 'Payment',
+                  subtitle: _paymentDateFmt.format(payment.paidAt),
+                  amountDisplay: payment.amountDisplay,
+                  amountPrefix: '− ',
+                  kind: StatementEntryKind.payment,
+                  trailingLabel: adjustmentBits.isEmpty
+                      ? billLabel
+                      : '$billLabel · ${adjustmentBits.join(' · ')}',
+                  onTap: () => onOpenPayment(payment),
+                );
+              }
+
+              final bill = entry.bill!;
               return StatementEntryTile(
-                title: 'Purchase#${bill.stkNo}',
+                title: 'Purchase #${bill.stkNo}',
                 subtitle: [
                   bill.billDate,
                   if (bill.statusDisplay.isNotEmpty) bill.statusDisplay,
                 ].join(' · '),
                 amountDisplay: bill.totalDisplay,
                 kind: StatementEntryKind.purchase,
+                onTap: () => onOpenPurchase(bill),
               );
             },
           ),
@@ -728,9 +776,11 @@ class _StatementTab extends StatelessWidget {
                 foregroundColor: AppColors.emerald,
                 side: const BorderSide(color: AppColors.emerald, width: 1.4),
                 minimumSize: const Size.fromHeight(48),
-                shape: const StadiumBorder(),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-              child: const Text('VIEW FULL STATEMENT'),
+              child: const Text('View full statement'),
             ),
           ),
         ),

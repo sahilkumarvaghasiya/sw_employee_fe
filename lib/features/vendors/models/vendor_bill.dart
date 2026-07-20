@@ -97,14 +97,6 @@ class VendorBill {
     return due.isPaid || status == 'paid' || pendingAmount <= 0;
   }
 
-  String get statusKey {
-    final lower = statusDisplay.toLowerCase();
-    if (lower.contains('partial')) return 'partial';
-    if (lower.contains('unpaid')) return 'unpaid';
-    if (lower == 'paid' || lower.contains('paid')) return 'paid';
-    return lower;
-  }
-
   factory VendorBill.fromJson(Map<String, dynamic> json) {
     final linesRaw = json['stock_lines'];
     final lines = <VendorStockLine>[];
@@ -243,4 +235,52 @@ class VendorPayableGroup {
 
   String get displayName => vendorName.toUpperCase();
 }
+
+/// Local / API statement payment ledger entry (design-ready for backend).
+class VendorStatementPayment {
+  const VendorStatementPayment({
+    required this.id,
+    required this.paidAt,
+    required this.amount,
+    required this.amountDisplay,
+    required this.bills,
+    this.discount = 0,
+    this.surcharge = 0,
+  });
+
+  final String id;
+  final DateTime paidAt;
+  final double amount;
+  final String amountDisplay;
+  final List<VendorBill> bills;
+  final double discount;
+  final double surcharge;
+
+  int get billCount => bills.length;
+
+  bool get hasAdjustments => discount > 0 || surcharge > 0;
+}
+
+enum VendorStatementKind { purchase, payment }
+
+/// Unified statement timeline row for purchases and payments.
+class VendorStatementEntry {
+  const VendorStatementEntry.purchase({
+    required this.bill,
+    required this.sortAt,
+  })  : kind = VendorStatementKind.purchase,
+        payment = null;
+
+  const VendorStatementEntry.payment({
+    required this.payment,
+    required this.sortAt,
+  })  : kind = VendorStatementKind.payment,
+        bill = null;
+
+  final VendorStatementKind kind;
+  final VendorBill? bill;
+  final VendorStatementPayment? payment;
+  final DateTime sortAt;
+}
+
 

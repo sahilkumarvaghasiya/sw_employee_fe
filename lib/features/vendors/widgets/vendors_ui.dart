@@ -38,13 +38,77 @@ class InrAmountText extends StatelessWidget {
   }
 }
 
+class VendorDueChip extends StatelessWidget {
+  const VendorDueChip({super.key, required this.due});
+
+  final VendorDueInfo due;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (Color bg, Color fg) = () {
+      if (due.isPaid) {
+        return (
+          AppColors.emerald.withValues(alpha: 0.12),
+          AppColors.emeraldDark,
+        );
+      }
+      if (due.isOverdue) {
+        return (
+          AppColors.error.withValues(alpha: 0.12),
+          AppColors.error,
+        );
+      }
+      if (due.isDueSoon) {
+        return (
+          AppColors.warning.withValues(alpha: 0.16),
+          const Color(0xFFB45309),
+        );
+      }
+      return (
+        AppColors.slate100,
+        AppColors.slate600,
+      );
+    }();
+
+    final label = due.days != null
+        ? (due.isOverdue
+            ? 'Overdue ${due.days!.abs()}d'
+            : due.days == 0
+                ? 'Due today'
+                : 'Due in ${due.days}d')
+        : due.label;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 class PayableTotalCard extends StatelessWidget {
   const PayableTotalCard({
     super.key,
     required this.totalDisplay,
+    this.pendingBills = 0,
+    this.overdue = 0,
+    this.dueThisWeek = 0,
   });
 
   final String totalDisplay;
+  final int pendingBills;
+  final int overdue;
+  final int dueThisWeek;
 
   @override
   Widget build(BuildContext context) {
@@ -54,71 +118,141 @@ class PayableTotalCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
-        color: isDark ? colorScheme.surface : Colors.white,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  colorScheme.surface,
+                  AppColors.emerald.withValues(alpha: 0.12),
+                ]
+              : [
+                  Colors.white,
+                  AppColors.emerald.withValues(alpha: 0.08),
+                ],
+        ),
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.06)
-              : AppColors.slate200,
+              : AppColors.emerald.withValues(alpha: 0.18),
         ),
         boxShadow: isDark
             ? null
             : [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  color: AppColors.emerald.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
               ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'TOTAL',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 8),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.emerald.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: AppColors.emerald,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                child: InrAmountText(
-                  totalDisplay,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.8,
-                    color: colorScheme.onSurface,
+                child: Text(
+                  'Total payable',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
+            ],
+          ),
+          const SizedBox(height: 14),
+          InrAmountText(
+            totalDisplay,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.8,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _SummaryMiniStat(
+                  label: 'Open bills',
+                  value: '$pendingBills',
                 ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF97316),
-                  borderRadius: BorderRadius.circular(8),
+              ),
+              Expanded(
+                child: _SummaryMiniStat(
+                  label: 'Overdue',
+                  value: '$overdue',
+                  emphasize: overdue > 0,
                 ),
-                child: Text(
-                  'Pay Vendor',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
+              ),
+              Expanded(
+                child: _SummaryMiniStat(
+                  label: 'Due soon',
+                  value: '$dueThisWeek',
                 ),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SummaryMiniStat extends StatelessWidget {
+  const _SummaryMiniStat({
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+  });
+
+  final String label;
+  final String value;
+  final bool emphasize;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: emphasize ? AppColors.error : colorScheme.onSurface,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -145,66 +279,112 @@ class VendorsSearchBar extends StatelessWidget {
       builder: (context, _) {
         final hasText = controller.text.trim().isNotEmpty;
 
-        return SizedBox(
-          height: 40,
-          child: TextField(
-            controller: controller,
-            onChanged: onChanged,
-            textInputAction: TextInputAction.search,
-            style: theme.textTheme.bodyMedium,
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: 'Search vendor',
-              hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
+        return TextField(
+          controller: controller,
+          onChanged: onChanged,
+          textInputAction: TextInputAction.search,
+          style: theme.textTheme.bodyMedium,
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'Search vendor',
+            hintStyle: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 22,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            suffixIcon: hasText
+                ? IconButton(
+                    tooltip: 'Clear search',
+                    onPressed: () {
+                      controller.clear();
+                      onChanged('');
+                    },
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                  )
+                : null,
+            filled: true,
+            fillColor: isDark ? colorScheme.surface : Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              borderSide: BorderSide(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : AppColors.slate200,
               ),
-              prefixIcon: Icon(
-                Icons.search_rounded,
-                size: 20,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              suffixIcon: hasText
-                  ? IconButton(
-                      tooltip: 'Clear search',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 36,
-                        minHeight: 36,
-                      ),
-                      onPressed: () {
-                        controller.clear();
-                        onChanged('');
-                      },
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                    )
-                  : null,
-              filled: true,
-              fillColor: isDark ? colorScheme.surface : Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                borderSide: BorderSide(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : AppColors.slate200,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                borderSide:
-                    const BorderSide(color: AppColors.emerald, width: 1.5),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 0,
-              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              borderSide:
+                  const BorderSide(color: AppColors.emerald, width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class VendorsFilterButton extends StatelessWidget {
+  const VendorsFilterButton({
+    super.key,
+    required this.active,
+    required this.onTap,
+  });
+
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Material(
+      color: active
+          ? AppColors.emerald.withValues(alpha: 0.1)
+          : (isDark ? theme.colorScheme.surface : Colors.white),
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        onTap: onTap,
+        child: Container(
+          height: 48,
+          width: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            border: Border.all(
+              color: active
+                  ? AppColors.emerald.withValues(alpha: 0.3)
+                  : (isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : AppColors.slate200),
+            ),
+          ),
+          child: Badge(
+            isLabelVisible: active,
+            smallSize: 8,
+            child: Icon(
+              Icons.tune_rounded,
+              size: 20,
+              color: active
+                  ? AppColors.emeraldDark
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -223,34 +403,171 @@ class VendorPayableTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final billLabel =
+        '${group.billCount} bill${group.billCount == 1 ? '' : 's'}';
+    final overdueCount = group.bills.where((b) => b.due.isOverdue).length;
 
-    return InkWell(
+    return AppSurfaceCard(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                group.displayName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.emerald.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.storefront_outlined,
+              color: AppColors.emerald,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  group.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  overdueCount > 0
+                      ? '$billLabel · $overdueCount overdue'
+                      : billLabel,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: overdueCount > 0
+                        ? AppColors.error
+                        : colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              InrAmountText(
+                group.pendingDisplay,
                 style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.emeraldDark,
                 ),
               ),
+              const SizedBox(height: 2),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class VendorBillSelectTile extends StatelessWidget {
+  const VendorBillSelectTile({
+    super.key,
+    required this.bill,
+    required this.selected,
+    required this.onToggle,
+    this.onOpenDetails,
+  });
+
+  final VendorBill bill;
+  final bool selected;
+  final VoidCallback onToggle;
+  final VoidCallback? onOpenDetails;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return AppSurfaceCard(
+      onTap: onToggle,
+      padding: const EdgeInsets.fromLTRB(8, 12, 12, 12),
+      borderColor: selected ? AppColors.emerald.withValues(alpha: 0.4) : null,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Checkbox(
+            value: selected,
+            onChanged: (_) => onToggle(),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Purchase #${bill.stkNo}',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      bill.billDate,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    VendorDueChip(due: bill.due),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            InrAmountText(
-              group.pendingDisplay,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: colorScheme.onSurface,
+          ),
+          if (onOpenDetails != null)
+            IconButton(
+              tooltip: 'Details',
+              onPressed: onOpenDetails,
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                Icons.info_outline_rounded,
+                size: 20,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
-          ],
-        ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              InrAmountText(
+                bill.pendingDisplay,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                bill.statusDisplay,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -265,14 +582,40 @@ class StatementEntryTile extends StatelessWidget {
     required this.subtitle,
     required this.amountDisplay,
     required this.kind,
+    this.amountPrefix,
+    this.onTap,
+    this.trailingLabel,
   });
 
   final String title;
   final String subtitle;
   final String amountDisplay;
   final StatementEntryKind kind;
+  final String? amountPrefix;
+  final VoidCallback? onTap;
+  final String? trailingLabel;
 
   Color get _amountColor {
+    switch (kind) {
+      case StatementEntryKind.purchase:
+        return AppColors.emeraldDark;
+      case StatementEntryKind.payment:
+      case StatementEntryKind.discount:
+        return const Color(0xFFC2410C);
+    }
+  }
+
+  Color get _iconBg {
+    switch (kind) {
+      case StatementEntryKind.purchase:
+        return AppColors.emerald.withValues(alpha: 0.1);
+      case StatementEntryKind.payment:
+      case StatementEntryKind.discount:
+        return const Color(0xFFC2410C).withValues(alpha: 0.1);
+    }
+  }
+
+  Color get _iconColor {
     switch (kind) {
       case StatementEntryKind.purchase:
         return AppColors.emerald;
@@ -282,16 +625,46 @@ class StatementEntryTile extends StatelessWidget {
     }
   }
 
+  IconData get _icon {
+    switch (kind) {
+      case StatementEntryKind.purchase:
+        return Icons.inventory_2_outlined;
+      case StatementEntryKind.payment:
+        return Icons.payments_outlined;
+      case StatementEntryKind.discount:
+        return Icons.percent_rounded;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+    final content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? colorScheme.surface : Colors.white,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : AppColors.slate200,
+        ),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _iconBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(_icon, size: 20, color: _iconColor),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -299,10 +672,10 @@ class StatementEntryTile extends StatelessWidget {
                 Text(
                   title,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   subtitle,
                   style: theme.textTheme.labelMedium?.copyWith(
@@ -310,18 +683,332 @@ class StatementEntryTile extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
+                if (trailingLabel != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    trailingLabel!,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AppColors.emeraldDark,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          InrAmountText(
-            amountDisplay,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: _amountColor,
-            ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (amountPrefix != null)
+                    Text(
+                      amountPrefix!,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: _amountColor,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                  InrAmountText(
+                    amountDisplay,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: _amountColor,
+                    ),
+                  ),
+                ],
+              ),
+              if (onTap != null) ...[
+                const SizedBox(height: 2),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ],
           ),
         ],
+      ),
+    );
+
+    if (onTap == null) return content;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        child: content,
+      ),
+    );
+  }
+}
+
+Future<void> showStatementPaymentDetailSheet({
+  required BuildContext context,
+  required VendorStatementPayment payment,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _StatementPaymentDetailSheet(payment: payment),
+  );
+}
+
+class _StatementPaymentDetailSheet extends StatelessWidget {
+  const _StatementPaymentDetailSheet({required this.payment});
+
+  final VendorStatementPayment payment;
+
+  static final NumberFormat _inr = NumberFormat('#,##,##0.00', 'en_IN');
+  static final DateFormat _dateTimeFmt = DateFormat('dd MMM yyyy · hh:mm a');
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final media = MediaQuery.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        constraints: BoxConstraints(maxHeight: media.size.height * 0.8),
+        decoration: BoxDecoration(
+          color: isDark ? colorScheme.surface : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.28),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Payment details',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFC2410C).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color:
+                              const Color(0xFFC2410C).withValues(alpha: 0.14),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Amount paid',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '− ₹ ${payment.amountDisplay}',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFFC2410C),
+                              letterSpacing: -0.5,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _dateTimeFmt.format(payment.paidAt),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (payment.hasAdjustments) ...[
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (payment.discount > 0)
+                            _DetailChip(
+                              label:
+                                  'Discount −₹ ${_inr.format(payment.discount)}',
+                              color: const Color(0xFFC2410C),
+                            ),
+                          if (payment.surcharge > 0)
+                            _DetailChip(
+                              label:
+                                  'Surcharge +₹ ${_inr.format(payment.surcharge)}',
+                              color: AppColors.emeraldDark,
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    Text(
+                      'Bills paid (${payment.billCount})',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.35)
+                            : AppColors.slate50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : AppColors.slate200,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          for (var i = 0; i < payment.bills.length; i++) ...[
+                            if (i > 0)
+                              Divider(
+                                height: 1,
+                                color: colorScheme.outlineVariant
+                                    .withValues(alpha: 0.4),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Purchase #${payment.bills[i].stkNo}',
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          payment.bills[i].billDate,
+                                          style: theme.textTheme.labelMedium
+                                              ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  InrAmountText(
+                                    payment.bills[i].pendingDisplay,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Ledger API coming next — this payment is shown from this session.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.emerald,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text('Close'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailChip extends StatelessWidget {
+  const _DetailChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -338,7 +1025,8 @@ Future<void> showPaymentReceiptSheet({
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
+    showDragHandle: false,
+    backgroundColor: Colors.transparent,
     builder: (_) => _PaymentReceiptSheet(
       vendorName: vendorName,
       amountDisplay: amountDisplay,
@@ -371,192 +1059,281 @@ class _PaymentReceiptSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final media = MediaQuery.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final billCountLabel =
+        '${bills.length} bill${bills.length == 1 ? '' : 's'}';
 
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 4, 20, 16 + media.viewInsets.bottom),
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        constraints: BoxConstraints(maxHeight: media.size.height * 0.78),
+        decoration: BoxDecoration(
+          color: isDark ? colorScheme.surface : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Payment recorded',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
+            const SizedBox(height: 10),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.28),
+                borderRadius: BorderRadius.circular(999),
+              ),
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Just now',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                InrAmountText(
-                  amountDisplay,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF97316),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Payment',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            AppSurfaceCard(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.person_outline_rounded,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      vendorName,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: AppColors.emerald.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          size: 34,
+                          color: AppColors.emerald,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Paid for',
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: media.size.height * 0.28),
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: bills.length,
-                separatorBuilder: (_, _) => Divider(
-                  height: 1,
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.45),
-                ),
-                itemBuilder: (context, index) {
-                  final bill = bills[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Purchase#${bill.stkNo}',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
+                    const SizedBox(height: 16),
+                    Text(
+                      'Payment recorded',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      vendorName,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 18,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.emerald.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.emerald.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Amount paid',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 6),
+                          InrAmountText(
+                            amountDisplay,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.6,
+                              color: AppColors.emeraldDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (discount > 0 || surcharge > 0) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          if (discount > 0)
+                            _ReceiptAdjustmentChip(
+                              label: 'Discount −₹ ${_inr.format(discount)}',
+                              tone: _ReceiptChipTone.discount,
+                            ),
+                          if (surcharge > 0)
+                            _ReceiptAdjustmentChip(
+                              label: 'Surcharge +₹ ${_inr.format(surcharge)}',
+                              tone: _ReceiptChipTone.surcharge,
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
                         Text(
-                          bill.billDate,
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                          'Applied to',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        InrAmountText(
-                          bill.pendingDisplay,
-                          style: theme.textTheme.bodyMedium?.copyWith(
+                        const Spacer(),
+                        Text(
+                          billCountLabel,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
                     ),
-                  );
-                },
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.35)
+                            : AppColors.slate50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : AppColors.slate200,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          for (var i = 0; i < bills.length; i++) ...[
+                            if (i > 0)
+                              Divider(
+                                height: 1,
+                                color: colorScheme.outlineVariant
+                                    .withValues(alpha: 0.4),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Purchase #${bills[i].stkNo}',
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          bills[i].billDate,
+                                          style: theme.textTheme.labelMedium
+                                              ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  InrAmountText(
+                                    bills[i].pendingDisplay,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            if (discount > 0 || surcharge > 0) ...[
-              const SizedBox(height: 8),
-              if (discount > 0)
-                Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      size: 16,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 6),
-                    const Text('Discount'),
-                    const Spacer(),
-                    Text(
-                      '(-)${_inr.format(discount)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFFC2410C),
-                      ),
-                    ),
-                  ],
-                ),
-              if (surcharge > 0)
-                Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      size: 16,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 6),
-                    const Text('Surcharge'),
-                    const Spacer(),
-                    Text(
-                      '(+)${_inr.format(surcharge)}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.emerald,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.emerald,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(48),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                8,
+                20,
+                16 + media.viewPadding.bottom.clamp(0, 8),
               ),
-              child: const Text('Done'),
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.emerald,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text('Done'),
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _ReceiptChipTone { discount, surcharge }
+
+class _ReceiptAdjustmentChip extends StatelessWidget {
+  const _ReceiptAdjustmentChip({
+    required this.label,
+    required this.tone,
+  });
+
+  final String label;
+  final _ReceiptChipTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDiscount = tone == _ReceiptChipTone.discount;
+    final fg = isDiscount ? const Color(0xFFC2410C) : AppColors.emeraldDark;
+    final bg = isDiscount
+        ? const Color(0xFFC2410C).withValues(alpha: 0.1)
+        : AppColors.emerald.withValues(alpha: 0.1);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -590,8 +1367,15 @@ class VendorsEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 40, color: colorScheme.onSurfaceVariant),
-            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.emerald.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, size: 32, color: AppColors.emerald),
+            ),
+            const SizedBox(height: 16),
             Text(
               title,
               textAlign: TextAlign.center,
@@ -613,165 +1397,6 @@ class VendorsEmptyState extends StatelessWidget {
               const SizedBox(height: 16),
               FilledButton(onPressed: onAction, child: Text(actionLabel!)),
             ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-Future<double?> showRecordPaymentSheet({
-  required BuildContext context,
-  required VendorBill bill,
-}) {
-  return showBulkPaymentSheet(
-    context: context,
-    title: 'Pay ${bill.vendor}',
-    subtitle: bill.stkNo,
-    selectedTotal: bill.pendingAmount,
-    selectedTotalDisplay: bill.pendingDisplay,
-  );
-}
-
-Future<double?> showBulkPaymentSheet({
-  required BuildContext context,
-  required String title,
-  required String subtitle,
-  required double selectedTotal,
-  required String selectedTotalDisplay,
-}) {
-  return showModalBottomSheet<double>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => _BulkPaymentSheet(
-      title: title,
-      subtitle: subtitle,
-      selectedTotal: selectedTotal,
-      selectedTotalDisplay: selectedTotalDisplay,
-    ),
-  );
-}
-
-class _BulkPaymentSheet extends StatefulWidget {
-  const _BulkPaymentSheet({
-    required this.title,
-    required this.subtitle,
-    required this.selectedTotal,
-    required this.selectedTotalDisplay,
-  });
-
-  final String title;
-  final String subtitle;
-  final double selectedTotal;
-  final String selectedTotalDisplay;
-
-  @override
-  State<_BulkPaymentSheet> createState() => _BulkPaymentSheetState();
-}
-
-class _BulkPaymentSheetState extends State<_BulkPaymentSheet> {
-  late final TextEditingController _amountController;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _amountController = TextEditingController(
-      text: widget.selectedTotal.toStringAsFixed(2),
-    );
-  }
-
-  @override
-  void dispose() {
-    _amountController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final raw = _amountController.text.trim().replaceAll(',', '');
-    final amount = double.tryParse(raw);
-
-    if (amount == null) {
-      setState(() => _error = 'Enter a valid amount');
-      return;
-    }
-    if (amount < 0.01) {
-      setState(() => _error = 'Minimum is 0.01');
-      return;
-    }
-    if (amount > widget.selectedTotal + 0.001) {
-      setState(() {
-        _error = 'Cannot exceed ${widget.selectedTotalDisplay}';
-      });
-      return;
-    }
-
-    Navigator.of(context).pop(amount);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final media = MediaQuery.of(context);
-
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          4,
-          20,
-          16 + media.viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              widget.subtitle,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _amountController,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              onChanged: (_) {
-                if (_error != null) setState(() => _error = null);
-              },
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Amount',
-                prefixText: 'Rs. ',
-                helperText: 'Selected total Rs. ${widget.selectedTotalDisplay}',
-                errorText: _error,
-                filled: true,
-              ),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _submit,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.emerald,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(52),
-              ),
-              child: const Text('Save payment'),
-            ),
           ],
         ),
       ),

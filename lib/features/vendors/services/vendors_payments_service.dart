@@ -171,33 +171,6 @@ class VendorsPaymentsService {
     return VendorBill.fromJson(decoded);
   }
 
-  Future<VendorBill> recordPayment({
-    required int billId,
-    required double amount,
-  }) async {
-    final response = await _apiService.patch(
-      _url('$_billsPath$billId/').toString(),
-      body: {'amount': amount},
-    );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final message = _extractErrorMessage(response) ??
-          'Failed to record payment (${response.statusCode})';
-      throw http.ClientException(message);
-    }
-
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid payment response');
-    }
-
-    final billRaw = decoded['bill'];
-    if (billRaw is Map) {
-      return VendorBill.fromJson(billRaw.cast<String, dynamic>());
-    }
-    return VendorBill.fromJson(decoded);
-  }
-
   Future<List<VendorBill>> bulkPay({
     required List<int> billIds,
     required double amount,

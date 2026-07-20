@@ -104,12 +104,6 @@ class VendorsProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> updateSearchQuery(String value) async {
-    _searchDebounce?.cancel();
-    _searchQuery = value.trim();
-    await refresh();
-  }
-
   Future<void> setDateRange(DateTimeRange? range) async {
     _dateRange = range;
     await refresh();
@@ -125,36 +119,6 @@ class VendorsProvider extends ChangeNotifier {
 
   Future<VendorBill> fetchBill(int id) {
     return _service.fetchBill(id);
-  }
-
-  Future<VendorBill> recordPayment({
-    required int billId,
-    required double amount,
-  }) async {
-    _isPaying = true;
-    notifyListeners();
-
-    try {
-      final updated = await _service.recordPayment(
-        billId: billId,
-        amount: amount,
-      );
-
-      _openBills = [
-        for (final bill in _openBills)
-          if (bill.id == billId) updated else bill,
-      ];
-      _vendors = _groupByVendor(_openBills);
-
-      try {
-        _summary = await _service.fetchSummary();
-      } catch (_) {}
-
-      return updated;
-    } finally {
-      _isPaying = false;
-      notifyListeners();
-    }
   }
 
   Future<List<VendorBill>> bulkPay({
