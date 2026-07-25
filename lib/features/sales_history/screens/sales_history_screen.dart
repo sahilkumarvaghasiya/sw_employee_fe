@@ -713,6 +713,15 @@ class _BillDetailsSheetState extends State<_BillDetailsSheet> {
 
   String _itemMeta(SalesLineItem item) {
     final parts = <String>['Qty ${item.quantity}'];
+    if (item.isReturn) {
+      // Returns use catalog unit price; do not treat sign flip as a discount.
+      parts.add('${widget.money(item.unitPrice)} each');
+      final returnDiscount = item.displayDiscountAmount;
+      if (returnDiscount > 0.0001) {
+        parts.add('${widget.money(returnDiscount)} off');
+      }
+      return parts.join(' · ');
+    }
     if (item.hasUnitPriceReduction) {
       parts.add(
         '${widget.money(item.unitPrice)} → ${widget.money(item.finalUnitPrice)} each',
@@ -720,8 +729,8 @@ class _BillDetailsSheetState extends State<_BillDetailsSheet> {
     } else {
       parts.add('${widget.money(item.unitPrice)} each');
     }
-    if (item.discountAmount > 0.0001) {
-      parts.add('${widget.money(item.discountAmount)} off');
+    if (item.displayDiscountAmount > 0.0001) {
+      parts.add('${widget.money(item.displayDiscountAmount)} off');
     }
     return parts.join(' · ');
   }
@@ -1003,11 +1012,11 @@ class _BillDetailsSheetState extends State<_BillDetailsSheet> {
                       label: 'Original product total',
                       value: money(bill.originalTotal),
                     ),
-                    // Item savings: how much was saved/lost on individual items
+                    // Item savings: real markdowns on sale lines only
                     if (bill.hasItemSavings)
                       BillingSummaryLine(
                         label: 'Item savings',
-                        value: '- ${money(bill.originalTotal - bill.subtotal)}',
+                        value: '- ${money(bill.itemSavings)}',
                         valueColor: colorScheme.tertiary,
                       ),
                     // Bill item subtotal: what items actually totalled to
@@ -1075,12 +1084,17 @@ class _BillDetailsSheetState extends State<_BillDetailsSheet> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        item.productName,
+                                        item.isReturn
+                                            ? '${item.productName} (Return)'
+                                            : item.productName,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: theme.textTheme.labelLarge
                                             ?.copyWith(
                                           fontWeight: FontWeight.w700,
+                                          color: item.isReturn
+                                              ? AppColors.error
+                                              : null,
                                         ),
                                       ),
                                       const SizedBox(height: 2),

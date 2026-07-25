@@ -34,6 +34,7 @@ class SalesLineItem {
     required this.lineTotal,
     required this.discountAmount,
     required this.enteredDiscountPercent,
+    this.isReturn = false,
   });
 
   final String id;
@@ -43,15 +44,33 @@ class SalesLineItem {
   /// Original (actual) unit price shown on the bill.
   ///
   /// Note: This is derived from backend values and should be treated as
-  /// informational only.
+  /// informational only. Magnitude only — use [isReturn] for sign.
   final double unitPrice;
 
   /// Per-unit price actually charged after item discount / custom price.
+  ///
+  /// May be negative for return lines when the API already signed the amount.
   final double finalUnitPrice;
 
-  /// Whether this line was sold below its original price.
-  bool get hasUnitPriceReduction =>
-      (unitPrice - finalUnitPrice).abs() > 0.0001;
+  /// Whether this line is a product return (refund).
+  final bool isReturn;
+
+  /// Catalog original line total, signed like live billing.
+  double get signedOriginalLineTotal {
+    final original = unitPrice.abs() * quantity;
+    return isReturn ? -original : original;
+  }
+
+  /// Whether this sale line was sold below its original price.
+  ///
+  /// Return lines compare magnitudes only — flipping a price to negative is
+  /// not a discount.
+  bool get hasUnitPriceReduction {
+    if (isReturn) {
+      return (unitPrice.abs() - finalUnitPrice.abs()) > 0.0001;
+    }
+    return (unitPrice - finalUnitPrice) > 0.0001;
+  }
 
   /// Amount for this line as returned by the API.
   final double lineTotal;
@@ -61,6 +80,17 @@ class SalesLineItem {
   /// This represents the explicit amount reduction (e.g., custom price flow)
   /// or the backend-calculated discount amount.
   final double discountAmount;
+
+  /// Real markdown shown for this line (ignores return sign-flip artifacts).
+  double get displayDiscountAmount {
+    if (isReturn) {
+      final catalog = unitPrice.abs() * quantity;
+      final charged = lineTotal.abs();
+      final savings = catalog - charged;
+      return savings > 0.0001 ? savings : 0;
+    }
+    return discountAmount;
+  }
 
   /// Discount percentage *only when the API explicitly provides it*.
   ///
@@ -243,7 +273,12 @@ class SalesBill {
               ? lineTotal
               : (lineTotal / safeQuantity).toDouble());
 
-          final unitPrice = rawUnitPrice ?? finalUnitPrice;
+          final unitPrice = (rawUnitPrice ?? finalUnitPrice).abs();
+
+          final isReturnFlag = item['is_return'] == true ||
+              item['is_return']?.toString().toLowerCase().trim() == 'true' ||
+              item['isReturn'] == true;
+          final isReturn = isReturnFlag || lineTotal < -0.0001;
 
         return SalesLineItem(
         id: (item['id'] ?? item['type_name'] ?? '').toString(),
@@ -254,6 +289,7 @@ class SalesBill {
         lineTotal: lineTotal,
         discountAmount: discountAmount.clamp(0, double.infinity).toDouble(),
         enteredDiscountPercent: enteredDiscountPercent,
+        isReturn: isReturn,
         );
       })
       .toList(growable: false);
@@ -296,15 +332,36 @@ class SalesBill {
 
   int get itemsCount => items.fold<int>(0, (sum, i) => sum + i.quantity);
 
-  /// Sum of each item's original (actual) price x quantity, before any discount.
-  double get originalTotal =>
-      originalTotalAmount ??
-      items.fold<double>(0, (sum, i) => sum + i.unitPrice * i.quantity);
+  bool get hasReturnItems => items.any((i) => i.isReturn);
 
-  /// Whether the original product total is higher than the subtotal charged.
-  bool get hasItemSavings => (originalTotal - subtotal) > 0.0001;
+  /// Sum of each item's original (actual) price × qty, before discount.
+  ///
+  /// When the bill includes returns, originals are signed (sale +, return −)
+  /// so they stay consistent with [subtotal] / refund math. Unsigned API
+  /// `original_total` must not be mixed with a signed negative subtotal.
+  double get originalTotal {
+    if (hasReturnItems && items.isNotEmpty) {
+      return items.fold<double>(
+        0,
+        (sum, i) => sum + i.signedOriginalLineTotal,
+      );
+    }
+    return originalTotalAmount ??
+        items.fold<double>(0, (sum, i) => sum + i.unitPrice * i.quantity);
+  }
 
-    double get subtotal =>
+  /// Per-item markdowns on sale lines only. Return sign-flips are not savings.
+  double get itemSavings => items.fold<double>(0, (sum, i) {
+        if (i.isReturn) return sum;
+        final originalLine = i.unitPrice * i.quantity;
+        final savings = originalLine - i.lineTotal;
+        return sum + (savings > 0.0001 ? savings : 0);
+      });
+
+  /// Whether any real item-level savings exist on sale lines.
+  bool get hasItemSavings => itemSavings > 0.0001;
+
+  double get subtotal =>
       subtotalAmount ?? items.fold<double>(0, (sum, i) => sum + i.lineTotal);
 
     double get totalDiscount {
