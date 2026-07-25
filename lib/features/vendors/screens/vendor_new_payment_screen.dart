@@ -116,11 +116,10 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
     return double.tryParse(raw) ?? 0;
   }
 
-  double get _adjustedPending =>
-      (widget.pendingAmount - _discount + _surcharge).clamp(0, double.infinity);
-
+  /// Discount (−) clears pending; surcharge (+) is extra charge, does not clear.
   double get _remained =>
-      (_adjustedPending - _paidAmount).clamp(0, double.infinity);
+      (_selectedTotal - _paidAmount - _discount + _surcharge)
+          .clamp(0, double.infinity);
 
   void _toggleBill(int id) {
     setState(() {
@@ -141,7 +140,7 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (ctx) => _DiscountSurchargeSheet(
-        pendingAmount: widget.pendingAmount,
+        pendingAmount: _selectedTotal,
         currentDiscount: _discount,
         currentSurcharge: _surcharge,
       ),
@@ -164,10 +163,17 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
       setState(() => _error = 'Enter a paid amount');
       return;
     }
-    final maxPayable = _selectedTotal + _surcharge;
-    if (amount > maxPayable + 0.001) {
+    if (amount > _selectedTotal + 0.001) {
       setState(() {
-        _error = 'Cannot exceed selected total ₹ ${_inr.format(maxPayable)}';
+        _error =
+            'Paid amount cannot exceed selected total ₹ ${_inr.format(_selectedTotal)}';
+      });
+      return;
+    }
+    if (_discount > 0 && amount + _discount > _selectedTotal + 0.001) {
+      setState(() {
+        _error =
+            'Paid + discount cannot exceed selected ₹ ${_inr.format(_selectedTotal)}';
       });
       return;
     }
@@ -250,7 +256,7 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
               ),
               const Spacer(),
               InrAmountText(
-                _inr.format(_adjustedPending),
+                _inr.format(_selectedTotal),
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: AppColors.emeraldDark,
@@ -452,7 +458,7 @@ class _DiscountSurchargeSheetState extends State<_DiscountSurchargeSheet> {
       return;
     }
     if (_type == 'discount' && amount > widget.pendingAmount + 0.001) {
-      setState(() => _error = 'Discount cannot exceed pending amount');
+      setState(() => _error = 'Discount cannot exceed selected pending');
       return;
     }
 

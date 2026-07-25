@@ -94,7 +94,7 @@ class _VendorBillDetailScreenState extends State<VendorBillDetailScreen> {
                 Text(
                   [
                     _bill.stkNo,
-                    _bill.billDate,
+                    _bill.displayDate,
                     if (_bill.due.label.isNotEmpty) _bill.due.label,
                   ].join(' · '),
                   style: theme.textTheme.bodySmall?.copyWith(

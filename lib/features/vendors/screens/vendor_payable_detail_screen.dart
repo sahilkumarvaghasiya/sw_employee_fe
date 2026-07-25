@@ -9,7 +9,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_surface_card.dart';
 import '../../stock_entry/models/vendor.dart';
-import '../../stock_entry/services/vendors_service.dart';
 import '../models/vendor_bill.dart';
 import '../providers/vendors_provider.dart';
 import '../services/vendors_payments_service.dart';
@@ -52,9 +51,13 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
 
   Vendor? _vendorInfo;
   bool _loadingInfo = true;
+  String _infoPendingDisplay = '';
 
-  List<VendorBill> _statementBills = const [];
-  final List<VendorStatementPayment> _sessionPayments = [];
+  List<VendorBill> _pendingBills = const [];
+  bool _loadingPending = true;
+  String? _pendingError;
+
+  List<VendorStatementEntry> _statementEntries = const [];
   bool _loadingStatement = true;
   String? _statementError;
   bool _downloadingStatementPdf = false;
@@ -63,10 +66,12 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
   @override
   void initState() {
     super.initState();
+    _infoPendingDisplay = widget.group.pendingDisplay;
     _tabController = TabController(length: 3, vsync: this, initialIndex: 1);
     _tabController.addListener(_onTabChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadVendorInfo();
+      _loadPendingBills();
       _loadStatement();
     });
   }
@@ -84,31 +89,28 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
     }
   }
 
+  int? get _vendorId {
+    final fromGroup = widget.group.vendorId;
+    if (fromGroup != null && fromGroup > 0) return fromGroup;
+    return int.tryParse(_vendorInfo?.id.trim() ?? '');
+  }
+
   Future<void> _loadVendorInfo() async {
     setState(() => _loadingInfo = true);
     try {
-      final vendors = await VendorsService().fetchVendors();
-      final key = widget.group.vendorName.trim().toLowerCase();
-      Vendor? match;
-      for (final v in vendors) {
-        final name = v.name.trim().toLowerCase();
-        if (name == key) {
-          match = v;
-          break;
-        }
+      final vendorId = _vendorId;
+      if (vendorId == null) {
+        throw StateError('Missing vendor id');
       }
-      if (match == null) {
-        for (final v in vendors) {
-          final name = v.name.trim().toLowerCase();
-          if (name.contains(key) || key.contains(name)) {
-            match = v;
-            break;
-          }
-        }
-      }
+
+      final json =
+          await VendorsPaymentsService().fetchPayableVendorInfo(vendorId);
+      final vendor = Vendor.fromJson(json);
       if (!mounted) return;
       setState(() {
-        _vendorInfo = match;
+        _vendorInfo = vendor;
+        _infoPendingDisplay =
+            (json['total_pending'] ?? widget.group.pendingDisplay).toString();
         _loadingInfo = false;
       });
     } catch (_) {
@@ -120,40 +122,52 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
     }
   }
 
+  Future<void> _loadPendingBills() async {
+    setState(() {
+      _loadingPending = true;
+      _pendingError = null;
+    });
+    try {
+      final vendorId = _vendorId;
+      if (vendorId == null) {
+        throw StateError('Missing vendor id');
+      }
+
+      final bills = await VendorsPaymentsService().fetchPayablePendingBills(
+        vendorId: vendorId,
+        startDate: _pendingDateRange?.start,
+        endDate: _pendingDateRange?.end,
+      );
+      if (!mounted) return;
+      setState(() {
+        _pendingBills = bills;
+        _loadingPending = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _pendingError = 'Couldn’t load pending bills';
+        _loadingPending = false;
+      });
+    }
+  }
+
   Future<void> _loadStatement() async {
     setState(() {
       _loadingStatement = true;
       _statementError = null;
     });
     try {
-      final service = VendorsPaymentsService();
-      final bills = <VendorBill>[];
-      for (final status in ['unpaid', 'partial', 'paid']) {
-        var page = 1;
-        while (true) {
-          final result = await service.fetchBills(
-            search: widget.group.vendorName,
-            status: status,
-            sort: 'newest',
-            page: page,
-            pageSize: 100,
-          );
-          bills.addAll(
-            result.bills.where(
-              (b) =>
-                  b.vendor.trim().toLowerCase() ==
-                  widget.group.vendorName.trim().toLowerCase(),
-            ),
-          );
-          if (!result.hasNext) break;
-          page += 1;
-          if (page > 20) break;
-        }
+      final vendorId = _vendorId;
+      if (vendorId == null) {
+        throw StateError('Missing vendor id');
       }
-      bills.sort((a, b) => b.billDate.compareTo(a.billDate));
+      final entries = await VendorsPaymentsService().fetchPayableStatement(
+        vendorId: vendorId,
+      );
       if (!mounted) return;
       setState(() {
-        _statementBills = bills;
+        _statementEntries = entries;
         _loadingStatement = false;
       });
     } catch (_) {
@@ -211,46 +225,49 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
     if (result == null || !mounted) return;
 
     try {
-      await context.read<VendorsProvider>().bulkPay(
+      final vendorId = _vendorId;
+      if (vendorId == null) {
+        throw StateError('Missing vendor id');
+      }
+
+      final payResult = await context.read<VendorsProvider>().payVendorBills(
+            vendorId: vendorId,
             billIds: result.billIds,
             amount: result.amount,
+            discount: result.discount,
+            surcharge: result.surcharge,
+            paymentDate: result.paymentDate,
           );
       if (!mounted) return;
 
-      final paidBills =
-          bills.where((b) => result.billIds.contains(b.id)).toList();
-      final payment = VendorStatementPayment(
-        id: 'local-${DateTime.now().millisecondsSinceEpoch}',
-        paidAt: result.paymentDate,
-        amount: result.amount,
-        amountDisplay: _inr.format(result.amount),
-        bills: List.unmodifiable(paidBills),
-        discount: result.discount,
-        surcharge: result.surcharge,
-      );
-
-      setState(() {
-        _selectedIds.clear();
-        _sessionPayments.insert(0, payment);
-      });
-      await _loadStatement();
+      setState(() => _selectedIds.clear());
+      await Future.wait([
+        _loadVendorInfo(),
+        _loadPendingBills(),
+        _loadStatement(),
+      ]);
       if (!mounted) return;
 
       _tabController.animateTo(2);
 
+      final appliedBills = payResult.bills.isNotEmpty
+          ? payResult.bills
+          : bills.where((b) => result.billIds.contains(b.id)).toList();
+
       await showPaymentReceiptSheet(
         context: context,
         vendorName: widget.group.displayName,
-        amountDisplay: _inr.format(result.amount),
-        bills: paidBills,
-        discount: result.discount,
-        surcharge: result.surcharge,
+        amountDisplay: payResult.payment.amountDisplay,
+        bills: appliedBills,
+        discount: payResult.payment.discount,
+        surcharge: payResult.payment.surcharge,
+        allocations: payResult.payment.allocations,
       );
 
       if (result.printPdf && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Payment PDF export will use a dedicated API next.'),
+            content: Text('Use Download PDF statement for the vendor ledger.'),
           ),
         );
       }
@@ -426,21 +443,7 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
       }
       _selectedIds.clear();
     });
-  }
-
-  bool _billInPendingDateRange(VendorBill bill) {
-    final range = _pendingDateRange;
-    if (range == null) return true;
-    final date = _parseBillSortDate(bill.billDate);
-    final day = DateTime(date.year, date.month, date.day);
-    final start = DateTime(range.start.year, range.start.month, range.start.day);
-    final end = DateTime(range.end.year, range.end.month, range.end.day);
-    return !day.isBefore(start) && !day.isAfter(end);
-  }
-
-  int? _resolveVendorId() {
-    final raw = _vendorInfo?.id.trim() ?? '';
-    return int.tryParse(raw);
+    await _loadPendingBills();
   }
 
   Future<_StatementDateChoice?> _askStatementDateRange() async {
@@ -512,7 +515,9 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
                     leading: const Icon(Icons.calendar_today_outlined),
                     title: const Text('Start date'),
                     subtitle: Text(
-                      start == null ? 'Optional · All dates' : _ddMMyyyy(start!),
+                      start == null
+                          ? 'Optional · Default last 6 months'
+                          : _ddMMyyyy(start!),
                     ),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: pickStart,
@@ -522,7 +527,9 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
                     leading: const Icon(Icons.event_outlined),
                     title: const Text('End date'),
                     subtitle: Text(
-                      end == null ? 'Optional · All dates' : _ddMMyyyy(end!),
+                      end == null
+                          ? 'Optional · Default today'
+                          : _ddMMyyyy(end!),
                     ),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: pickEnd,
@@ -562,11 +569,11 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
   Future<void> _downloadStatementPdf() async {
     if (_downloadingStatementPdf) return;
 
-    var vendorId = _resolveVendorId();
+    var vendorId = _vendorId;
     if (vendorId == null) {
       await _loadVendorInfo();
       if (!mounted) return;
-      vendorId = _resolveVendorId();
+      vendorId = _vendorId;
     }
     if (vendorId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -580,11 +587,18 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
     final choice = await _askStatementDateRange();
     if (choice == null || !mounted) return;
 
+    // Default: last 6 months when both dates are empty.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final defaultStart = DateTime(today.year, today.month - 6, today.day);
+    final startDate = choice.start ?? defaultStart;
+    final endDate = choice.end ?? today;
+
     setState(() => _downloadingStatementPdf = true);
     try {
       final bytes = await context.read<VendorsProvider>().fetchReportPdf(
-            startDate: choice.start,
-            endDate: choice.end,
+            startDate: startDate,
+            endDate: endDate,
             vendorId: vendorId,
           );
       if (!mounted) return;
@@ -594,18 +608,10 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
           .replaceAll(RegExp(r'^-+|-+$'), '');
-      final filename = () {
-        final start = choice.start;
-        final end = choice.end;
-        if (start == null && end == null) {
-          return 'vendor-statement-${safeName.isEmpty ? 'vendor' : safeName}.pdf';
-        }
-        final startPart =
-            start == null ? 'start' : DateFormat('yyyyMMdd').format(start);
-        final endPart =
-            end == null ? 'end' : DateFormat('yyyyMMdd').format(end);
-        return 'vendor-statement-${safeName.isEmpty ? 'vendor' : safeName}-$startPart-$endPart.pdf';
-      }();
+      final filename =
+          'vendor-statement-${safeName.isEmpty ? 'vendor' : safeName}-'
+          '${DateFormat('yyyyMMdd').format(startDate)}-'
+          '${DateFormat('yyyyMMdd').format(endDate)}.pdf';
 
       await Printing.sharePdf(
         bytes: Uint8List.fromList(bytes),
@@ -621,33 +627,17 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
     }
   }
 
-  List<VendorStatementEntry> get _statementEntries {
-    final entries = <VendorStatementEntry>[
-      for (final payment in _sessionPayments)
-        VendorStatementEntry.payment(
-          payment: payment,
-          sortAt: payment.paidAt,
-        ),
-      for (final bill in _statementBills)
-        VendorStatementEntry.purchase(
-          bill: bill,
-          sortAt: _parseBillSortDate(bill.billDate),
-        ),
-    ];
-    entries.sort((a, b) => b.sortAt.compareTo(a.sortAt));
-    return entries;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final provider = context.watch<VendorsProvider>();
     final live = provider.vendorByName(widget.group.vendorName) ?? widget.group;
-    final bills = live.bills
-        .where((b) => !b.isFullyPaid && _billInPendingDateRange(b))
-        .toList();
+    final bills = _pendingBills;
     final hasPendingDateFilter = _pendingDateRange != null;
+    final outstandingDisplay = _infoPendingDisplay.isNotEmpty
+        ? _infoPendingDisplay
+        : live.pendingDisplay;
     final validIds = bills.map((b) => b.id).toSet();
     final selectedBills =
         bills.where((b) => _selectedIds.contains(b.id)).toList();
@@ -706,7 +696,7 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
                         ),
                       ),
                       InrAmountText(
-                        live.pendingDisplay,
+                        outstandingDisplay,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
                           color: AppColors.emeraldDark,
@@ -806,16 +796,19 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
         children: [
           _InformationTab(
             vendorName: live.displayName,
-            pendingDisplay: live.pendingDisplay,
+            pendingDisplay: outstandingDisplay,
             vendor: _vendorInfo,
             loading: _loadingInfo,
             onRetry: _loadVendorInfo,
           ),
           _PendingPaymentsTab(
             bills: bills,
+            loading: _loadingPending,
+            error: _pendingError,
             selectedIds: _selectedIds,
             hasDateFilter: hasPendingDateFilter,
             onPickDateRange: _pickPendingDateRange,
+            onRetry: _loadPendingBills,
             onToggle: _toggle,
             onOpenDetails: (bill) async {
               await Navigator.of(context).push(
@@ -824,6 +817,8 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
                   provider: provider,
                 ),
               );
+              if (!mounted) return;
+              await _loadPendingBills();
             },
           ),
           _StatementTab(
@@ -840,10 +835,19 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
                 ),
               );
             },
-            onOpenPayment: (payment) {
+            onOpenPayment: (payment) async {
+              var detail = payment;
+              final paymentId = int.tryParse(payment.id);
+              if (paymentId != null) {
+                try {
+                  detail = await VendorsPaymentsService()
+                      .fetchPayablePaymentDetail(paymentId);
+                } catch (_) {}
+              }
+              if (!mounted) return;
               showStatementPaymentDetailSheet(
                 context: context,
-                payment: payment,
+                payment: detail,
               );
             },
             onDownloadPdf: _downloadStatementPdf,
@@ -957,17 +961,23 @@ class _InformationTab extends StatelessWidget {
 class _PendingPaymentsTab extends StatelessWidget {
   const _PendingPaymentsTab({
     required this.bills,
+    required this.loading,
+    required this.error,
     required this.selectedIds,
     required this.hasDateFilter,
     required this.onPickDateRange,
+    required this.onRetry,
     required this.onToggle,
     required this.onOpenDetails,
   });
 
   final List<VendorBill> bills;
+  final bool loading;
+  final String? error;
   final Set<int> selectedIds;
   final bool hasDateFilter;
   final VoidCallback onPickDateRange;
+  final VoidCallback onRetry;
   final ValueChanged<int> onToggle;
   final ValueChanged<VendorBill> onOpenDetails;
 
@@ -1019,7 +1029,23 @@ class _PendingPaymentsTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        if (bills.isEmpty)
+        if (loading)
+          const Padding(
+            padding: EdgeInsets.only(top: 48),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: VendorsEmptyState(
+              title: 'Couldn’t load pending bills',
+              subtitle: 'Pull or tap retry',
+              actionLabel: 'Retry',
+              onAction: onRetry,
+              icon: Icons.error_outline_rounded,
+            ),
+          )
+        else if (bills.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 24),
             child: VendorsEmptyState(

@@ -349,10 +349,9 @@ class VendorPayableTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final openBills =
-        group.bills.where((b) => !b.isFullyPaid && b.pendingAmount > 0).length;
-    final overdueCount = group.bills.where((b) => b.due.isOverdue).length;
-    final settled = group.pendingAmount <= 0;
+    final openBills = group.billsCount;
+    final overdueCount = group.overdueCount;
+    final settled = group.isSettled || group.pendingAmount <= 0;
     final billLabel = settled
         ? 'Settled'
         : '$openBills bill${openBills == 1 ? '' : 's'}';
@@ -477,7 +476,7 @@ class VendorBillSelectTile extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
-                      bill.billDate,
+                      bill.displayDate,
                       style: theme.textTheme.labelMedium?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
@@ -857,7 +856,12 @@ class _StatementPaymentDetailSheet extends StatelessWidget {
                       ),
                       child: Column(
                         children: [
-                          for (var i = 0; i < payment.bills.length; i++) ...[
+                          for (var i = 0;
+                              i <
+                                  (payment.allocations.isNotEmpty
+                                      ? payment.allocations.length
+                                      : payment.bills.length);
+                              i++) ...[
                             if (i > 0)
                               Divider(
                                 height: 1,
@@ -877,7 +881,9 @@ class _StatementPaymentDetailSheet extends StatelessWidget {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Purchase #${payment.bills[i].stkNo}',
+                                          payment.allocations.isNotEmpty
+                                              ? 'Purchase #${payment.allocations[i].stkNo}'
+                                              : 'Purchase #${payment.bills[i].stkNo}',
                                           style: theme.textTheme.bodyMedium
                                               ?.copyWith(
                                             fontWeight: FontWeight.w700,
@@ -885,7 +891,12 @@ class _StatementPaymentDetailSheet extends StatelessWidget {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          payment.bills[i].billDate,
+                                          payment.allocations.isNotEmpty
+                                              ? (payment.allocations[i]
+                                                      .dueDate ??
+                                                  payment
+                                                      .allocations[i].billDate)
+                                              : payment.bills[i].displayDate,
                                           style: theme.textTheme.labelMedium
                                               ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
@@ -895,7 +906,9 @@ class _StatementPaymentDetailSheet extends StatelessWidget {
                                     ),
                                   ),
                                   InrAmountText(
-                                    payment.bills[i].pendingDisplay,
+                                    payment.allocations.isNotEmpty
+                                        ? payment.allocations[i].appliedDisplay
+                                        : payment.bills[i].pendingDisplay,
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       fontWeight: FontWeight.w800,
                                     ),
@@ -905,13 +918,6 @@ class _StatementPaymentDetailSheet extends StatelessWidget {
                             ),
                           ],
                         ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Ledger API coming next — this payment is shown from this session.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -973,6 +979,7 @@ Future<void> showPaymentReceiptSheet({
   required List<VendorBill> bills,
   double discount = 0,
   double surcharge = 0,
+  List<VendorPaymentAllocationLine> allocations = const [],
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -985,6 +992,7 @@ Future<void> showPaymentReceiptSheet({
       bills: bills,
       discount: discount,
       surcharge: surcharge,
+      allocations: allocations,
     ),
   );
 }
@@ -996,6 +1004,7 @@ class _PaymentReceiptSheet extends StatelessWidget {
     required this.bills,
     this.discount = 0,
     this.surcharge = 0,
+    this.allocations = const [],
   });
 
   final String vendorName;
@@ -1003,6 +1012,7 @@ class _PaymentReceiptSheet extends StatelessWidget {
   final List<VendorBill> bills;
   final double discount;
   final double surcharge;
+  final List<VendorPaymentAllocationLine> allocations;
 
   static final NumberFormat _inr = NumberFormat('#,##,##0.00', 'en_IN');
 
@@ -1012,8 +1022,10 @@ class _PaymentReceiptSheet extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final media = MediaQuery.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final rowCount =
+        allocations.isNotEmpty ? allocations.length : bills.length;
     final billCountLabel =
-        '${bills.length} bill${bills.length == 1 ? '' : 's'}';
+        '$rowCount bill${rowCount == 1 ? '' : 's'}';
 
     return SafeArea(
       top: false,
@@ -1173,7 +1185,7 @@ class _PaymentReceiptSheet extends StatelessWidget {
                       ),
                       child: Column(
                         children: [
-                          for (var i = 0; i < bills.length; i++) ...[
+                          for (var i = 0; i < rowCount; i++) ...[
                             if (i > 0)
                               Divider(
                                 height: 1,
@@ -1193,7 +1205,9 @@ class _PaymentReceiptSheet extends StatelessWidget {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Purchase #${bills[i].stkNo}',
+                                          allocations.isNotEmpty
+                                              ? 'Purchase #${allocations[i].stkNo}'
+                                              : 'Purchase #${bills[i].stkNo}',
                                           style: theme.textTheme.bodyMedium
                                               ?.copyWith(
                                             fontWeight: FontWeight.w700,
@@ -1201,7 +1215,10 @@ class _PaymentReceiptSheet extends StatelessWidget {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          bills[i].billDate,
+                                          allocations.isNotEmpty
+                                              ? (allocations[i].dueDate ??
+                                                  allocations[i].billDate)
+                                              : bills[i].displayDate,
                                           style: theme.textTheme.labelMedium
                                               ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
@@ -1212,7 +1229,9 @@ class _PaymentReceiptSheet extends StatelessWidget {
                                     ),
                                   ),
                                   InrAmountText(
-                                    bills[i].pendingDisplay,
+                                    allocations.isNotEmpty
+                                        ? allocations[i].appliedDisplay
+                                        : bills[i].pendingDisplay,
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       fontWeight: FontWeight.w800,
                                     ),
