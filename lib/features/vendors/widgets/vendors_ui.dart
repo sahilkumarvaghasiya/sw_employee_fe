@@ -335,60 +335,6 @@ class VendorsSearchBar extends StatelessWidget {
   }
 }
 
-class VendorsFilterButton extends StatelessWidget {
-  const VendorsFilterButton({
-    super.key,
-    required this.active,
-    required this.onTap,
-  });
-
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Material(
-      color: active
-          ? AppColors.emerald.withValues(alpha: 0.1)
-          : (isDark ? theme.colorScheme.surface : Colors.white),
-      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        onTap: onTap,
-        child: Container(
-          height: 48,
-          width: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            border: Border.all(
-              color: active
-                  ? AppColors.emerald.withValues(alpha: 0.3)
-                  : (isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : AppColors.slate200),
-            ),
-          ),
-          child: Badge(
-            isLabelVisible: active,
-            smallSize: 8,
-            child: Icon(
-              Icons.tune_rounded,
-              size: 20,
-              color: active
-                  ? AppColors.emeraldDark
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class VendorPayableTile extends StatelessWidget {
   const VendorPayableTile({
     super.key,
@@ -403,9 +349,13 @@ class VendorPayableTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final billLabel =
-        '${group.billCount} bill${group.billCount == 1 ? '' : 's'}';
+    final openBills =
+        group.bills.where((b) => !b.isFullyPaid && b.pendingAmount > 0).length;
     final overdueCount = group.bills.where((b) => b.due.isOverdue).length;
+    final settled = group.pendingAmount <= 0;
+    final billLabel = settled
+        ? 'Settled'
+        : '$openBills bill${openBills == 1 ? '' : 's'}';
 
     return AppSurfaceCard(
       onTap: onTap,
@@ -440,11 +390,11 @@ class VendorPayableTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  overdueCount > 0
+                  overdueCount > 0 && !settled
                       ? '$billLabel · $overdueCount overdue'
                       : billLabel,
                   style: theme.textTheme.labelMedium?.copyWith(
-                    color: overdueCount > 0
+                    color: overdueCount > 0 && !settled
                         ? AppColors.error
                         : colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -461,7 +411,9 @@ class VendorPayableTile extends StatelessWidget {
                 group.pendingDisplay,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: AppColors.emeraldDark,
+                  color: settled
+                      ? colorScheme.onSurfaceVariant
+                      : AppColors.emeraldDark,
                 ),
               ),
               const SizedBox(height: 2),

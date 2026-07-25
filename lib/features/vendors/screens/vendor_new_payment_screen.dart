@@ -72,9 +72,9 @@ class VendorNewPaymentScreen extends StatefulWidget {
 
 class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
   static final NumberFormat _inr = NumberFormat('#,##,##0.00', 'en_IN');
-  static final DateFormat _dateFmt = DateFormat('dd / MM / yyyy');
+  static final DateFormat _dateFmt = DateFormat('dd/MM/yyyy');
 
-  late DateTime _paymentDate;
+  late final DateTime _paymentDate;
   late final Set<int> _selectedIds;
   late final TextEditingController _paidController;
 
@@ -87,7 +87,8 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
   @override
   void initState() {
     super.initState();
-    _paymentDate = DateTime.now();
+    final now = DateTime.now();
+    _paymentDate = DateTime(now.year, now.month, now.day);
     _selectedIds = {...widget.initialSelectedIds};
     if (_selectedIds.isEmpty && widget.bills.isNotEmpty) {
       _selectedIds.add(widget.bills.first.id);
@@ -132,17 +133,6 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
       _paidController.text = _selectedTotal.toStringAsFixed(2);
       _error = null;
     });
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _paymentDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (picked == null || !mounted) return;
-    setState(() => _paymentDate = picked);
   }
 
   Future<void> _addDiscountOrSurcharge() async {
@@ -223,20 +213,15 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
         children: [
-          InkWell(
-            onTap: _pickDate,
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            child: InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Date*',
-                filled: true,
-                suffixIcon: Icon(Icons.calendar_today_outlined, size: 20),
-              ),
-              child: Text(
-                _dateFmt.format(_paymentDate),
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+          InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Date*',
+              filled: true,
+            ),
+            child: Text(
+              _dateFmt.format(_paymentDate),
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -307,12 +292,30 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            'Remaining: ₹ ${_inr.format(_remained)}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Remaining: ₹ ${_inr.format(_remained)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: _addDiscountOrSurcharge,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.homeAccentTeal,
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                child: const Text('+ Add discount / surcharge'),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
           InkWell(
@@ -363,20 +366,6 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: _addDiscountOrSurcharge,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.homeAccentTeal,
-                textStyle: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              child: const Text('+ Add discount / surcharge'),
-            ),
-          ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),

@@ -123,31 +123,28 @@ class VendorsPaymentsService {
     return VendorBillsPage(bills: bills, hasNext: hasNext, count: count);
   }
 
-  /// Loads unpaid + partial bills (paged) for payable vendor grouping.
+  /// Loads bills for the Pay Vendor hub (all statuses) so settled vendors stay listed.
+  /// Search is the only filter applied here.
   Future<List<VendorBill>> fetchOpenBills({
     String? search,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
     final bills = <VendorBill>[];
-
-    for (final status in ['unpaid', 'partial']) {
-      var page = 1;
-      while (true) {
-        final result = await fetchBills(
-          search: search,
-          status: status,
-          startDate: startDate,
-          endDate: endDate,
-          sort: 'newest',
-          page: page,
-          pageSize: 100,
-        );
-        bills.addAll(result.bills);
-        if (!result.hasNext) break;
-        page += 1;
-        if (page > 50) break; // safety cap
-      }
+    var page = 1;
+    while (true) {
+      final result = await fetchBills(
+        search: search,
+        startDate: startDate,
+        endDate: endDate,
+        sort: 'newest',
+        page: page,
+        pageSize: 100,
+      );
+      bills.addAll(result.bills);
+      if (!result.hasNext) break;
+      page += 1;
+      if (page > 50) break; // safety cap
     }
 
     return bills;
@@ -208,10 +205,12 @@ class VendorsPaymentsService {
   Future<VendorReportPreview> fetchReportPreview({
     DateTime? startDate,
     DateTime? endDate,
+    int? vendorId,
   }) async {
     final qp = <String, String>{};
     if (startDate != null) qp['start_date'] = ddMMyyyyDash(startDate);
     if (endDate != null) qp['end_date'] = ddMMyyyyDash(endDate);
+    if (vendorId != null) qp['vendor'] = vendorId.toString();
 
     final response = await _apiService.get(
       _url(_reportPreviewPath, queryParameters: qp).toString(),
@@ -233,10 +232,12 @@ class VendorsPaymentsService {
   Future<Uint8List> fetchReportPdf({
     DateTime? startDate,
     DateTime? endDate,
+    int? vendorId,
   }) async {
     final qp = <String, String>{};
     if (startDate != null) qp['start_date'] = ddMMyyyyDash(startDate);
     if (endDate != null) qp['end_date'] = ddMMyyyyDash(endDate);
+    if (vendorId != null) qp['vendor'] = vendorId.toString();
 
     final response = await _apiService.get(
       _url(_reportPdfPath, queryParameters: qp).toString(),

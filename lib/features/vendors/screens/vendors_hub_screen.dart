@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -28,7 +27,6 @@ class VendorsHubScreen extends StatefulWidget {
 }
 
 class _VendorsHubScreenState extends State<VendorsHubScreen> {
-  static final DateFormat _dateFmt = DateFormat('dd MMM yyyy');
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -46,81 +44,10 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
     super.dispose();
   }
 
-  Future<void> _pickDateRange() async {
-    final provider = context.read<VendorsProvider>();
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDateRange: provider.dateRange,
-    );
-    if (!mounted) return;
-    await provider.setDateRange(picked);
-  }
-
-  Future<void> _openFilterSheet() async {
-    final provider = context.read<VendorsProvider>();
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        final media = MediaQuery.of(sheetContext);
-
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              4,
-              20,
-              16 + media.viewInsets.bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Filter',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    Navigator.pop(sheetContext);
-                    await _pickDateRange();
-                  },
-                  icon: const Icon(Icons.date_range_outlined, size: 18),
-                  label: Text(
-                    provider.dateRange == null
-                        ? 'Filter by date'
-                        : '${_dateFmt.format(provider.dateRange!.start)} – ${_dateFmt.format(provider.dateRange!.end)}',
-                  ),
-                ),
-                if (provider.dateRange != null)
-                  TextButton(
-                    onPressed: () async {
-                      Navigator.pop(sheetContext);
-                      await provider.setDateRange(null);
-                    },
-                    child: const Text('Clear dates'),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = context.watch<VendorsProvider>();
-    final hasFilter = provider.dateRange != null;
     final summary = provider.summary;
 
     return Scaffold(
@@ -137,11 +64,6 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
             },
             icon: const Icon(Icons.picture_as_pdf_outlined),
           ),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: provider.isLoading ? null : provider.refresh,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
         ],
       ),
       body: RefreshIndicator(
@@ -153,45 +75,12 @@ class _VendorsHubScreenState extends State<VendorsHubScreen> {
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               sliver: SliverToBoxAdapter(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: VendorsSearchBar(
-                        controller: _searchController,
-                        onChanged: provider.setSearchQuery,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    VendorsFilterButton(
-                      active: hasFilter,
-                      onTap: _openFilterSheet,
-                    ),
-                  ],
+                child: VendorsSearchBar(
+                  controller: _searchController,
+                  onChanged: provider.setSearchQuery,
                 ),
               ),
             ),
-            if (provider.dateRange != null)
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                sliver: SliverToBoxAdapter(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: InputChip(
-                      label: Text(
-                        '${_dateFmt.format(provider.dateRange!.start)} – ${_dateFmt.format(provider.dateRange!.end)}',
-                      ),
-                      onDeleted: () => provider.setDateRange(null),
-                      visualDensity: VisualDensity.compact,
-                      backgroundColor:
-                          AppColors.emerald.withValues(alpha: 0.08),
-                      side: BorderSide(
-                        color: AppColors.emerald.withValues(alpha: 0.2),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
               sliver: SliverToBoxAdapter(

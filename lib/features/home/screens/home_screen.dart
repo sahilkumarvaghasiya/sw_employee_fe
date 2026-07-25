@@ -343,18 +343,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             actions: [
               HomeRadialAction(
-                label: 'Billing',
-                icon: Icons.qr_code_scanner_rounded,
-                accentColor: AppColors.indigo,
-                enabled: canBilling,
-                disabledHint: 'Billing access is locked by your manager.',
-                onTap: () => _openAndRefresh(
-                  CustomerFormScreen.route(),
-                  featureKey: 'billing',
-                  lockedMessage: 'Billing access is locked by your manager.',
-                ),
-              ),
-              HomeRadialAction(
                 label: 'Stock',
                 icon: Icons.inventory_2_rounded,
                 accentColor: AppColors.homeAccentAmber,
@@ -376,6 +364,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ProductsScreen.route(),
                   featureKey: 'products',
                   lockedMessage: 'Products access is locked by your manager.',
+                ),
+              ),
+              HomeRadialAction(
+                label: 'Billing',
+                icon: Icons.qr_code_scanner_rounded,
+                accentColor: AppColors.indigo,
+                isPrimary: true,
+                enabled: canBilling,
+                disabledHint: 'Billing access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  CustomerFormScreen.route(),
+                  featureKey: 'billing',
+                  lockedMessage: 'Billing access is locked by your manager.',
                 ),
               ),
               HomeRadialAction(

@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_surface_card.dart';
 import '../../stock_entry/models/vendor.dart';
 import '../../stock_entry/services/vendors_service.dart';
@@ -53,6 +57,8 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
   final List<VendorStatementPayment> _sessionPayments = [];
   bool _loadingStatement = true;
   String? _statementError;
+  bool _downloadingStatementPdf = false;
+  DateTimeRange? _pendingDateRange;
 
   @override
   void initState() {
@@ -272,6 +278,349 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
     return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
+  String _ddMMyyyy(DateTime d) {
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yyyy = d.year.toString();
+    return '$dd/$mm/$yyyy';
+  }
+
+  Future<void> _pickPendingDateRange() async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year - 2, 1, 1);
+    final lastDate = DateTime(now.year, now.month, now.day);
+
+    DateTime? start = _pendingDateRange?.start;
+    DateTime? end = _pendingDateRange?.end;
+
+    DateTime clamp(DateTime d) {
+      if (d.isBefore(firstDate)) return firstDate;
+      if (d.isAfter(lastDate)) return lastDate;
+      return d;
+    }
+
+    if (start != null) start = clamp(start);
+    if (end != null) end = clamp(end);
+    if (start != null && end != null && end.isBefore(start)) {
+      end = start;
+    }
+
+    final picked = await showDialog<_PendingDateChoice?>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> pickStart() async {
+              final next = await showDatePicker(
+                context: dialogContext,
+                initialDate: start ?? lastDate,
+                firstDate: firstDate,
+                lastDate: lastDate,
+              );
+              if (next == null) return;
+              setDialogState(() {
+                start = clamp(next);
+                if (end != null && end!.isBefore(start!)) {
+                  end = start;
+                }
+              });
+            }
+
+            Future<void> pickEnd() async {
+              final next = await showDatePicker(
+                context: dialogContext,
+                initialDate: end ?? start ?? lastDate,
+                firstDate: firstDate,
+                lastDate: lastDate,
+              );
+              if (next == null) return;
+              setDialogState(() {
+                end = clamp(next);
+                if (start != null && end!.isBefore(start!)) {
+                  start = end;
+                }
+              });
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              ),
+              title: Text(
+                'Date range',
+                style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_today_outlined),
+                    title: const Text('Start date'),
+                    subtitle: Text(
+                      start == null ? 'Optional · All dates' : _ddMMyyyy(start!),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: pickStart,
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.event_outlined),
+                    title: const Text('End date'),
+                    subtitle: Text(
+                      end == null ? 'Optional · All dates' : _ddMMyyyy(end!),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: pickEnd,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(
+                      const _PendingDateChoice(),
+                    );
+                  },
+                  child: const Text('Clear'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(
+                      _PendingDateChoice(start: start, end: end),
+                    );
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      if (picked.start != null && picked.end != null) {
+        _pendingDateRange = DateTimeRange(
+          start: picked.start!,
+          end: picked.end!,
+        );
+      } else if (picked.start == null && picked.end == null) {
+        _pendingDateRange = null;
+      } else {
+        // Partial range: treat missing side as open-ended via a wide bound.
+        final resolvedStart = picked.start ?? firstDate;
+        final resolvedEnd = picked.end ?? lastDate;
+        _pendingDateRange = DateTimeRange(
+          start: resolvedStart,
+          end: resolvedEnd.isBefore(resolvedStart) ? resolvedStart : resolvedEnd,
+        );
+      }
+      _selectedIds.clear();
+    });
+  }
+
+  bool _billInPendingDateRange(VendorBill bill) {
+    final range = _pendingDateRange;
+    if (range == null) return true;
+    final date = _parseBillSortDate(bill.billDate);
+    final day = DateTime(date.year, date.month, date.day);
+    final start = DateTime(range.start.year, range.start.month, range.start.day);
+    final end = DateTime(range.end.year, range.end.month, range.end.day);
+    return !day.isBefore(start) && !day.isAfter(end);
+  }
+
+  int? _resolveVendorId() {
+    final raw = _vendorInfo?.id.trim() ?? '';
+    return int.tryParse(raw);
+  }
+
+  Future<_StatementDateChoice?> _askStatementDateRange() async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year - 2, 1, 1);
+    final lastDate = DateTime(now.year, now.month, now.day);
+
+    DateTime? start;
+    DateTime? end;
+
+    DateTime clamp(DateTime d) {
+      if (d.isBefore(firstDate)) return firstDate;
+      if (d.isAfter(lastDate)) return lastDate;
+      return d;
+    }
+
+    return showDialog<_StatementDateChoice>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> pickStart() async {
+              final next = await showDatePicker(
+                context: dialogContext,
+                initialDate: start ?? lastDate,
+                firstDate: firstDate,
+                lastDate: lastDate,
+              );
+              if (next == null) return;
+              setDialogState(() {
+                start = clamp(next);
+                if (end != null && end!.isBefore(start!)) {
+                  end = start;
+                }
+              });
+            }
+
+            Future<void> pickEnd() async {
+              final next = await showDatePicker(
+                context: dialogContext,
+                initialDate: end ?? start ?? lastDate,
+                firstDate: firstDate,
+                lastDate: lastDate,
+              );
+              if (next == null) return;
+              setDialogState(() {
+                end = clamp(next);
+                if (start != null && end!.isBefore(start!)) {
+                  start = end;
+                }
+              });
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              ),
+              title: Text(
+                'Statement period',
+                style: Theme.of(dialogContext).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_today_outlined),
+                    title: const Text('Start date'),
+                    subtitle: Text(
+                      start == null ? 'Optional · All dates' : _ddMMyyyy(start!),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: pickStart,
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.event_outlined),
+                    title: const Text('End date'),
+                    subtitle: Text(
+                      end == null ? 'Optional · All dates' : _ddMMyyyy(end!),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: pickEnd,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setDialogState(() {
+                      start = null;
+                      end = null;
+                    });
+                  },
+                  child: const Text('Clear'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(
+                      _StatementDateChoice(start: start, end: end),
+                    );
+                  },
+                  child: const Text('Download'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _downloadStatementPdf() async {
+    if (_downloadingStatementPdf) return;
+
+    var vendorId = _resolveVendorId();
+    if (vendorId == null) {
+      await _loadVendorInfo();
+      if (!mounted) return;
+      vendorId = _resolveVendorId();
+    }
+    if (vendorId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Couldn’t resolve this vendor for PDF download'),
+        ),
+      );
+      return;
+    }
+
+    final choice = await _askStatementDateRange();
+    if (choice == null || !mounted) return;
+
+    setState(() => _downloadingStatementPdf = true);
+    try {
+      final bytes = await context.read<VendorsProvider>().fetchReportPdf(
+            startDate: choice.start,
+            endDate: choice.end,
+            vendorId: vendorId,
+          );
+      if (!mounted) return;
+
+      final safeName = widget.group.vendorName
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+          .replaceAll(RegExp(r'^-+|-+$'), '');
+      final filename = () {
+        final start = choice.start;
+        final end = choice.end;
+        if (start == null && end == null) {
+          return 'vendor-statement-${safeName.isEmpty ? 'vendor' : safeName}.pdf';
+        }
+        final startPart =
+            start == null ? 'start' : DateFormat('yyyyMMdd').format(start);
+        final endPart =
+            end == null ? 'end' : DateFormat('yyyyMMdd').format(end);
+        return 'vendor-statement-${safeName.isEmpty ? 'vendor' : safeName}-$startPart-$endPart.pdf';
+      }();
+
+      await Printing.sharePdf(
+        bytes: Uint8List.fromList(bytes),
+        filename: filename,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to download statement PDF')),
+      );
+    } finally {
+      if (mounted) setState(() => _downloadingStatementPdf = false);
+    }
+  }
+
   List<VendorStatementEntry> get _statementEntries {
     final entries = <VendorStatementEntry>[
       for (final payment in _sessionPayments)
@@ -295,7 +644,10 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
     final colorScheme = theme.colorScheme;
     final provider = context.watch<VendorsProvider>();
     final live = provider.vendorByName(widget.group.vendorName) ?? widget.group;
-    final bills = live.bills.where((b) => !b.isFullyPaid).toList();
+    final bills = live.bills
+        .where((b) => !b.isFullyPaid && _billInPendingDateRange(b))
+        .toList();
+    final hasPendingDateFilter = _pendingDateRange != null;
     final validIds = bills.map((b) => b.id).toSet();
     final selectedBills =
         bills.where((b) => _selectedIds.contains(b.id)).toList();
@@ -462,6 +814,8 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
           _PendingPaymentsTab(
             bills: bills,
             selectedIds: _selectedIds,
+            hasDateFilter: hasPendingDateFilter,
+            onPickDateRange: _pickPendingDateRange,
             onToggle: _toggle,
             onOpenDetails: (bill) async {
               await Navigator.of(context).push(
@@ -476,6 +830,7 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
             entries: _statementEntries,
             loading: _loadingStatement,
             error: _statementError,
+            downloadingPdf: _downloadingStatementPdf,
             onRetry: _loadStatement,
             onOpenPurchase: (bill) async {
               await Navigator.of(context).push(
@@ -491,15 +846,7 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
                 payment: payment,
               );
             },
-            onViewFull: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Full statement PDF needs a dedicated API — coming next.',
-                  ),
-                ),
-              );
-            },
+            onDownloadPdf: _downloadStatementPdf,
           ),
         ],
       ),
@@ -611,12 +958,16 @@ class _PendingPaymentsTab extends StatelessWidget {
   const _PendingPaymentsTab({
     required this.bills,
     required this.selectedIds,
+    required this.hasDateFilter,
+    required this.onPickDateRange,
     required this.onToggle,
     required this.onOpenDetails,
   });
 
   final List<VendorBill> bills;
   final Set<int> selectedIds;
+  final bool hasDateFilter;
+  final VoidCallback onPickDateRange;
   final ValueChanged<int> onToggle;
   final ValueChanged<VendorBill> onOpenDetails;
 
@@ -625,41 +976,73 @@ class _PendingPaymentsTab extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    if (bills.isEmpty) {
-      return const VendorsEmptyState(
-        title: 'No pending payments',
-        subtitle: 'All bills for this vendor are settled',
-      );
-    }
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
-        Text(
-          'Select bills to pay',
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Choose one or more purchases, then pay a single amount',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Select bills to pay',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Choose one or more purchases, then pay a single amount',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: hasDateFilter ? 'Change date filter' : 'Filter by date',
+              onPressed: onPickDateRange,
+              icon: Badge(
+                isLabelVisible: hasDateFilter,
+                smallSize: 8,
+                child: Icon(
+                  Icons.date_range_outlined,
+                  color: hasDateFilter
+                      ? AppColors.emerald
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 14),
-        ...bills.map(
-          (bill) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: VendorBillSelectTile(
-              bill: bill,
-              selected: selectedIds.contains(bill.id),
-              onToggle: () => onToggle(bill.id),
-              onOpenDetails: () => onOpenDetails(bill),
+        if (bills.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: VendorsEmptyState(
+              title: hasDateFilter
+                  ? 'No bills in this period'
+                  : 'No pending payments',
+              subtitle: hasDateFilter
+                  ? 'Try a different date range'
+                  : 'All bills for this vendor are settled',
+            ),
+          )
+        else
+          ...bills.map(
+            (bill) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: VendorBillSelectTile(
+                bill: bill,
+                selected: selectedIds.contains(bill.id),
+                onToggle: () => onToggle(bill.id),
+                onOpenDetails: () => onOpenDetails(bill),
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -670,19 +1053,21 @@ class _StatementTab extends StatelessWidget {
     required this.entries,
     required this.loading,
     required this.error,
+    required this.downloadingPdf,
     required this.onRetry,
     required this.onOpenPurchase,
     required this.onOpenPayment,
-    required this.onViewFull,
+    required this.onDownloadPdf,
   });
 
   final List<VendorStatementEntry> entries;
   final bool loading;
   final String? error;
+  final bool downloadingPdf;
   final VoidCallback onRetry;
   final ValueChanged<VendorBill> onOpenPurchase;
   final ValueChanged<VendorStatementPayment> onOpenPayment;
-  final VoidCallback onViewFull;
+  final VoidCallback onDownloadPdf;
 
   static final DateFormat _paymentDateFmt = DateFormat('dd MMM yyyy · hh:mm a');
 
@@ -706,9 +1091,25 @@ class _StatementTab extends StatelessWidget {
     }
 
     if (entries.isEmpty) {
-      return const VendorsEmptyState(
-        title: 'No statement entries',
-        subtitle: 'Purchases and payments will show here',
+      return Column(
+        children: [
+          const Expanded(
+            child: VendorsEmptyState(
+              title: 'No statement entries',
+              subtitle: 'Purchases and payments will show here',
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: _StatementPdfButton(
+                downloading: downloadingPdf,
+                onPressed: onDownloadPdf,
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -770,21 +1171,60 @@ class _StatementTab extends StatelessWidget {
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: OutlinedButton(
-              onPressed: onViewFull,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.emerald,
-                side: const BorderSide(color: AppColors.emerald, width: 1.4),
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: const Text('View full statement'),
+            child: _StatementPdfButton(
+              downloading: downloadingPdf,
+              onPressed: onDownloadPdf,
             ),
           ),
         ),
       ],
     );
   }
+}
+
+class _StatementPdfButton extends StatelessWidget {
+  const _StatementPdfButton({
+    required this.downloading,
+    required this.onPressed,
+  });
+
+  final bool downloading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: downloading ? null : onPressed,
+      icon: downloading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+      label: Text(downloading ? 'Preparing PDF…' : 'Download PDF statement'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.emerald,
+        side: const BorderSide(color: AppColors.emerald, width: 1.4),
+        minimumSize: const Size.fromHeight(48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatementDateChoice {
+  const _StatementDateChoice({this.start, this.end});
+
+  final DateTime? start;
+  final DateTime? end;
+}
+
+class _PendingDateChoice {
+  const _PendingDateChoice({this.start, this.end});
+
+  final DateTime? start;
+  final DateTime? end;
 }
