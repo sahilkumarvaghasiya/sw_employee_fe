@@ -28,7 +28,16 @@ jobs:
         run: dart run flutter_launcher_icons
 
       - name: Build web
-        run: flutter build web --release
+        run: >
+          flutter build web --release
+          --build-number=${{ github.run_number }}
+          --dart-define=BUILD_ID=${{ github.sha }}
+
+      - name: Prepare web deploy artifacts
+        env:
+          BUILD_ID: ${{ github.sha }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: dart run tool/prepare_web_deploy.dart
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -39,7 +48,7 @@ jobs:
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BILLINGFRONTEND }}
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_BILLINGFRONTEND }}'
           projectId: billingfrontend
           channelId: pr-${{ github.event.pull_request.number }}
           firebaseToolsVersion: '15.22.3'
