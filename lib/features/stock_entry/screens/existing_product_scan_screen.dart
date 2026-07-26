@@ -14,12 +14,21 @@ import '../../products/models/product.dart';
 import '../../products/services/products_service.dart';
 import '../models/existing_stock_product.dart';
 import '../models/stock_entry_draft_item.dart';
+import '../models/vendor.dart';
+import '../services/stock_entry_service.dart';
 import '../widgets/stock_entry_ui.dart';
 
 /// Find an existing catalog product (search or scan), review read-only details,
 /// then restock with quantity + optional price overrides.
 class ExistingProductScanScreen extends StatefulWidget {
-  const ExistingProductScanScreen({super.key, this.initialDraft});
+  const ExistingProductScanScreen({
+    super.key,
+    required this.vendor,
+    this.initialDraft,
+  });
+
+  /// Current stock-entry vendor — search is scoped to this vendor's products.
+  final Vendor vendor;
 
   /// When set, opens in edit mode with this restock draft prefilled.
   final StockEntryDraftItem? initialDraft;
@@ -27,11 +36,15 @@ class ExistingProductScanScreen extends StatefulWidget {
   static const String routeName = '/stock-entry/existing-product';
 
   static Route<List<StockEntryDraftItem>?> route({
+    required Vendor vendor,
     StockEntryDraftItem? initialDraft,
   }) {
     return MaterialPageRoute<List<StockEntryDraftItem>?>(
       settings: const RouteSettings(name: routeName),
-      builder: (_) => ExistingProductScanScreen(initialDraft: initialDraft),
+      builder: (_) => ExistingProductScanScreen(
+        vendor: vendor,
+        initialDraft: initialDraft,
+      ),
     );
   }
 
@@ -54,6 +67,7 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
 
   final ProductsService _productsService = ProductsService();
   final BillingService _billingService = BillingService();
+  final StockEntryService _stockEntryService = StockEntryService();
 
   Timer? _searchDebounce;
   int _searchRequestId = 0;
@@ -235,12 +249,6 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
     });
   }
 
-  bool _matchesNameOrBrand(Product product, String query) {
-    final needle = query.toLowerCase();
-    return product.name.toLowerCase().contains(needle) ||
-        product.companyName.toLowerCase().contains(needle);
-  }
-
   Future<void> _runSearch(String raw) async {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
@@ -259,19 +267,16 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
     });
 
     try {
-      final page = await _productsService.fetchProductVariants(
+      final page = await _stockEntryService.fetchVendorProducts(
+        vendorId: widget.vendor.id,
+        search: trimmed,
         page: 1,
         pageSize: 30,
-        filters: <String, String>{'search': trimmed},
       );
       if (!mounted || requestId != _searchRequestId) return;
 
-      final filtered = page.items
-          .where((product) => _matchesNameOrBrand(product, trimmed))
-          .toList(growable: false);
-
       setState(() {
-        _searchResults = filtered;
+        _searchResults = page.items;
         _isSearching = false;
       });
     } catch (_) {

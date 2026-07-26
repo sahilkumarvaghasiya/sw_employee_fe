@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../../core/config/api_config.dart';
 import '../../../core/utils/product_size_format.dart';
 import '../../auth/services/api_service.dart';
+import '../../products/models/product.dart';
 import '../models/stock_entry.dart';
 import '../models/vendor.dart';
 import '../models/stock_entry_detail.dart';
@@ -107,6 +108,12 @@ class StockEntryService {
   static String createExistingVendorStockEntryPath(String vendorId) {
     final safeId = Uri.encodeComponent(vendorId);
     return '/vendors/existing/$safeId/stock/create/';
+  }
+
+  // GET /api/vendors/existing/<id>/products/?search=&page=&page_size=
+  static String existingVendorProductsPath(String vendorId) {
+    final safeId = Uri.encodeComponent(vendorId);
+    return '/vendors/existing/$safeId/products/';
   }
 
   // From curl:
@@ -715,6 +722,62 @@ class StockEntryService {
     }
 
     return GeneratedBarcode(barcode: barcode, barcodeUrl: barcodeUrl);
+  }
+
+  Future<({List<Product> items, bool hasMore})> fetchVendorProducts({
+    required String vendorId,
+    required String search,
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    final qp = <String, String>{
+      'page': page.toString(),
+      'page_size': pageSize.toString(),
+    };
+    final trimmed = search.trim();
+    if (trimmed.isNotEmpty) {
+      qp['search'] = trimmed;
+    }
+
+    final response = await _apiService.get(
+      _url(
+        existingVendorProductsPath(vendorId),
+        queryParameters: qp,
+      ).toString(),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw http.ClientException(
+        'Failed to load vendor products (${response.statusCode})',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    List<dynamic> list = const [];
+    var hasMore = false;
+
+    if (decoded is Map<String, dynamic>) {
+      if (decoded['results'] is List) {
+        list = decoded['results'] as List<dynamic>;
+        hasMore = decoded['next'] != null;
+      } else if (decoded['data'] is List) {
+        list = decoded['data'] as List<dynamic>;
+        hasMore = list.length >= pageSize;
+      }
+    } else if (decoded is List) {
+      list = decoded;
+      hasMore = list.length >= pageSize;
+    }
+
+    final items = <Product>[];
+    for (final row in list) {
+      if (row is Map) {
+        items.add(
+          Product.fromVariantListJson(row.cast<String, dynamic>()),
+        );
+      }
+    }
+    return (items: items, hasMore: hasMore);
   }
 
   Future<String?> createStockEntry({
