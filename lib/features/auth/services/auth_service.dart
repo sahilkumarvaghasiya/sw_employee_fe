@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/api_config.dart';
@@ -78,13 +77,34 @@ class AuthService {
       throw Exception(_errorMessageFromResponse(response));
     } on TimeoutException {
       throw Exception('Request timed out. Backend is slow or unreachable.');
-    } on SocketException {
-      throw Exception(
-        'Cannot connect to backend. Check API URL and ensure server is reachable from this device.',
-      );
+    } on http.ClientException catch (e) {
+      throw Exception(_networkFailureMessage(e));
     } on FormatException {
       throw Exception('Invalid response format from backend.');
+    } catch (e) {
+      // SocketException on IO platforms (avoid dart:io so web builds work).
+      if (e.runtimeType.toString() == 'SocketException') {
+        throw Exception(
+          'Cannot connect to backend. Check internet and try again.',
+        );
+      }
+      rethrow;
     }
+  }
+
+  String _networkFailureMessage(http.ClientException e) {
+    final detail = e.message.trim();
+    final isClientLoad = detail.toLowerCase().contains('clientload') ||
+        detail.toLowerCase().contains('failed to fetch') ||
+        detail.toLowerCase().contains('xmlhttprequest');
+    if (isClientLoad) {
+      return 'Cannot reach server from this iPhone. '
+          'Open the site in Safari (not the home-screen icon), '
+          'clear Website Data for billingfrontend.web.app, '
+          'disable content blockers, then try again.';
+    }
+    return 'Cannot connect to backend. Check internet and try again.'
+        '${detail.isEmpty ? '' : ' ($detail)'}';
   }
 
   Future<bool> restoreSession() async {
@@ -177,7 +197,7 @@ class AuthService {
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
       // Still clear session locally from AuthProvider.
-    } on SocketException {
+    } on http.ClientException {
       // Same — offline logout should still sign the user out in-app.
     } catch (_) {
       // Ignore — blacklist is best-effort.
