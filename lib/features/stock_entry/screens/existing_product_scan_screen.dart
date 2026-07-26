@@ -478,6 +478,58 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
     );
   }
 
+  Widget _buildSearchScanActions(ColorScheme colorScheme) {
+    final hasQuery = _searchController.text.isNotEmpty;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasQuery)
+          IconButton(
+            tooltip: 'Clear search',
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () {
+              _searchController.clear();
+              _searchDebounce?.cancel();
+              setState(() {
+                _searchResults = const [];
+                _isSearching = false;
+                _searchError = null;
+              });
+            },
+          ),
+        if (_startingScanner)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14),
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else
+          IconButton(
+            tooltip: _scannerActive ? 'Stop camera' : 'Scan barcode',
+            icon: Icon(
+              _scannerActive
+                  ? Icons.videocam_off_rounded
+                  : Icons.qr_code_scanner_rounded,
+              color: _scannerActive
+                  ? AppColors.homeAccentTeal
+                  : colorScheme.primary,
+            ),
+            onPressed: () {
+              if (_scannerActive) {
+                unawaited(_stopScanner());
+              } else {
+                unawaited(_startScanner());
+              }
+            },
+          ),
+      ],
+    );
+  }
+
   Widget _buildSearchAndScanner(ThemeData theme, ColorScheme colorScheme) {
     final isDark = theme.brightness == Brightness.dark;
 
@@ -495,20 +547,11 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
           decoration: InputDecoration(
             hintText: 'Search product or brand…',
             prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: _searchController.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () {
-                      _searchController.clear();
-                      _searchDebounce?.cancel();
-                      setState(() {
-                        _searchResults = const [];
-                        _isSearching = false;
-                        _searchError = null;
-                      });
-                    },
-                  )
-                : null,
+            suffixIcon: _buildSearchScanActions(colorScheme),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 48,
+              minHeight: 48,
+            ),
             filled: true,
             fillColor: isDark ? colorScheme.surface : Colors.white,
           ),
@@ -568,20 +611,8 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
             ),
           ),
         if (_selected == null) ...[
-          const SizedBox(height: 12),
-          StockEntryCompactScannerBar(
-            scannerActive: _scannerActive,
-            startingScanner: _startingScanner,
-            onToggleScanner: () {
-              if (_scannerActive) {
-                unawaited(_stopScanner());
-              } else {
-                unawaited(_startScanner());
-              }
-            },
-          ),
           if (_scannerActive) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               child: AspectRatio(

@@ -1948,10 +1948,16 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                   decoration: InputDecoration(
                                     hintText: 'Search product or brand…',
                                     prefixIcon: const Icon(Icons.search_rounded),
-                                    suffixIcon: productSearchController
-                                            .text.isNotEmpty
-                                        ? IconButton(
-                                            icon: const Icon(Icons.close_rounded),
+                                    suffixIcon: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (productSearchController
+                                            .text.isNotEmpty)
+                                          IconButton(
+                                            tooltip: 'Clear search',
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                            ),
                                             onPressed: () {
                                               productSearchController.clear();
                                               _productSearchDebounce?.cancel();
@@ -1961,8 +1967,47 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                                 _isProductSearching = false;
                                               });
                                             },
+                                          ),
+                                        if (_startingScanner)
+                                          const Padding(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 14,
+                                            ),
+                                            child: SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
                                           )
-                                        : null,
+                                        else
+                                          IconButton(
+                                            tooltip: _scannerActive
+                                                ? 'Stop camera'
+                                                : 'Scan barcode',
+                                            icon: Icon(
+                                              _scannerActive
+                                                  ? Icons.videocam_off_rounded
+                                                  : Icons.qr_code_scanner_rounded,
+                                              color: _scannerActive
+                                                  ? AppColors.emerald
+                                                  : colorScheme.primary,
+                                            ),
+                                            onPressed: () {
+                                              if (_scannerActive) {
+                                                unawaited(_stopScanner());
+                                              } else {
+                                                unawaited(_startScanner());
+                                              }
+                                            },
+                                          ),
+                                      ],
+                                    ),
+                                    suffixIconConstraints: const BoxConstraints(
+                                      minWidth: 48,
+                                      minHeight: 48,
+                                    ),
                                     filled: true,
                                     fillColor: theme.brightness == Brightness.dark
                                         ? colorScheme.surface
@@ -2038,84 +2083,65 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             ),
                           ),
                         ),
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                          sliver: SliverToBoxAdapter(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                BillingCompactScannerBar(
-                                  scannerActive: _scannerActive,
-                                  startingScanner: _startingScanner,
-                                  onToggleScanner: () {
-                                    if (_scannerActive) {
-                                      unawaited(_stopScanner());
-                                    } else {
-                                      unawaited(_startScanner());
-                                    }
-                                  },
+                        if (_scannerActive)
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                            sliver: SliverToBoxAdapter(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusMd,
                                 ),
-                                if (_scannerActive) ...[
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(
-                                      AppTheme.radiusMd,
-                                    ),
-                                    child: AspectRatio(
-                                      aspectRatio: 4 / 3,
-                                      child: BarcodeScannerView(
-                                        controller: _scannerController,
-                                        profile: BarcodeScanProfile.billing,
-                                        enabled: _canAcceptBarcodeScans,
-                                        hintText:
-                                            'Align barcode bars in the green frame — move closer if small',
-                                        onBarcodeConfirmed: (value) {
-                                          unawaited(_handleBarcode(value));
-                                        },
-                                        errorBuilder: (context, error, child) {
-                                          return Container(
-                                            color: colorScheme
-                                                .surfaceContainerHighest,
-                                            padding: const EdgeInsets.all(16),
-                                            child: Center(
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    Icons.camera_alt_outlined,
-                                                    color: colorScheme
-                                                        .onSurfaceVariant,
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  Text(
-                                                    'Camera unavailable',
-                                                    style: theme
-                                                        .textTheme.titleSmall
-                                                        ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  TextButton(
-                                                    onPressed: () {
-                                                      unawaited(_stopScanner());
-                                                    },
-                                                    child: const Text('Close'),
-                                                  ),
-                                                ],
+                                child: AspectRatio(
+                                  aspectRatio: 4 / 3,
+                                  child: BarcodeScannerView(
+                                    controller: _scannerController,
+                                    profile: BarcodeScanProfile.billing,
+                                    enabled: _canAcceptBarcodeScans,
+                                    hintText:
+                                        'Align barcode bars in the green frame — move closer if small',
+                                    onBarcodeConfirmed: (value) {
+                                      unawaited(_handleBarcode(value));
+                                    },
+                                    errorBuilder: (context, error, child) {
+                                      return Container(
+                                        color: colorScheme
+                                            .surfaceContainerHighest,
+                                        padding: const EdgeInsets.all(16),
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.camera_alt_outlined,
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
                                               ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                'Camera unavailable',
+                                                style: theme
+                                                    .textTheme.titleSmall
+                                                    ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              TextButton(
+                                                onPressed: () {
+                                                  unawaited(_stopScanner());
+                                                },
+                                                child: const Text('Close'),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
                                   ),
-                                ],
-                              ],
+                                ),
+                              ),
                             ),
                           ),
-                        ),
                         SliverPadding(
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                           sliver: SliverToBoxAdapter(
