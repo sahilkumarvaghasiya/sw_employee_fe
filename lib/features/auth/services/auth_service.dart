@@ -55,10 +55,11 @@ class AuthService {
         final response = await _client
             .post(
               _accountUri('/login/'),
+              // Do not send Cache-Control/Pragma: Safari iOS treats them as
+              // non-simple CORS headers and aborts with "ClientLoad failed"
+              // when the API allow-list omits them.
               headers: {
                 'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
               },
               body: jsonEncode(payload),
             )
