@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/api_config.dart';
@@ -39,52 +38,99 @@ class AuthService {
     String password, {
     bool forceLogin = false,
   }) async {
-    try {
-      final payload = <String, dynamic>{
-        'email': email,
-        'password': password,
-      };
-      if (forceLogin) {
-        payload['force_login'] = true;
-      }
-
-      final response = await _client
-          .post(
-            _accountUri('/login/'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(payload),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final access = data['access']?.toString();
-        final refresh = data['refresh']?.toString();
-
-        if (access == null || refresh == null) {
-          throw Exception('Invalid login response from server');
-        }
-
-        return {...data, 'access': access, 'refresh': refresh};
-      }
-
-      if (response.statusCode == 409) {
-        final data = jsonDecode(response.body);
-        if (data is Map<String, dynamic>) {
-          return data;
-        }
-      }
-
-      throw Exception(_errorMessageFromResponse(response));
-    } on TimeoutException {
-      throw Exception('Request timed out. Backend is slow or unreachable.');
-    } on SocketException {
-      throw Exception(
-        'Cannot connect to backend. Check API URL and ensure server is reachable from this device.',
-      );
-    } on FormatException {
-      throw Exception('Invalid response format from backend.');
+    final payload = <String, dynamic>{
+      'email': email,
+      'password': password,
+    };
+    if (forceLogin) {
+      payload['force_login'] = true;
     }
+
+    // India → US Railway can drop the first request on mobile; retry briefly.
+    const maxAttempts = 3;
+    Object? lastError;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final response = await _client
+            .post(
+              _accountUri('/login/'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+              },
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 30));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          final access = data['access']?.toString();
+          final refresh = data['refresh']?.toString();
+
+          if (access == null || refresh == null) {
+            throw Exception('Invalid login response from server');
+          }
+
+          return {...data, 'access': access, 'refresh': refresh};
+        }
+
+        if (response.statusCode == 409) {
+          final data = jsonDecode(response.body);
+          if (data is Map<String, dynamic>) {
+            return data;
+          }
+        }
+
+        // Auth/validation errors should not be retried.
+        throw Exception(_errorMessageFromResponse(response));
+      } on TimeoutException catch (e) {
+        lastError = e;
+      } on http.ClientException catch (e) {
+        lastError = e;
+      } on FormatException {
+        throw Exception('Invalid response format from backend.');
+      } catch (e) {
+        if (e.runtimeType.toString() == 'SocketException') {
+          lastError = e;
+        } else {
+          // Non-network failures (e.g. invalid credentials message).
+          rethrow;
+        }
+      }
+
+      if (attempt < maxAttempts) {
+        await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
+        // Fresh client helps after a broken keep-alive on long-haul links.
+        HttpClientManager.reset();
+      }
+    }
+
+    if (lastError is TimeoutException) {
+      throw Exception(
+        'Server is too far/slow from this network. Please try again on Wi‑Fi.',
+      );
+    }
+    if (lastError is http.ClientException) {
+      throw Exception(_networkFailureMessage(lastError as http.ClientException));
+    }
+    throw Exception(
+      'Cannot connect to backend. Check internet and try again.',
+    );
+  }
+
+  String _networkFailureMessage(http.ClientException e) {
+    final detail = e.message.trim();
+    final isClientLoad = detail.toLowerCase().contains('clientload') ||
+        detail.toLowerCase().contains('failed to fetch') ||
+        detail.toLowerCase().contains('xmlhttprequest');
+    if (isClientLoad) {
+      return 'Cannot reach server right now (India → USA link). '
+          'Keep the home-screen app, switch to Wi‑Fi, wait a moment, and tap Sign in again.';
+    }
+    return 'Cannot connect to backend. Check internet and try again.'
+        '${detail.isEmpty ? '' : ' ($detail)'}';
   }
 
   Future<bool> restoreSession() async {
@@ -177,7 +223,7 @@ class AuthService {
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
       // Still clear session locally from AuthProvider.
-    } on SocketException {
+    } on http.ClientException {
       // Same — offline logout should still sign the user out in-app.
     } catch (_) {
       // Ignore — blacklist is best-effort.
