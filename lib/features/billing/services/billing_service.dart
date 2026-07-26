@@ -41,7 +41,8 @@ class BillingService {
   static const String _customerLookupPath = '/sales/customer-lookup/';
   static const String _qrConfigsPath = '/sales/payment-configs/qr/';
   static const String _createBillPath = '/sales/bills/create/';
-  static const String _sendWhatsAppInvoicePath = '/sales/bills/send-whatsapp-invoice/';
+  static const String _sendWhatsAppInvoicePath =
+      '/sales/bills/send-whatsapp-invoice/';
 
   final ApiService _apiService;
 
@@ -81,9 +82,7 @@ class BillingService {
 
     final response = await _apiService.post(
       _url(_sendWhatsAppInvoicePath).toString(),
-      body: {
-        'bill_id': normalizedBillId,
-      },
+      body: {'bill_id': normalizedBillId},
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -157,8 +156,9 @@ class BillingService {
       } else if (item.isUnitPriceOverride ||
           item.unitPrice != item.originalUnitPrice) {
         // custom_amount is the per-unit final price; backend multiplies by qty.
-        final customUnitPrice =
-            item.unitPrice.clamp(0, double.infinity).toDouble();
+        final customUnitPrice = item.unitPrice
+            .clamp(0, double.infinity)
+            .toDouble();
         if (customUnitPrice > 0.0001) {
           row['custom_amount'] = money(customUnitPrice);
         }
@@ -170,8 +170,8 @@ class BillingService {
     final hasReturnItems = items.any((item) => item.isReturn);
     final customBillAmount =
         hasReturnItems || (finalAmount - calculatedFinalAmount).abs() > 0.0001
-            ? finalAmount
-            : 0.0;
+        ? finalAmount
+        : 0.0;
 
     final paymentMethodValue = switch (paymentMethod) {
       BillingPaymentMethod.cash => 'cash',
@@ -593,14 +593,41 @@ class BillingService {
   BillingQrConfig? _qrConfigFromMap(Map<String, dynamic> map) {
     final id = (map['id'] ?? '').toString().trim();
     final name = (map['name'] ?? map['label'] ?? '').toString().trim();
-    final imageUrl = (map['image_url'] ?? map['imageUrl'] ?? '')
+    final rawImageUrl = (map['image_url'] ?? map['imageUrl'] ?? '')
         .toString()
         .trim();
+    final imageUrl = _normalizeMediaUrl(rawImageUrl);
 
     if (id.isEmpty || name.isEmpty || imageUrl.isEmpty) {
       return null;
     }
 
     return BillingQrConfig(id: id, name: name, imageUrl: imageUrl);
+  }
+
+  /// Flutter web is served over HTTPS; http:// media URLs are blocked as
+  /// mixed content. Upgrade scheme (and resolve relative paths) against API host.
+  String _normalizeMediaUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty || value.toLowerCase() == 'null') return '';
+
+    final uri = Uri.tryParse(value);
+    if (uri == null) return value;
+
+    if (uri.hasScheme) {
+      if (uri.scheme == 'http' && ApiConfig.baseUrl.startsWith('https://')) {
+        return uri.replace(scheme: 'https').toString();
+      }
+      return value;
+    }
+
+    final apiBase = Uri.parse(ApiConfig.baseUrl);
+    final origin = Uri(
+      scheme: apiBase.scheme,
+      host: apiBase.host,
+      port: apiBase.hasPort ? apiBase.port : null,
+    );
+    final path = value.startsWith('/') ? value : '/$value';
+    return origin.resolve(path).toString();
   }
 }
