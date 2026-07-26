@@ -2097,48 +2097,93 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                         );
                       }
 
+                      Widget piecesStepButton({
+                        required String tooltip,
+                        required IconData icon,
+                        required VoidCallback onPressed,
+                      }) {
+                        return IconButton(
+                          tooltip: tooltip,
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 34,
+                            height: 34,
+                          ),
+                          style: IconButton.styleFrom(
+                            backgroundColor: colorScheme.surface.withValues(
+                              alpha: 0.72,
+                            ),
+                            foregroundColor: colorScheme.onSurface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          iconSize: 18,
+                          onPressed: onPressed,
+                          icon: Icon(icon),
+                        );
+                      }
+
                       Widget piecesStepper() {
                         return SizedBox(
                           height: gridHeight,
                           child: InputDecorator(
                             isEmpty: false,
-                            decoration:
-                                gridDecoration(
-                                  icon: Icons.confirmation_number_outlined,
-                                  hint: '1',
-                                ).copyWith(
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 8,
-                                  ),
-                                ),
+                            decoration: gridDecoration(
+                              icon: Icons.confirmation_number_outlined,
+                              hint: '1',
+                            ).copyWith(
+                              // Outer grey field only; no nested white input fill.
+                              hintText: null,
+                              contentPadding: const EdgeInsets.fromLTRB(
+                                4,
+                                6,
+                                8,
+                                6,
+                              ),
+                            ),
                             child: Row(
                               children: [
-                                IconButton(
+                                piecesStepButton(
                                   tooltip: 'Decrease',
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 32,
-                                    height: 32,
-                                  ),
-                                  iconSize: 18,
+                                  icon: Icons.remove_rounded,
                                   onPressed: () {
                                     final current =
                                         int.tryParse(
                                           _draftRow.qtyController.text.trim(),
                                         ) ??
                                         0;
-                                    if (current <= 1) return;
-                                    _draftRow.qtyController.text = (current - 1)
-                                        .toString();
+                                    if (current <= 0) {
+                                      _draftRow.qtyController.clear();
+                                      setState(() {});
+                                      return;
+                                    }
+                                    final next = current - 1;
+                                    // Allow empty while editing (type 50, etc.).
+                                    _draftRow.qtyController.text =
+                                        next <= 0 ? '' : next.toString();
                                     setState(() {});
                                   },
-                                  icon: const Icon(Icons.remove_rounded),
                                 ),
                                 Expanded(
-                                  child: Transform.translate(
-                                    offset: const Offset(-9, -3),
+                                  child: Theme(
+                                    data: theme.copyWith(
+                                      inputDecorationTheme:
+                                          const InputDecorationTheme(
+                                            filled: false,
+                                            fillColor: Colors.transparent,
+                                            border: InputBorder.none,
+                                            enabledBorder: InputBorder.none,
+                                            focusedBorder: InputBorder.none,
+                                            disabledBorder: InputBorder.none,
+                                            errorBorder: InputBorder.none,
+                                            focusedErrorBorder:
+                                                InputBorder.none,
+                                            contentPadding: EdgeInsets.zero,
+                                            isDense: true,
+                                          ),
+                                    ),
                                     child: TextFormField(
                                       controller: _draftRow.qtyController,
                                       keyboardType: TextInputType.number,
@@ -2151,42 +2196,46 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                           TextAlignVertical.center,
                                       style: theme.textTheme.bodyLarge
                                           ?.copyWith(
-                                            height: 1,
+                                            height: 1.1,
                                             fontWeight: FontWeight.w700,
                                           ),
-                                      decoration: const InputDecoration(
+                                      decoration: InputDecoration(
                                         isDense: true,
                                         isCollapsed: true,
+                                        filled: false,
+                                        fillColor: Colors.transparent,
                                         border: InputBorder.none,
-                                        hintText: '1',
+                                        enabledBorder: InputBorder.none,
+                                        focusedBorder: InputBorder.none,
+                                        // Empty hint so clearing "1" doesn't look stuck.
+                                        hintText: '0',
+                                        hintStyle: theme.textTheme.bodyLarge
+                                            ?.copyWith(
+                                              height: 1.1,
+                                              fontWeight: FontWeight.w600,
+                                              color: colorScheme
+                                                  .onSurfaceVariant
+                                                  .withValues(alpha: 0.45),
+                                            ),
                                         contentPadding: EdgeInsets.zero,
                                       ),
                                     ),
                                   ),
                                 ),
-                                IconButton(
+                                piecesStepButton(
                                   tooltip: 'Increase',
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 32,
-                                    height: 32,
-                                  ),
-                                  iconSize: 18,
+                                  icon: Icons.add_rounded,
                                   onPressed: () {
                                     final current =
                                         int.tryParse(
                                           _draftRow.qtyController.text.trim(),
                                         ) ??
                                         0;
-                                    final next =
-                                        (current <= 0 ? 0 : current) + 1;
-                                    _draftRow.qtyController.text = next
-                                        .toString();
+                                    _draftRow.qtyController.text =
+                                        (current + 1).toString();
                                     setState(() {});
                                   },
-                                  icon: const Icon(Icons.add_rounded),
-                                ),
+                                )
                               ],
                             ),
                           ),
