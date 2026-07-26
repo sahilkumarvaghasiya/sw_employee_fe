@@ -263,14 +263,6 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
         surcharge: payResult.payment.surcharge,
         allocations: payResult.payment.allocations,
       );
-
-      if (result.printPdf && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Use Download PDF statement for the vendor ledger.'),
-          ),
-        );
-      }
     } catch (e) {
       if (!mounted) return;
       final message = e.toString().replaceFirst('ClientException: ', '');
