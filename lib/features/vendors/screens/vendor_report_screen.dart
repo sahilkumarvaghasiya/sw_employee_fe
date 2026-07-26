@@ -49,7 +49,7 @@ class _VendorReportScreenState extends State<VendorReportScreen> {
 
   String _dateLabel() {
     final range = _dateRange;
-    if (range == null) return 'All dates';
+    if (range == null) return 'Last 6 months';
     return '${_dateFmt.format(range.start)} – ${_dateFmt.format(range.end)}';
   }
 
@@ -188,9 +188,8 @@ class _VendorReportScreenState extends State<VendorReportScreen> {
 
       final filename = () {
         final range = _dateRange;
-        if (range == null) return 'vendor-report.pdf';
-        final start =
-            DateFormat('yyyyMMdd').format(range.start);
+        if (range == null) return 'vendor-report-last-6-months.pdf';
+        final start = DateFormat('yyyyMMdd').format(range.start);
         final end = DateFormat('yyyyMMdd').format(range.end);
         return 'vendor-report-$start-$end.pdf';
       }();

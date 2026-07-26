@@ -16,8 +16,9 @@ class VendorsPaymentsService {
   static const String _summaryPath = '/vendors/payable/summary/';
   static const String _payableVendorsPath = '/vendors/payable/vendors/';
   static const String _billsPath = '/manager/vendors/bills/';
-  static const String _reportPreviewPath = '/manager/vendors/reports/preview/';
-  static const String _reportPdfPath = '/manager/vendors/reports/pdf/';
+  // Employee payable report (default last 6 months when dates empty).
+  static const String _reportPreviewPath = '/vendors/payable/reports/preview/';
+  static const String _reportPdfPath = '/vendors/payable/reports/pdf/';
 
   static String _payableVendorInfoPath(int vendorId) =>
       '/vendors/payable/vendors/$vendorId/info/';
