@@ -183,7 +183,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
   Future<void> _scanExistingProduct() async {
     final drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
-      ExistingProductScanScreen.route(),
+      ExistingProductScanScreen.route(vendor: widget.vendor),
     );
 
     if (!mounted) return;
@@ -347,7 +347,10 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     if (draftsToEdit.any((d) => d.isExisting)) {
       drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
-        ExistingProductScanScreen.route(initialDraft: draftsToEdit.first),
+        ExistingProductScanScreen.route(
+          vendor: widget.vendor,
+          initialDraft: draftsToEdit.first,
+        ),
       );
     } else {
       drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(

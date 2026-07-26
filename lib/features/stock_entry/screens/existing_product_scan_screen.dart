@@ -14,12 +14,21 @@ import '../../products/models/product.dart';
 import '../../products/services/products_service.dart';
 import '../models/existing_stock_product.dart';
 import '../models/stock_entry_draft_item.dart';
+import '../models/vendor.dart';
+import '../services/stock_entry_service.dart';
 import '../widgets/stock_entry_ui.dart';
 
 /// Find an existing catalog product (search or scan), review read-only details,
 /// then restock with quantity + optional price overrides.
 class ExistingProductScanScreen extends StatefulWidget {
-  const ExistingProductScanScreen({super.key, this.initialDraft});
+  const ExistingProductScanScreen({
+    super.key,
+    required this.vendor,
+    this.initialDraft,
+  });
+
+  /// Current stock-entry vendor — search is scoped to this vendor's products.
+  final Vendor vendor;
 
   /// When set, opens in edit mode with this restock draft prefilled.
   final StockEntryDraftItem? initialDraft;
@@ -27,11 +36,15 @@ class ExistingProductScanScreen extends StatefulWidget {
   static const String routeName = '/stock-entry/existing-product';
 
   static Route<List<StockEntryDraftItem>?> route({
+    required Vendor vendor,
     StockEntryDraftItem? initialDraft,
   }) {
     return MaterialPageRoute<List<StockEntryDraftItem>?>(
       settings: const RouteSettings(name: routeName),
-      builder: (_) => ExistingProductScanScreen(initialDraft: initialDraft),
+      builder: (_) => ExistingProductScanScreen(
+        vendor: vendor,
+        initialDraft: initialDraft,
+      ),
     );
   }
 
@@ -54,6 +67,7 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
 
   final ProductsService _productsService = ProductsService();
   final BillingService _billingService = BillingService();
+  final StockEntryService _stockEntryService = StockEntryService();
 
   Timer? _searchDebounce;
   int _searchRequestId = 0;
@@ -235,12 +249,6 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
     });
   }
 
-  bool _matchesNameOrBrand(Product product, String query) {
-    final needle = query.toLowerCase();
-    return product.name.toLowerCase().contains(needle) ||
-        product.companyName.toLowerCase().contains(needle);
-  }
-
   Future<void> _runSearch(String raw) async {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
@@ -259,19 +267,16 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
     });
 
     try {
-      final page = await _productsService.fetchProductVariants(
+      final page = await _stockEntryService.fetchVendorProducts(
+        vendorId: widget.vendor.id,
+        search: trimmed,
         page: 1,
         pageSize: 30,
-        filters: <String, String>{'search': trimmed},
       );
       if (!mounted || requestId != _searchRequestId) return;
 
-      final filtered = page.items
-          .where((product) => _matchesNameOrBrand(product, trimmed))
-          .toList(growable: false);
-
       setState(() {
-        _searchResults = filtered;
+        _searchResults = page.items;
         _isSearching = false;
       });
     } catch (_) {
@@ -478,6 +483,58 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
     );
   }
 
+  Widget _buildSearchScanActions(ColorScheme colorScheme) {
+    final hasQuery = _searchController.text.isNotEmpty;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasQuery)
+          IconButton(
+            tooltip: 'Clear search',
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () {
+              _searchController.clear();
+              _searchDebounce?.cancel();
+              setState(() {
+                _searchResults = const [];
+                _isSearching = false;
+                _searchError = null;
+              });
+            },
+          ),
+        if (_startingScanner)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14),
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else
+          IconButton(
+            tooltip: _scannerActive ? 'Stop camera' : 'Scan barcode',
+            icon: Icon(
+              _scannerActive
+                  ? Icons.videocam_off_rounded
+                  : Icons.qr_code_scanner_rounded,
+              color: _scannerActive
+                  ? AppColors.homeAccentTeal
+                  : colorScheme.primary,
+            ),
+            onPressed: () {
+              if (_scannerActive) {
+                unawaited(_stopScanner());
+              } else {
+                unawaited(_startScanner());
+              }
+            },
+          ),
+      ],
+    );
+  }
+
   Widget _buildSearchAndScanner(ThemeData theme, ColorScheme colorScheme) {
     final isDark = theme.brightness == Brightness.dark;
 
@@ -495,20 +552,11 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
           decoration: InputDecoration(
             hintText: 'Search product or brand…',
             prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: _searchController.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () {
-                      _searchController.clear();
-                      _searchDebounce?.cancel();
-                      setState(() {
-                        _searchResults = const [];
-                        _isSearching = false;
-                        _searchError = null;
-                      });
-                    },
-                  )
-                : null,
+            suffixIcon: _buildSearchScanActions(colorScheme),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 48,
+              minHeight: 48,
+            ),
             filled: true,
             fillColor: isDark ? colorScheme.surface : Colors.white,
           ),
@@ -568,20 +616,8 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
             ),
           ),
         if (_selected == null) ...[
-          const SizedBox(height: 12),
-          StockEntryCompactScannerBar(
-            scannerActive: _scannerActive,
-            startingScanner: _startingScanner,
-            onToggleScanner: () {
-              if (_scannerActive) {
-                unawaited(_stopScanner());
-              } else {
-                unawaited(_startScanner());
-              }
-            },
-          ),
           if (_scannerActive) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               child: AspectRatio(
