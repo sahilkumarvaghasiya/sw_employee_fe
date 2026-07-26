@@ -14,7 +14,6 @@ class NewPaymentResult {
     required this.amount,
     required this.billIds,
     required this.paymentDate,
-    required this.printPdf,
     this.discount = 0,
     this.surcharge = 0,
   });
@@ -22,7 +21,6 @@ class NewPaymentResult {
   final double amount;
   final List<int> billIds;
   final DateTime paymentDate;
-  final bool printPdf;
   final double discount;
   final double surcharge;
 }
@@ -79,7 +77,6 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
   late final TextEditingController _paidController;
 
   bool _transactionsExpanded = true;
-  bool _printPdf = false;
   double _discount = 0;
   double _surcharge = 0;
   String? _error;
@@ -183,7 +180,6 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
         amount: amount,
         billIds: _selectedIds.toList(growable: false),
         paymentDate: _paymentDate,
-        printPdf: _printPdf,
         discount: _discount,
         surcharge: _surcharge,
       ),
@@ -195,7 +191,6 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final provider = context.watch<VendorsProvider>();
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -372,29 +367,6 @@ class _VendorNewPaymentScreenState extends State<VendorNewPaymentScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? colorScheme.surfaceContainerHighest
-                  : AppColors.slate100,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            ),
-            child: SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                'Print PDF of payment',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              value: _printPdf,
-              activeThumbColor: Colors.white,
-              activeTrackColor: AppColors.emerald,
-              onChanged: (v) => setState(() => _printPdf = v),
-            ),
-          ),
         ],
       ),
     );
