@@ -220,6 +220,18 @@ abstract final class AppTheme {
     );
   }
 
+  static const List<String> _fontFallback = [
+    'Roboto',
+    'Arial',
+    'Noto Sans',
+    'sans-serif',
+  ];
+
+  static TextStyle? _withRupeeFallback(TextStyle? style) {
+    if (style == null) return null;
+    return style.copyWith(fontFamilyFallback: _fontFallback);
+  }
+
   static TextTheme _textTheme(Brightness brightness) {
     final base = GoogleFonts.plusJakartaSansTextTheme(
       brightness == Brightness.dark
@@ -227,27 +239,51 @@ abstract final class AppTheme {
           : ThemeData.light().textTheme,
     );
 
-    return base.copyWith(
-      displaySmall: base.displaySmall?.copyWith(
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.8,
+    // Plus Jakarta Sans lacks ₹ (U+20B9); fall back so amounts don't show □.
+    return TextTheme(
+      displayLarge: _withRupeeFallback(base.displayLarge),
+      displayMedium: _withRupeeFallback(base.displayMedium),
+      displaySmall: _withRupeeFallback(
+        base.displaySmall?.copyWith(
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.8,
+        ),
       ),
-      headlineMedium: base.headlineMedium?.copyWith(
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.5,
+      headlineLarge: _withRupeeFallback(base.headlineLarge),
+      headlineMedium: _withRupeeFallback(
+        base.headlineMedium?.copyWith(
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
+        ),
       ),
-      titleLarge: base.titleLarge?.copyWith(
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.3,
+      headlineSmall: _withRupeeFallback(base.headlineSmall),
+      titleLarge: _withRupeeFallback(
+        base.titleLarge?.copyWith(
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
+        ),
       ),
-      titleMedium: base.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.2,
+      titleMedium: _withRupeeFallback(
+        base.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.2,
+        ),
       ),
-      titleSmall: base.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-      labelLarge: base.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-      bodyMedium: base.bodyMedium?.copyWith(height: 1.5),
-      bodySmall: base.bodySmall?.copyWith(height: 1.45),
+      titleSmall: _withRupeeFallback(
+        base.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+      ),
+      bodyLarge: _withRupeeFallback(base.bodyLarge),
+      bodyMedium: _withRupeeFallback(
+        base.bodyMedium?.copyWith(height: 1.5),
+      ),
+      bodySmall: _withRupeeFallback(
+        base.bodySmall?.copyWith(height: 1.45),
+      ),
+      labelLarge: _withRupeeFallback(
+        base.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      labelMedium: _withRupeeFallback(base.labelMedium),
+      labelSmall: _withRupeeFallback(base.labelSmall),
     );
   }
 }

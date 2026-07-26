@@ -191,6 +191,7 @@ class BillingCheckoutBar extends StatelessWidget {
     required this.discountLabel,
     required this.onPayment,
     this.enabled = true,
+    this.isRefund = false,
   });
 
   final int itemCount;
@@ -198,6 +199,7 @@ class BillingCheckoutBar extends StatelessWidget {
   final String discountLabel;
   final VoidCallback? onPayment;
   final bool enabled;
+  final bool isRefund;
 
   @override
   Widget build(BuildContext context) {
@@ -206,12 +208,18 @@ class BillingCheckoutBar extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.slate900 : Colors.white,
+        color: isRefund
+            ? (isDark
+                ? AppColors.error.withValues(alpha: 0.16)
+                : AppColors.error.withValues(alpha: 0.08))
+            : (isDark ? AppColors.slate900 : Colors.white),
         border: Border(
           top: BorderSide(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : AppColors.slate200,
+            color: isRefund
+                ? AppColors.error.withValues(alpha: 0.35)
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : AppColors.slate200),
           ),
         ),
       ),
@@ -227,15 +235,24 @@ class BillingCheckoutBar extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '$itemCount item${itemCount == 1 ? '' : 's'}',
+                      isRefund
+                          ? 'Refund due'
+                          : '$itemCount item${itemCount == 1 ? '' : 's'}',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
+                        color: isRefund ? AppColors.error : null,
                       ),
                     ),
                     Text(
-                      '$subtotalLabel · Disc $discountLabel',
+                      isRefund
+                          ? '$subtotalLabel · $itemCount item${itemCount == 1 ? '' : 's'}'
+                          : '$subtotalLabel · Disc $discountLabel',
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: isRefund
+                            ? AppColors.error
+                            : theme.colorScheme.onSurfaceVariant,
+                        fontWeight:
+                            isRefund ? FontWeight.w700 : FontWeight.w400,
                       ),
                     ),
                   ],
@@ -244,9 +261,15 @@ class BillingCheckoutBar extends StatelessWidget {
               const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed: enabled ? onPayment : null,
-                icon: const Icon(Icons.payments_outlined, size: 20),
-                label: const Text('Payment'),
+                icon: Icon(
+                  isRefund
+                      ? Icons.assignment_return_rounded
+                      : Icons.payments_outlined,
+                  size: 20,
+                ),
+                label: Text(isRefund ? 'Refund' : 'Payment'),
                 style: FilledButton.styleFrom(
+                  backgroundColor: isRefund ? AppColors.error : null,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 14,
@@ -268,16 +291,20 @@ class BillingPayableHero extends StatelessWidget {
     required this.amount,
     this.label = 'Amount to pay',
     this.subtitle,
+    this.isRefund = false,
   });
 
   final String amount;
   final String label;
   final String? subtitle;
+  final bool isRefund;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final accent = isRefund ? AppColors.error : AppColors.emerald;
+    final accentDark = isRefund ? AppColors.error : AppColors.emeraldDark;
 
     return Container(
       width: double.infinity,
@@ -286,19 +313,19 @@ class BillingPayableHero extends StatelessWidget {
         gradient: LinearGradient(
           colors: isDark
               ? [
-                  AppColors.emerald.withValues(alpha: 0.25),
-                  AppColors.emerald.withValues(alpha: 0.08),
+                  accent.withValues(alpha: 0.28),
+                  accent.withValues(alpha: 0.1),
                 ]
               : [
-                  AppColors.emerald.withValues(alpha: 0.12),
-                  AppColors.emerald.withValues(alpha: 0.04),
+                  accent.withValues(alpha: 0.14),
+                  accent.withValues(alpha: 0.05),
                 ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(
-          color: AppColors.emerald.withValues(alpha: 0.25),
+          color: accent.withValues(alpha: isRefund ? 0.4 : 0.25),
         ),
       ),
       child: Column(
@@ -306,8 +333,8 @@ class BillingPayableHero extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
+              color: isRefund ? accentDark : theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
@@ -315,7 +342,7 @@ class BillingPayableHero extends StatelessWidget {
             amount,
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.w800,
-              color: AppColors.emeraldDark,
+              color: accentDark,
               letterSpacing: -0.5,
             ),
           ),
@@ -324,7 +351,9 @@ class BillingPayableHero extends StatelessWidget {
             Text(
               subtitle!,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+                color: isRefund
+                    ? accentDark.withValues(alpha: 0.8)
+                    : theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],

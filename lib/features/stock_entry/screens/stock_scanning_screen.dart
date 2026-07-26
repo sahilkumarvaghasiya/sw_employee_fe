@@ -15,6 +15,7 @@ import '../services/stock_entry_service.dart';
 import '../widgets/payment_section.dart';
 import '../widgets/stock_entry_ui.dart';
 import 'add_stock_entry_item_screen.dart';
+import 'existing_product_scan_screen.dart';
 import 'stock_barcode_scanner_screen.dart';
 import 'stock_entry_history_screen.dart';
 import 'stock_entry_main_screen.dart';
@@ -48,7 +49,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   DateTime? _deadline;
 
   bool _itemsLocked = false;
-  bool _showDeadlineValidation = false;
 
   double _totalStockValue = 0;
   double _paidAmount = 0;
@@ -181,6 +181,17 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     _addDraftsToList(drafts);
   }
 
+  Future<void> _scanExistingProduct() async {
+    final drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
+      ExistingProductScanScreen.route(),
+    );
+
+    if (!mounted) return;
+    if (drafts == null || drafts.isEmpty) return;
+
+    _addDraftsToList(drafts);
+  }
+
   void _addDraftsToList(List<StockEntryDraftItem> drafts) {
     if (drafts.isEmpty) return;
 
@@ -224,7 +235,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     if (picked == null) return;
     setState(() {
       _deadline = picked;
-      _showDeadlineValidation = false;
     });
   }
 
@@ -256,9 +266,10 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   Future<void> _removeBlockByBarcode(String barcode) async {
     if (_itemsLocked) return;
 
+    final normalizedBarcode = barcode.trim();
     final indices = <int>[];
     for (var i = 0; i < _items.length; i++) {
-      if (_items[i].draft.barcode == barcode) {
+      if (_items[i].draft.barcode.trim() == normalizedBarcode) {
         indices.add(i);
       }
     }
@@ -294,12 +305,13 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
   Future<void> _editBlockByBarcode(String barcode) async {
     if (_itemsLocked) return;
 
+    final normalizedBarcode = barcode.trim();
     final indices = <int>[];
     final draftsToEdit = <StockEntryDraftItem>[];
 
     for (var i = 0; i < _items.length; i++) {
       final item = _items[i];
-      if (item.draft.barcode != barcode) continue;
+      if (item.draft.barcode.trim() != normalizedBarcode) continue;
 
       indices.add(i);
       draftsToEdit.add(
@@ -320,33 +332,46 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
           quantity: item.quantity,
           costPrice: item.costPrice,
           sellingPrice: item.sellingPrice,
+          isExisting: item.draft.isExisting,
+          variantId: item.draft.variantId,
+          costPriceOverride: item.draft.costPriceOverride,
+          sellingPriceOverride: item.draft.sellingPriceOverride,
         ),
       );
     }
 
     if (draftsToEdit.isEmpty) return;
-    final insertAt = indices.first;
 
-    final drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
-      AddStockEntryItemScreen.route(
-        initialBarcode: barcode,
-        allowBarcodeEdit: false,
-        initialDrafts: draftsToEdit,
-      ),
-    );
+    final insertAt = indices.first;
+    final List<StockEntryDraftItem>? drafts;
+
+    if (draftsToEdit.any((d) => d.isExisting)) {
+      drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
+        ExistingProductScanScreen.route(initialDraft: draftsToEdit.first),
+      );
+    } else {
+      drafts = await Navigator.of(context).push<List<StockEntryDraftItem>?>(
+        AddStockEntryItemScreen.route(
+          initialBarcode: barcode,
+          allowBarcodeEdit: false,
+          initialDrafts: draftsToEdit,
+        ),
+      );
+    }
 
     if (!mounted) return;
     if (drafts == null) return;
 
+    final updatedDrafts = drafts;
     setState(() {
       for (var i = indices.length - 1; i >= 0; i--) {
         final removed = _items.removeAt(indices[i]);
         removed.dispose();
       }
 
-      if (drafts.isNotEmpty) {
-        for (var i = drafts.length - 1; i >= 0; i--) {
-          final next = _EditableDraftItem.fromDraft(drafts[i]);
+      if (updatedDrafts.isNotEmpty) {
+        for (var i = updatedDrafts.length - 1; i >= 0; i--) {
+          final next = _EditableDraftItem.fromDraft(updatedDrafts[i]);
           next.attachOnChanged(() {
             _syncTotalsFromControllers();
           });
@@ -360,10 +385,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
   Map<String, dynamic> _buildSavePayload() {
     final isExistingVendor = int.tryParse(widget.vendor.id) != null;
-    final productsByBarcode = <String, List<_EditableDraftItem>>{};
-    for (final item in _items) {
-      (productsByBarcode[item.draft.barcode] ??= []).add(item);
-    }
 
     String moneyString(double value) => value.toStringAsFixed(2);
     Object companyNameValue(StockEntryDraftItem item) {
@@ -383,13 +404,53 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       return '$y-$m-$day';
     }
 
+    final existingItems = <_EditableDraftItem>[];
+    final newItems = <_EditableDraftItem>[];
+    for (final item in _items) {
+      if (item.draft.isExisting) {
+        existingItems.add(item);
+      } else {
+        newItems.add(item);
+      }
+    }
+
     final products = <Map<String, dynamic>>[];
-    for (final entry in productsByBarcode.entries) {
+
+    // Existing restocks — backend only needs is_existing + variant_id + pieces
+    // (prices optional). Group by barcode for a cleaner products[] list.
+    final existingByBarcode = <String, List<_EditableDraftItem>>{};
+    for (final item in existingItems) {
+      (existingByBarcode[item.draft.barcode] ??= []).add(item);
+    }
+    for (final entry in existingByBarcode.entries) {
+      products.add({
+        'is_existing': true,
+        'item_variants': [
+          for (final it in entry.value)
+            {
+              'variant_id': it.draft.variantId,
+              'pieces': it.quantity,
+              if (it.draft.costPriceOverride != null)
+                'purchase_price': moneyString(it.draft.costPriceOverride!),
+              if (it.draft.sellingPriceOverride != null)
+                'sellprice': moneyString(it.draft.sellingPriceOverride!),
+            },
+        ],
+      });
+    }
+
+    // New products — full create payload.
+    final newByBarcode = <String, List<_EditableDraftItem>>{};
+    for (final item in newItems) {
+      (newByBarcode[item.draft.barcode] ??= []).add(item);
+    }
+    for (final entry in newByBarcode.entries) {
       final barcode = entry.key;
       final items = entry.value;
       final first = items.first.draft;
 
       products.add({
+        'is_existing': false,
         'company_name': companyNameValue(first),
         if (first.brandId != null && first.brandId!.trim().isNotEmpty)
           'brand_id': first.brandId,
@@ -401,7 +462,10 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
           for (final it in items)
             {
               'size': it.draft.sizeId ?? it.draft.size,
-              'colour': it.draft.colourId ?? it.draft.colour,
+              'colour': it.draft.colourId ??
+                  (it.draft.colour.trim().isEmpty
+                      ? null
+                      : it.draft.colour.trim()),
               'pieces': it.quantity,
               'sellprice': moneyString(it.sellingPrice),
               'purchase_price': moneyString(it.costPrice),
@@ -449,6 +513,13 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       if (item.quantity <= 0) {
         _showSnack('Quantity must be at least 1.');
         return false;
+      }
+      if (item.draft.isExisting) {
+        if (item.draft.variantId == null) {
+          _showSnack('Existing product is missing variant id. Re-add it.');
+          return false;
+        }
+        continue;
       }
       if (item.sellingPrice <= 0) {
         _showSnack('Selling price must be > 0.');
@@ -572,12 +643,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                 return;
               }
 
-              if (_remainingAmount > 0 && _deadline == null) {
-                setState(() => _showDeadlineValidation = true);
-                setModalState(() {});
-                return;
-              }
-
               setModalState(() => isSaving = true);
               try {
                 final saved = await _saveFinal();
@@ -683,12 +748,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                         _syncTotalsFromControllers();
                                         setModalState(() {});
                                       },
-                                      deadlineErrorText:
-                                          _showDeadlineValidation &&
-                                              _remainingAmount > 0 &&
-                                              _deadline == null
-                                          ? 'Required field'
-                                          : null,
                                     ),
                                     const SizedBox(height: 14),
                                     Row(
@@ -799,13 +858,6 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     if (_paidAmount > _totalStockValue + 0.0001) {
       _showSnack('Paid amount cannot exceed total payment.');
-      return false;
-    }
-
-    if (_remainingAmount > 0 && _deadline == null) {
-      if (mounted) {
-        setState(() => _showDeadlineValidation = true);
-      }
       return false;
     }
 
@@ -1143,6 +1195,31 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                                 ),
                                           ),
                                         ),
+                                        if (first.draft.isExisting) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 3,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.homeAccentTeal
+                                                  .withAlpha(24),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                            child: Text(
+                                              'Existing',
+                                              style: theme.textTheme.labelSmall
+                                                  ?.copyWith(
+                                                    color: const Color(
+                                                      0xFF0F766E,
+                                                    ),
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ],
@@ -1495,6 +1572,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
           children: [
             StockEntryCompactActions(
               onScan: _scanBarcode,
+              onExisting: _scanExistingProduct,
               onGenerate: _generateBarcode,
             ),
             const SizedBox(height: 16),
@@ -1549,7 +1627,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Tap Scan or New barcode above',
+                      'Tap Scan, Existing, or New above',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                       ),

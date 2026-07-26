@@ -22,6 +22,7 @@
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="RetailPilot">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
@@ -41,6 +42,28 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    // Best-effort early cleanup for already-installed iOS home-screen apps.
+    // Full cleanup also runs inside flutter_bootstrap.js before engine load.
+    (function () {
+      try {
+        if (!('serviceWorker' in navigator)) return;
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          registrations.forEach(function (registration) {
+            registration.unregister();
+          });
+        });
+      } catch (_) {}
+      try {
+        if (!('caches' in window)) return;
+        caches.keys().then(function (keys) {
+          keys.forEach(function (key) {
+            caches.delete(key);
+          });
+        });
+      } catch (_) {}
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

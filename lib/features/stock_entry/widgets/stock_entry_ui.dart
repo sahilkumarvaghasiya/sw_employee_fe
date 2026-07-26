@@ -236,16 +236,26 @@ class StockEntryCompactActions extends StatelessWidget {
   const StockEntryCompactActions({
     super.key,
     required this.onScan,
+    required this.onExisting,
     required this.onGenerate,
   });
 
   final VoidCallback onScan;
+  final VoidCallback onExisting;
   final VoidCallback onGenerate;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    Widget divider() => Container(
+          width: 1,
+          height: 36,
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : AppColors.slate200,
+        );
 
     return Container(
       decoration: BoxDecoration(
@@ -264,22 +274,31 @@ class StockEntryCompactActions extends StatelessWidget {
             child: _CompactActionTile(
               icon: Icons.qr_code_scanner_rounded,
               label: 'Scan',
-              isPrimary: true,
+              tooltip: 'Scan new product barcode',
+              color: AppColors.emerald,
+              darkColor: AppColors.emeraldDark,
               onTap: onScan,
             ),
           ),
-          Container(
-            width: 1,
-            height: 32,
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : AppColors.slate200,
+          divider(),
+          Expanded(
+            child: _CompactActionTile(
+              icon: Icons.inventory_2_rounded,
+              label: 'Existing',
+              tooltip: 'Restock existing product',
+              color: AppColors.homeAccentTeal,
+              darkColor: const Color(0xFF0F766E),
+              onTap: onExisting,
+            ),
           ),
+          divider(),
           Expanded(
             child: _CompactActionTile(
               icon: Icons.add_rounded,
-              label: 'New barcode',
-              isPrimary: false,
+              label: 'New',
+              tooltip: 'Generate new barcode',
+              color: AppColors.indigo,
+              darkColor: AppColors.indigo,
               onTap: onGenerate,
             ),
           ),
@@ -293,13 +312,17 @@ class _CompactActionTile extends StatelessWidget {
   const _CompactActionTile({
     required this.icon,
     required this.label,
-    required this.isPrimary,
+    required this.tooltip,
+    required this.color,
+    required this.darkColor,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
-  final bool isPrimary;
+  final String tooltip;
+  final Color color;
+  final Color darkColor;
   final VoidCallback onTap;
 
   @override
@@ -308,28 +331,113 @@ class _CompactActionTile extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isPrimary ? AppColors.emerald : AppColors.indigo,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: isPrimary ? AppColors.emeraldDark : AppColors.indigo,
+      child: Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 20, color: color),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: darkColor,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact camera toggle bar — matches billing’s search+scan pattern.
+class StockEntryCompactScannerBar extends StatelessWidget {
+  const StockEntryCompactScannerBar({
+    super.key,
+    required this.scannerActive,
+    required this.startingScanner,
+    required this.onToggleScanner,
+  });
+
+  final bool scannerActive;
+  final bool startingScanner;
+  final VoidCallback onToggleScanner;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scannerActive
+            ? AppColors.homeAccentTeal.withValues(alpha: 0.1)
+            : (isDark ? colorScheme.surface : Colors.white),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(
+          color: scannerActive
+              ? AppColors.homeAccentTeal.withValues(alpha: 0.35)
+              : (isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : AppColors.slate200),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          onTap: startingScanner ? null : onToggleScanner,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  scannerActive
+                      ? Icons.videocam_off_rounded
+                      : Icons.qr_code_scanner_rounded,
+                  color: scannerActive
+                      ? AppColors.homeAccentTeal
+                      : colorScheme.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    scannerActive
+                        ? 'Camera on — tap to stop'
+                        : 'Scan with camera',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (startingScanner)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Icon(
+                    scannerActive
+                        ? Icons.stop_circle_outlined
+                        : Icons.play_circle_outline,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+              ],
+            ),
           ),
         ),
       ),

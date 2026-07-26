@@ -355,7 +355,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ),
               ),
             ),
-            if (provider.isLoadingInitial)
+            if (provider.isLoadingInitial && provider.items.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(child: CircularProgressIndicator()),

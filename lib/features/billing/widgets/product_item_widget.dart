@@ -14,6 +14,7 @@ class ProductItemWidget extends StatefulWidget {
     required this.onIncrement,
     required this.onDecrement,
     required this.onRemove,
+    this.onReturnToggled,
     this.priceEntryAsUnitPrice = false,
   });
 
@@ -23,6 +24,7 @@ class ProductItemWidget extends StatefulWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final VoidCallback onRemove;
+  final VoidCallback? onReturnToggled;
   final bool priceEntryAsUnitPrice;
 
   @override
@@ -32,12 +34,19 @@ class ProductItemWidget extends StatefulWidget {
 class _ProductItemWidgetState extends State<ProductItemWidget> {
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
+  String _signedMoney(double value) {
+    if (value < -0.0001) return '-₹${(-value).toStringAsFixed(2)}';
+    return _money(value);
+  }
+
   bool get _priceOverridden =>
       widget.item.unitPrice != widget.item.originalUnitPrice;
 
   bool get _discountApplied => widget.item.discountPercent > 0;
 
   bool get _hasOffer => _priceOverridden || _discountApplied;
+
+  bool get _isReturn => widget.item.isReturn;
 
   Future<void> _openOfferSheet() async {
     await showModalBottomSheet<void>(
@@ -61,18 +70,26 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
     final sizeText = widget.item.size?.trim() ?? '';
 
     final maxQuantity = widget.item.availableQuantity;
-    final canIncrement =
-        maxQuantity == null || widget.item.quantity < maxQuantity;
+    final canIncrement = _isReturn ||
+        maxQuantity == null ||
+        widget.item.quantity < maxQuantity;
+
+    final cardColor = _isReturn
+        ? AppColors.error.withValues(alpha: isDark ? 0.14 : 0.08)
+        : (isDark ? colorScheme.surface : Colors.white);
+    final borderColor = _isReturn
+        ? AppColors.error.withValues(alpha: isDark ? 0.4 : 0.3)
+        : (isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : AppColors.slate200);
+    final amountColor =
+        _isReturn ? AppColors.error : AppColors.emeraldDark;
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? colorScheme.surface : Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : AppColors.slate200,
-        ),
+        border: Border.all(color: borderColor),
       ),
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
       child: Column(
@@ -97,7 +114,10 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                     Row(
                       children: [
                         if (sizeText.isNotEmpty) ...[
-                          _MetaTag(text: sizeText, icon: Icons.straighten_rounded),
+                          _MetaTag(
+                            text: sizeText,
+                            icon: Icons.straighten_rounded,
+                          ),
                           const SizedBox(width: 6),
                         ],
                         Text(
@@ -116,7 +136,11 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                 tooltip: 'Remove',
                 onPressed: widget.onRemove,
                 visualDensity: VisualDensity.compact,
-                icon: Icon(Icons.close_rounded, size: 18, color: colorScheme.error),
+                icon: Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: colorScheme.error,
+                ),
               ),
             ],
           ),
@@ -147,66 +171,152 @@ class _ProductItemWidgetState extends State<ProductItemWidget> {
                         ),
                       ),
                     Text(
-                      _money(widget.item.lineTotal),
+                      _signedMoney(widget.item.signedLineTotal),
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: AppColors.emeraldDark,
+                        color: amountColor,
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              Material(
-                color: _hasOffer
-                    ? AppColors.emerald.withValues(alpha: 0.12)
-                    : colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
+              Opacity(
+                opacity: _isReturn ? 0.45 : 1,
+                child: Material(
+                  color: !_isReturn && _hasOffer
+                      ? AppColors.emerald.withValues(alpha: 0.12)
+                      : colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(10),
-                  onTap: _openOfferSheet,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _hasOffer
-                              ? Icons.local_offer_rounded
-                              : Icons.percent_rounded,
-                          size: 16,
-                          color: _hasOffer
-                              ? AppColors.emerald
-                              : colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _hasOffer ? 'Edit' : 'Offer',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: _hasOffer
-                                ? AppColors.emeraldDark
-                                : colorScheme.onSurfaceVariant,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: _isReturn ? null : _openOfferSheet,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _hasOffer
+                                ? Icons.local_offer_rounded
+                                : Icons.percent_rounded,
+                            size: 16,
+                            color: _isReturn
+                                ? colorScheme.onSurfaceVariant
+                                : (_hasOffer
+                                    ? AppColors.emerald
+                                    : colorScheme.onSurfaceVariant),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          Text(
+                            _hasOffer ? 'Edit' : 'Offer',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: _isReturn
+                                  ? colorScheme.onSurfaceVariant
+                                  : (_hasOffer
+                                      ? AppColors.emeraldDark
+                                      : colorScheme.onSurfaceVariant),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
+              if (widget.onReturnToggled != null) ...[
+                const SizedBox(width: 6),
+                Opacity(
+                  opacity: _hasOffer ? 0.45 : 1,
+                  child: Material(
+                    color: !_hasOffer && _isReturn
+                        ? AppColors.error.withValues(alpha: 0.14)
+                        : colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: _hasOffer ? null : widget.onReturnToggled,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.assignment_return_rounded,
+                              size: 16,
+                              color: _hasOffer
+                                  ? colorScheme.onSurfaceVariant
+                                  : (_isReturn
+                                      ? AppColors.error
+                                      : colorScheme.onSurfaceVariant),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Return',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: _hasOffer
+                                    ? colorScheme.onSurfaceVariant
+                                    : (_isReturn
+                                        ? AppColors.error
+                                        : colorScheme.onSurfaceVariant),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
-          if (_hasOffer) ...[
+          if (_isReturn || (!_isReturn && _hasOffer)) ...[
             const SizedBox(height: 8),
-            _OfferSummaryChip(
-              item: widget.item,
-              priceEntryAsUnitPrice: widget.priceEntryAsUnitPrice,
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (_isReturn) const _ReturnSummaryChip(),
+                if (!_isReturn && _hasOffer)
+                  _OfferSummaryChip(
+                    item: widget.item,
+                    priceEntryAsUnitPrice: widget.priceEntryAsUnitPrice,
+                  ),
+              ],
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ReturnSummaryChip extends StatelessWidget {
+  const _ReturnSummaryChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        'Return',
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: AppColors.error,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -237,20 +347,17 @@ class _OfferSummaryChip extends StatelessWidget {
       );
     }
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.emerald.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          parts.join(' · '),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: AppColors.emeraldDark,
-            fontWeight: FontWeight.w600,
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.emerald.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        parts.join(' · '),
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: AppColors.emeraldDark,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -426,24 +533,30 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
 
-  void _handlePriceChanged(String value) {
-    final trimmed = value.trim();
+  /// Returns next unit price when valid; sets [_priceError] and returns null when not.
+  double? _parseCustomUnitPrice() {
+    final trimmed = _priceController.text.trim();
     if (trimmed.isEmpty) {
-      setState(() => _priceError = null);
-      widget.onPriceChanged(null);
-      return;
+      setState(() => _priceError = 'Enter a custom price');
+      return null;
     }
 
     final parsed = double.tryParse(trimmed);
     if (parsed == null || parsed <= 0) {
       setState(() => _priceError = 'Invalid entry');
-      return;
+      return null;
     }
 
     if (widget.priceEntryAsUnitPrice) {
+      if (parsed > widget.item.originalUnitPrice + 0.0001) {
+        setState(
+          () => _priceError =
+              'Cannot exceed original ${_money(widget.item.originalUnitPrice)}',
+        );
+        return null;
+      }
       setState(() => _priceError = null);
-      widget.onPriceChanged(parsed);
-      return;
+      return parsed;
     }
 
     final qty = widget.item.quantity <= 0 ? 1 : widget.item.quantity;
@@ -452,30 +565,40 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
       setState(
         () => _priceError = 'Must be less than ${_money(originalTotal)}',
       );
-      return;
+      return null;
     }
 
-    final nextUnitPrice = widget.item.originalUnitPrice - (parsed / qty);
     setState(() => _priceError = null);
-    widget.onPriceChanged(nextUnitPrice);
+    return widget.item.originalUnitPrice - (parsed / qty);
   }
 
-  void _handleDiscountChanged(String value) {
-    final trimmed = value.trim();
+  double? _parseDiscountPercent() {
+    final trimmed = _discountController.text.trim();
     if (trimmed.isEmpty) {
-      setState(() => _discountError = null);
-      widget.onDiscountChanged(null);
-      return;
+      setState(() => _discountError = 'Enter a discount');
+      return null;
     }
 
     final parsed = double.tryParse(trimmed);
     if (parsed == null || parsed < 1 || parsed > 100) {
       setState(() => _discountError = 'Enter 1 to 100');
-      return;
+      return null;
     }
 
     setState(() => _discountError = null);
-    widget.onDiscountChanged(parsed);
+    return parsed;
+  }
+
+  void _onPriceFieldChanged(String _) {
+    if (_priceError != null) {
+      setState(() => _priceError = null);
+    }
+  }
+
+  void _onDiscountFieldChanged(String _) {
+    if (_discountError != null) {
+      setState(() => _discountError = null);
+    }
   }
 
   void _clearAll() {
@@ -488,6 +611,34 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
       _discountError = null;
       _mode = 0;
     });
+  }
+
+  void _onDone() {
+    if (_mode == 0) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    if (_mode == 1) {
+      final unitPrice = _parseCustomUnitPrice();
+      if (unitPrice == null) return;
+      // Clear discount path, then apply custom unit price.
+      widget.onDiscountChanged(null);
+      widget.onPriceChanged(unitPrice);
+      Navigator.of(context).pop();
+      return;
+    }
+
+    if (_mode == 2) {
+      final percent = _parseDiscountPercent();
+      if (percent == null) return;
+      widget.onPriceChanged(null);
+      widget.onDiscountChanged(percent);
+      Navigator.of(context).pop();
+      return;
+    }
+
+    Navigator.of(context).pop();
   }
 
   @override
@@ -519,8 +670,16 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
           const SizedBox(height: 16),
           SegmentedButton<int>(
             segments: const [
-              ButtonSegment(value: 1, label: Text('Custom price'), icon: Icon(Icons.currency_rupee, size: 16)),
-              ButtonSegment(value: 2, label: Text('Discount %'), icon: Icon(Icons.percent, size: 16)),
+              ButtonSegment(
+                value: 1,
+                label: Text('Custom price'),
+                icon: Icon(Icons.currency_rupee, size: 16),
+              ),
+              ButtonSegment(
+                value: 2,
+                label: Text('Discount %'),
+                icon: Icon(Icons.percent, size: 16),
+              ),
             ],
             selected: _mode == 0 ? <int>{} : {_mode},
             emptySelectionAllowed: true,
@@ -531,6 +690,8 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
                 } else {
                   _mode = selected.first;
                 }
+                _priceError = null;
+                _discountError = null;
               });
             },
           ),
@@ -545,9 +706,15 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
                     : 'Total reduction',
                 prefixText: '₹ ',
                 errorText: _priceError,
-                hintText: widget.priceEntryAsUnitPrice ? 'e.g. 450' : 'Amount off total',
+                hintText: widget.priceEntryAsUnitPrice
+                    ? 'Max ${_money(widget.item.originalUnitPrice)}'
+                    : 'Amount off total',
+                helperText: widget.priceEntryAsUnitPrice
+                    ? 'Cannot exceed original price'
+                    : null,
               ),
-              onChanged: _handlePriceChanged,
+              onChanged: _onPriceFieldChanged,
+              onSubmitted: (_) => _onDone(),
             )
           else if (_mode == 2)
             TextField(
@@ -559,7 +726,8 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
                 errorText: _discountError,
                 hintText: '1 – 100',
               ),
-              onChanged: _handleDiscountChanged,
+              onChanged: _onDiscountFieldChanged,
+              onSubmitted: (_) => _onDone(),
             )
           else
             Text(
@@ -580,7 +748,7 @@ class _OfferEditSheetState extends State<_OfferEditSheet> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: _onDone,
                   child: const Text('Done'),
                 ),
               ),

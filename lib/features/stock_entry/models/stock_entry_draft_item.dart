@@ -36,6 +36,10 @@ class StockEntryDraftItem {
     required this.quantity,
     required this.costPrice,
     required this.sellingPrice,
+    this.isExisting = false,
+    this.variantId,
+    this.costPriceOverride,
+    this.sellingPriceOverride,
   });
 
   final String barcode;
@@ -56,4 +60,16 @@ class StockEntryDraftItem {
   final int quantity;
   final double costPrice;
   final double sellingPrice;
+
+  /// Restock path — maps to backend `is_existing`.
+  final bool isExisting;
+
+  /// Backend `ProductVariant` PK — required when [isExisting] is true.
+  final int? variantId;
+
+  /// When set, sent as `purchase_price` for existing products; otherwise omitted.
+  final double? costPriceOverride;
+
+  /// When set, sent as `sellprice` for existing products; otherwise omitted.
+  final double? sellingPriceOverride;
 }

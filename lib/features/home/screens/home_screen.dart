@@ -7,7 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/home_dashboard_provider.dart';
-import '../widgets/quick_action_card.dart';
+import '../widgets/home_radial_menu.dart';
 import '../widgets/recent_bill_tile.dart';
 import '../widgets/section_header.dart';
 import '../widgets/summary_metric_card.dart';
@@ -17,6 +17,7 @@ import '../../stock_alerts/providers/stock_alerts_provider.dart';
 import '../../stock_alerts/screens/stock_alerts_screen.dart';
 import '../../stock_entry/screens/stock_entry_main_screen.dart';
 import '../../sales_history/screens/sales_history_screen.dart';
+import '../../vendors/screens/vendors_hub_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,7 +35,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ]);
   }
 
-  Future<void> _openAndRefresh(Route<dynamic> route) async {
+  Future<void> _openAndRefresh(
+    Route<dynamic> route, {
+    required String featureKey,
+    required String lockedMessage,
+  }) async {
+    final allowed =
+        context.read<AuthProvider>().canAccessFeature(featureKey);
+    if (!allowed) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(lockedMessage)));
+      return;
+    }
     await Navigator.of(context).push(route);
     if (!mounted) return;
     await _refreshDashboard();
@@ -68,113 +81,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    final employeeName = context.watch<AuthProvider>().employeeName;
-    final branchName = context.watch<AuthProvider>().branchName;
+    final auth = context.watch<AuthProvider>();
+    final employeeName = auth.employeeName;
+    final branchName = auth.branchName;
     final firstName = employeeName.trim().split(' ').first;
+    final canBilling = auth.canAccessFeature('billing');
+    final canStock = auth.canAccessFeature('stock');
+    final canProducts = auth.canAccessFeature('products');
+    final canSales = auth.canAccessFeature('sales');
+    final canPayable = auth.canAccessFeature('payable');
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await _openAndRefresh(CustomerFormScreen.route());
-        },
-        backgroundColor: AppColors.indigo,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        icon: const Icon(Icons.qr_code_scanner_rounded),
-        label: const Text('Scan & Bill'),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refreshDashboard,
-        color: AppColors.indigo,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: _HomeHeroHeader(
-                greeting: greetingForIndianTime(),
-                employeeName: firstName.isNotEmpty ? firstName : 'there',
-                branchName: branchName,
-                isDark: isDark,
-                onAlertsTap: () async {
-                  await _openAndRefresh(StockAlertsScreen.route());
-                },
-                onThemeToggle: () => context.read<ThemeProvider>().toggle(),
-                isDarkMode: context.watch<ThemeProvider>().isDark,
-                alertCount: context.watch<StockAlertsProvider>().unseenCount,
-                employeeChip: _EmployeeChip(name: employeeName),
-              ),
-            ),
-
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-              sliver: SliverToBoxAdapter(
-                child: SectionHeader(
-                  title: 'Quick actions',
-                  subtitle: 'Everything you need in one tap',
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _refreshDashboard,
+            color: AppColors.indigo,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _HomeHeroHeader(
+                    greeting: greetingForIndianTime(),
+                    employeeName: firstName.isNotEmpty ? firstName : 'there',
+                    branchName: branchName,
+                    isDark: isDark,
+                    onAlertsTap: () async {
+                      await _openAndRefresh(
+                        StockAlertsScreen.route(),
+                        featureKey: 'stock',
+                        lockedMessage:
+                            'Stock access is locked by your manager.',
+                      );
+                    },
+                    onThemeToggle: () => context.read<ThemeProvider>().toggle(),
+                    isDarkMode: context.watch<ThemeProvider>().isDark,
+                    alertCount: context.watch<StockAlertsProvider>().unseenCount,
+                    employeeChip: _EmployeeChip(name: employeeName),
+                  ),
                 ),
-              ),
-            ),
 
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 1.15,
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+                  sliver: const SliverToBoxAdapter(
+                    child: SectionHeader(
+                      title: 'Today at a glance',
+                      subtitle: 'Live stats from your store',
+                    ),
+                  ),
                 ),
-                delegate: SliverChildListDelegate.fixed([
-                  QuickActionCard(
-                    title: 'Start Billing',
-                    subtitle: 'Scan & checkout',
-                    icon: Icons.qr_code_scanner_rounded,
-                    isPrimary: true,
-                    onTap: () async {
-                      await _openAndRefresh(CustomerFormScreen.route());
-                    },
-                  ),
-                  QuickActionCard(
-                    title: 'Stock Entry',
-                    subtitle: 'Receive inventory',
-                    icon: Icons.inventory_2_outlined,
-                    accentColor: AppColors.homeAccentAmber,
-                    onTap: () async {
-                      await _openAndRefresh(StockEntryMainScreen.route());
-                    },
-                  ),
-                  QuickActionCard(
-                    title: 'Products',
-                    subtitle: 'Browse catalog',
-                    icon: Icons.grid_view_rounded,
-                    accentColor: AppColors.homeAccentViolet,
-                    onTap: () async {
-                      await _openAndRefresh(ProductsScreen.route());
-                    },
-                  ),
-                  QuickActionCard(
-                    title: 'Sales History',
-                    subtitle: 'Past bills',
-                    icon: Icons.receipt_long_outlined,
-                    accentColor: AppColors.homeAccentSky,
-                    onTap: () async {
-                      await _openAndRefresh(SalesHistoryScreen.route());
-                    },
-                  ),
-                ]),
-              ),
-            ),
-
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-              sliver: const SliverToBoxAdapter(
-                child: SectionHeader(
-                  title: 'Today at a glance',
-                  subtitle: 'Live stats from your store',
-                ),
-              ),
-            ),
 
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
@@ -362,6 +318,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             amount: bill.amountDisplay,
                             method: bill.paymentMethodLabel,
                             accentColor: billAccents[index % billAccents.length],
+                            isRefund: bill.amountValue < -0.0001,
                             onTap: null,
                           ),
                         );
@@ -372,9 +329,83 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ),
 
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
-        ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: HomeRadialMenu.scrollClearance(context) + 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          HomeRadialMenu(
+            key: ValueKey(
+              'radial-$canBilling-$canStock-$canProducts-$canSales-$canPayable',
+            ),
+            actions: [
+              HomeRadialAction(
+                label: 'Stock',
+                icon: Icons.inventory_2_rounded,
+                accentColor: AppColors.homeAccentAmber,
+                enabled: canStock,
+                disabledHint: 'Stock access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  StockEntryMainScreen.route(),
+                  featureKey: 'stock',
+                  lockedMessage: 'Stock access is locked by your manager.',
+                ),
+              ),
+              HomeRadialAction(
+                label: 'Products',
+                icon: Icons.grid_view_rounded,
+                accentColor: AppColors.homeAccentViolet,
+                enabled: canProducts,
+                disabledHint: 'Products access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  ProductsScreen.route(),
+                  featureKey: 'products',
+                  lockedMessage: 'Products access is locked by your manager.',
+                ),
+              ),
+              HomeRadialAction(
+                label: 'Billing',
+                icon: Icons.qr_code_scanner_rounded,
+                accentColor: AppColors.indigo,
+                isPrimary: true,
+                enabled: canBilling,
+                disabledHint: 'Billing access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  CustomerFormScreen.route(),
+                  featureKey: 'billing',
+                  lockedMessage: 'Billing access is locked by your manager.',
+                ),
+              ),
+              HomeRadialAction(
+                label: 'Sales',
+                icon: Icons.receipt_long_rounded,
+                accentColor: AppColors.homeAccentSky,
+                enabled: canSales,
+                disabledHint: 'Sales access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  SalesHistoryScreen.route(),
+                  featureKey: 'sales',
+                  lockedMessage: 'Sales access is locked by your manager.',
+                ),
+              ),
+              HomeRadialAction(
+                label: 'Vendors',
+                icon: Icons.account_balance_wallet_rounded,
+                accentColor: AppColors.homeAccentRose,
+                enabled: canPayable,
+                disabledHint: 'Vendors access is locked by your manager.',
+                onTap: () => _openAndRefresh(
+                  VendorsHubScreen.route(),
+                  featureKey: 'payable',
+                  lockedMessage: 'Vendors access is locked by your manager.',
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

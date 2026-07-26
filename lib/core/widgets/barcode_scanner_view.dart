@@ -63,14 +63,18 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   Size? _layoutSize;
 
   bool get _useStockWebHints =>
-      kIsWeb && widget.profile.isStockEntry && _awaitingConfirmValue == null;
+      kIsWeb &&
+      widget.profile.usesRobust1dPipeline &&
+      _awaitingConfirmValue == null;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _scanSessionStartedAt = now;
-    _scanWarmupEndsAt = now.add(_scanWarmupDuration);
+    _scanWarmupEndsAt = widget.profile.usesRobust1dPipeline
+        ? null
+        : now.add(_scanWarmupDuration);
     _startHintRotation();
     _scheduleSecondaryDecode();
   }
@@ -81,6 +85,14 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     if (!widget.enabled && oldWidget.enabled) {
       _stopSecondaryDecode();
       _resetScanState();
+    }
+    if (widget.enabled && !oldWidget.enabled) {
+      // Allow another stable read after the parent re-enables scanning
+      // (e.g. existing-product lookup miss / clear selection).
+      _hasDeliveredBarcode = false;
+      _resetScanState();
+      _scheduleSecondaryDecode();
+      _startHintRotation();
     }
     if (widget.profile != oldWidget.profile) {
       _validator.reset();
@@ -103,6 +115,8 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
       _awaitingConfirmValue == null;
 
   bool get _isWarmingUp {
+    // Stock-page parity: robust 1D scanning starts detecting immediately.
+    if (widget.profile.usesRobust1dPipeline) return false;
     final warmupEndsAt = _scanWarmupEndsAt;
     if (warmupEndsAt == null) return false;
     return DateTime.now().isBefore(warmupEndsAt);
@@ -158,7 +172,9 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     _latestFrameBytes = null;
     final now = DateTime.now();
     _scanSessionStartedAt = now;
-    _scanWarmupEndsAt = now.add(_scanWarmupDuration);
+    _scanWarmupEndsAt = widget.profile.usesRobust1dPipeline
+        ? null
+        : now.add(_scanWarmupDuration);
     if (_awaitingConfirmValue != null || _confirmSourceLabel != null) {
       if (mounted) {
         setState(() {
@@ -190,21 +206,30 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     }
 
     final scanWindow = computeBarcodeScanWindow(layoutSize, widget.profile);
-    final barcode = pickBestBarcode(
-      capture.barcodes,
-      layoutSize: layoutSize,
-      scanWindow: scanWindow,
-      profile: widget.profile,
-    );
+    final String? normalized;
 
-    final value = barcode?.rawValue?.trim();
-    if (value == null || value.isEmpty) return;
+    if (widget.profile.usesRobust1dPipeline) {
+      // Same picker as stock entry stock page — relaxed window, hang-tag
+      // filters, and garbage rejection for small/weak reads.
+      final value = pickStockBarcodeValue(
+        capture.barcodes,
+        layoutSize: layoutSize,
+        textureSize: capture.size,
+        scanWindow: scanWindow,
+      );
+      if (value == null || value.isEmpty) return;
+      normalized = value;
+    } else {
+      final barcode = pickBestBarcode(
+        capture.barcodes,
+        layoutSize: layoutSize,
+        scanWindow: scanWindow,
+        profile: widget.profile,
+      );
 
-    final normalized = widget.profile.isStockEntry
-        ? normalizeStockBarcodeValue(value)
-        : value;
-    if (widget.profile.isStockEntry && !isLikelyStockBarcodeValue(normalized)) {
-      return;
+      final value = barcode?.rawValue?.trim();
+      if (value == null || value.isEmpty) return;
+      normalized = value;
     }
 
     _lastSuccessfulDetectAt = DateTime.now();
@@ -226,7 +251,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   }) {
     final needsConfirm =
         widget.requireManualConfirm ||
-        (widget.profile.isStockEntry && fromPrintedText);
+        (widget.profile.usesRobust1dPipeline && fromPrintedText);
 
     if (needsConfirm) {
       setState(() {
@@ -381,7 +406,11 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
             MobileScanner(
               controller: widget.controller,
               fit: BoxFit.cover,
-              scanWindow: scanWindow,
+              // Match stock barcode page: leave native detection unrestricted.
+              // The green frame is guidance; pickStockBarcodeValue filters with
+              // window expansion / single-candidate fallbacks.
+              scanWindow:
+                  widget.profile.usesRobust1dPipeline ? null : scanWindow,
               errorBuilder: widget.errorBuilder,
               overlayBuilder: (context, constraints) {
                 return CustomPaint(

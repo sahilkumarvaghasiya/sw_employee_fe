@@ -57,7 +57,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   bool _startingScanner = false;
 
   final MobileScannerController _scannerController =
-      createBarcodeScannerController(autoStart: false);
+      createBarcodeScannerController(
+    autoStart: false,
+    profile: BarcodeScanProfile.billing,
+  );
 
   Timer? _phoneLookupDebounce;
   Timer? _productSearchDebounce;
@@ -172,6 +175,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   }
 
   String _money(double value) => '₹${value.toStringAsFixed(2)}';
+
+  String _signedMoney(double value) {
+    if (value < -0.0001) return '-₹${(-value).toStringAsFixed(2)}';
+    return _money(value);
+  }
 
   String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
 
@@ -294,7 +302,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     _handlingBarcode = true;
 
     final provider = context.read<BillingProvider>();
-    final normalizedBarcode = barcode.trim();
+    final normalizedBarcode = normalizeStockBarcodeValue(barcode);
 
     try {
       if (normalizedBarcode.isEmpty) return;
@@ -620,6 +628,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   }
 
   Future<bool> _confirmPaymentDone({required String methodLabel}) async {
+    final provider = context.read<BillingProvider>();
+    final isRefund = provider.isRefundDue;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -629,13 +639,16 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
             borderRadius: BorderRadius.circular(AppTheme.radiusLg),
           ),
           title: Text(
-            'Confirm payment',
+            isRefund ? 'Confirm refund' : 'Confirm payment',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w800,
+              color: isRefund ? AppColors.error : null,
             ),
           ),
           content: Text(
-            'Mark $methodLabel payment as received?',
+            isRefund
+                ? 'Mark $methodLabel refund of ${_signedMoney(provider.finalAmount)} as given to customer?'
+                : 'Mark $methodLabel payment as received?',
             style: theme.textTheme.bodyMedium,
           ),
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -646,7 +659,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Yes, done'),
+              style: isRefund
+                  ? FilledButton.styleFrom(backgroundColor: AppColors.error)
+                  : null,
+              child: Text(isRefund ? 'Yes, refunded' : 'Yes, done'),
             ),
           ],
         );
@@ -760,28 +776,32 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
             }
 
             double payable = baseAmount;
-            if (offerMode == 1 && entered > 0) {
-              payable = entered.clamp(0, baseAmount);
-            } else if (offerMode == 2 && entered > 0) {
-              final pct = entered.clamp(0, 100);
-              payable = (baseAmount * (1 - pct / 100)).clamp(
-                0,
-                double.infinity,
-              );
+            if (baseAmount > 0.0001) {
+              if (offerMode == 1 && entered > 0) {
+                payable = entered.clamp(0, baseAmount);
+              } else if (offerMode == 2 && entered > 0) {
+                final pct = entered.clamp(0, 100);
+                payable = (baseAmount * (1 - pct / 100)).clamp(
+                  0,
+                  double.infinity,
+                );
+              }
             }
 
             final itemSubtotal = baseAmount;
             final itemDelta = itemSubtotal - provider.originalSubtotal;
             final itemDiscount =
                 itemDelta < -0.0001 ? (-itemDelta).toDouble() : 0.0;
-            final itemDiscountPercent = provider.originalSubtotal > 0 &&
+            final absOriginal = provider.originalSubtotal.abs();
+            final itemDiscountPercent = absOriginal > 0 &&
                     itemDiscount > 0.0001
-                ? (itemDiscount / provider.originalSubtotal) * 100
+                ? (itemDiscount / absOriginal) * 100
                 : 0.0;
             final priceAdjustment =
                 itemDelta > 0.0001 ? itemDelta.toDouble() : 0.0;
-            final billDiscount =
-                (itemSubtotal - payable).clamp(0, double.infinity).toDouble();
+            final billDiscount = baseAmount > 0.0001
+                ? (itemSubtotal - payable).clamp(0, double.infinity).toDouble()
+                : 0.0;
             final billDiscountPercent =
                 itemSubtotal > 0.0001 && billDiscount > 0.0001
                     ? (billDiscount / itemSubtotal) * 100
@@ -789,6 +809,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
             final showBreakdown = itemDiscount > 0.0001 ||
                 priceAdjustment > 0.0001 ||
                 billDiscount > 0.0001;
+            final allowBillOffer = baseAmount > 0.0001;
 
             return BillingKeyboardSheetBody(
               child: Column(
@@ -803,9 +824,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                       ),
                       const SizedBox(height: 12),
                       BillingPayableHero(
-                        amount: _money(payable),
-                        subtitle:
-                            '${provider.items.length} item${provider.items.length == 1 ? '' : 's'}',
+                        label: provider.isRefundDue
+                            ? 'Refund due'
+                            : 'Amount to pay',
+                        amount: _signedMoney(payable),
+                        isRefund: provider.isRefundDue,
+                        subtitle: provider.isRefundDue
+                            ? 'Pay this amount back to customer · ${provider.items.length} item${provider.items.length == 1 ? '' : 's'}'
+                            : '${provider.items.length} item${provider.items.length == 1 ? '' : 's'}',
                       ),
                       const SizedBox(height: 12),
                       Theme(
@@ -847,10 +873,17 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          item.productName,
+                                          item.isReturn
+                                              ? '${item.productName} (Return)'
+                                              : item.productName,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.bodySmall,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: item.isReturn
+                                                ? AppColors.error
+                                                : null,
+                                          ),
                                         ),
                                       ),
                                       Text(
@@ -858,6 +891,17 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                         style: theme.textTheme.labelMedium
                                             ?.copyWith(
                                           fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _signedMoney(item.signedLineTotal),
+                                        style: theme.textTheme.labelMedium
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: item.isReturn
+                                              ? AppColors.error
+                                              : null,
                                         ),
                                       ),
                                     ],
@@ -884,11 +928,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                             children: [
                               BillingSummaryLine(
                                 label: 'Original',
-                                value: _money(provider.originalSubtotal),
+                                value: _signedMoney(provider.originalSubtotal),
                               ),
                               BillingSummaryLine(
                                 label: 'Subtotal',
-                                value: _money(itemSubtotal),
+                                value: _signedMoney(itemSubtotal),
                               ),
                               if (itemDiscount > 0.0001)
                                 BillingSummaryLine(
@@ -919,74 +963,77 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 16),
-                      Text(
-                        'Adjust total (optional)',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.onSurfaceVariant,
+                      if (allowBillOffer) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Adjust total (optional)',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      SegmentedButton<int>(
-                        segments: const [
-                          ButtonSegment<int>(
-                            value: 0,
-                            label: Text('None'),
-                          ),
-                          ButtonSegment<int>(
-                            value: 1,
-                            label: Text('Price'),
-                          ),
-                          ButtonSegment<int>(
-                            value: 2,
-                            label: Text('% Off'),
-                          ),
-                        ],
-                        multiSelectionEnabled: false,
-                        emptySelectionAllowed: false,
-                        selected: {offerMode},
-                        showSelectedIcon: false,
-                        onSelectionChanged: (selection) {
-                          setModalState(() {
-                            offerMode = selection.first;
-                            hasInteractedWithOfferField = false;
-                            adjustmentController.clear();
-                            offerValueError = null;
-                          });
-                        },
-                      ),
-                      if (offerMode != 0) ...[
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: adjustmentController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          onChanged: (value) {
-                            hasInteractedWithOfferField = true;
+                        const SizedBox(height: 8),
+                        SegmentedButton<int>(
+                          segments: const [
+                            ButtonSegment<int>(
+                              value: 0,
+                              label: Text('None'),
+                            ),
+                            ButtonSegment<int>(
+                              value: 1,
+                              label: Text('Price'),
+                            ),
+                            ButtonSegment<int>(
+                              value: 2,
+                              label: Text('% Off'),
+                            ),
+                          ],
+                          multiSelectionEnabled: false,
+                          emptySelectionAllowed: false,
+                          selected: {offerMode},
+                          showSelectedIcon: false,
+                          onSelectionChanged: (selection) {
                             setModalState(() {
-                              validateOfferValue(
-                                currentValue: value,
-                                showRequiredOnEmpty: false,
-                              );
+                              offerMode = selection.first;
+                              hasInteractedWithOfferField = false;
+                              adjustmentController.clear();
+                              offerValueError = null;
                             });
                           },
-                          decoration: InputDecoration(
-                            isDense: true,
-                            labelText: offerMode == 1
-                                ? 'Final amount'
-                                : 'Discount %',
-                            hintText: offerMode == 1 ? 'Enter amount' : '1–100',
-                            prefixText: offerMode == 1 ? '₹ ' : null,
-                            suffixText: offerMode == 2 ? ' %' : null,
-                            errorText: offerValueError,
-                            border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(AppTheme.radiusMd),
+                        ),
+                        if (offerMode != 0) ...[
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: adjustmentController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            onChanged: (value) {
+                              hasInteractedWithOfferField = true;
+                              setModalState(() {
+                                validateOfferValue(
+                                  currentValue: value,
+                                  showRequiredOnEmpty: false,
+                                );
+                              });
+                            },
+                            decoration: InputDecoration(
+                              isDense: true,
+                              labelText: offerMode == 1
+                                  ? 'Final amount'
+                                  : 'Discount %',
+                              hintText:
+                                  offerMode == 1 ? 'Enter amount' : '1–100',
+                              prefixText: offerMode == 1 ? '₹ ' : null,
+                              suffixText: offerMode == 2 ? ' %' : null,
+                              errorText: offerValueError,
+                              border: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.circular(AppTheme.radiusMd),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
                       const SizedBox(height: 20),
                       Row(
@@ -1028,7 +1075,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       return false;
     }
 
-    if (offerMode == 0) {
+    if (offerMode == 0 || baseAmount <= 0.0001) {
       provider.setManualFinalAmount(null);
       return true;
     }
@@ -1171,7 +1218,14 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 BillingPayableHero(
-                                  amount: _money(p.finalAmount),
+                                  label: p.isRefundDue
+                                      ? 'Refund due'
+                                      : 'Amount to pay',
+                                  amount: _signedMoney(p.finalAmount),
+                                  isRefund: p.isRefundDue,
+                                  subtitle: p.isRefundDue
+                                      ? 'Pay this amount back to customer'
+                                      : null,
                                 ),
                                 const SizedBox(height: 16),
                                 if (qrConfigs.isEmpty)
@@ -1413,14 +1467,23 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'How did they pay?',
+                      provider.isRefundDue
+                          ? 'How will you refund?'
+                          : 'How did they pay?',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 12),
                     BillingPayableHero(
-                      amount: _money(provider.finalAmount),
+                      label: provider.isRefundDue
+                          ? 'Refund due'
+                          : 'Amount to pay',
+                      amount: _signedMoney(provider.finalAmount),
+                      isRefund: provider.isRefundDue,
+                      subtitle: provider.isRefundDue
+                          ? 'Pay this amount back to customer'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     BillingPaymentMethodTile(
@@ -2002,9 +2065,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                       aspectRatio: 4 / 3,
                                       child: BarcodeScannerView(
                                         controller: _scannerController,
+                                        profile: BarcodeScanProfile.billing,
                                         enabled: _canAcceptBarcodeScans,
                                         hintText:
-                                            'Align the barcode inside the frame and hold steady.',
+                                            'Align barcode bars in the green frame — move closer if small',
                                         onBarcodeConfirmed: (value) {
                                           unawaited(_handleBarcode(value));
                                         },
@@ -2122,6 +2186,11 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
                                     );
                                     _lineItemKeys.remove(item.id);
                                     _showSnack('Removed ${item.productName}');
+                                  },
+                                  onReturnToggled: () {
+                                    context
+                                        .read<BillingProvider>()
+                                        .toggleItemReturn(item.id);
                                   },
                                 );
                               },
@@ -2452,8 +2521,9 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         bottomNavigationBar: _scanMode
             ? BillingCheckoutBar(
                 itemCount: provider.totalItems,
-                subtotalLabel: _money(provider.subtotal),
-                discountLabel: _money(provider.totalDiscount),
+                subtotalLabel: _signedMoney(provider.calculatedFinalAmount),
+                discountLabel: _signedMoney(provider.totalDiscount),
+                isRefund: provider.isRefundDue,
                 onPayment: _onPaymentTap,
                 enabled: provider.items.isNotEmpty,
               )

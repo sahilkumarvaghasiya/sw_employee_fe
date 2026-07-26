@@ -42,6 +42,19 @@ class AuthProvider extends ChangeNotifier {
   bool _isBlocked = false;
   bool get isBlocked => _isBlocked;
 
+  /// Per-section access for the home radial menu (billing/stock/...).
+  /// Missing keys default to allowed (true).
+  Map<String, bool> _featureAccess = const {
+    'billing': true,
+    'stock': true,
+    'products': true,
+    'sales': true,
+    'payable': true,
+  };
+
+  bool canAccessFeature(String feature) =>
+      _featureAccess[feature] ?? true;
+
   String? _forceLoginMessage;
   String? get forceLoginMessage => _forceLoginMessage;
 
@@ -138,10 +151,35 @@ class AuthProvider extends ChangeNotifier {
       _branchName = shopName;
     }
 
+    _featureAccess = _parseFeatureAccess(userInfo['feature_access']);
+
     await _tokenStorage.saveUserContext(
       userName: userName.isNotEmpty ? userName : _employeeName,
       shopName: shopName.isNotEmpty ? shopName : _branchName,
     );
+  }
+
+  Map<String, bool> _parseFeatureAccess(dynamic raw) {
+    final next = <String, bool>{
+      'billing': true,
+      'stock': true,
+      'products': true,
+      'sales': true,
+      'payable': true,
+    };
+    if (raw is! Map) return next;
+
+    final map = Map<String, dynamic>.from(raw);
+    for (final key in next.keys) {
+      final value = map[key];
+      if (value is bool) {
+        next[key] = value;
+      } else if (value != null) {
+        final text = value.toString().trim().toLowerCase();
+        next[key] = text != 'false' && text != '0' && text != 'no';
+      }
+    }
+    return next;
   }
 
   Future<LoginOutcome> login(
@@ -154,6 +192,13 @@ class AuthProvider extends ChangeNotifier {
     _forceLoginMessage = null;
     _sessionMessage = null;
     _isBlocked = false;
+    _featureAccess = const {
+      'billing': true,
+      'stock': true,
+      'products': true,
+      'sales': true,
+      'payable': true,
+    };
     notifyListeners();
 
     try {
@@ -184,8 +229,18 @@ class AuthProvider extends ChangeNotifier {
       _isAuthenticated = true;
       _isBlocked = false;
       _forceLoginMessage = null;
-    _remainingAttempts = null;
+      _remainingAttempts = null;
       _sessionMessage = null;
+
+      // Load section access before home so locked buttons are blurred immediately.
+      try {
+        final userInfo = await _authService.fetchUserInfo();
+        await _applyUserInfoMap(userInfo);
+        _lastUserInfoAt = DateTime.now();
+      } catch (_) {
+        // Home refresh will retry; keep defaults until then.
+      }
+
       _isLoading = false;
       notifyListeners();
       await AppNavigator.pushToHome();
@@ -225,6 +280,13 @@ class AuthProvider extends ChangeNotifier {
     clearPendingForceLogin();
     _errorMessage = null;
     _isBlocked = false;
+    _featureAccess = const {
+      'billing': true,
+      'stock': true,
+      'products': true,
+      'sales': true,
+      'payable': true,
+    };
     notifyListeners();
 
     await SessionNotifier.notifyLogout(reason);

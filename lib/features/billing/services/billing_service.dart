@@ -59,29 +59,44 @@ class BillingService {
     return uri.replace(queryParameters: queryParameters);
   }
 
-  Future<void> sendWhatsAppInvoice({
+  Future<String> sendWhatsAppInvoice({
     required String billId,
-    required BillingCustomer customer,
-    required List<BillingLineItem> items,
-    required BillingPaymentMethod? paymentMethod,
-    required bool markPaid,
-    required double paidAmount,
-    required double subtotal,
-    required double totalDiscount,
-    required double finalAmount,
+    BillingCustomer? customer,
+    List<BillingLineItem>? items,
+    BillingPaymentMethod? paymentMethod,
+    bool? markPaid,
+    double? paidAmount,
+    double? subtotal,
+    double? totalDiscount,
+    double? finalAmount,
   }) async {
     if (!whatsAppApiIntegrated) {
-      return;
+      return 'pending';
+    }
+
+    final normalizedBillId = billId.trim();
+    if (normalizedBillId.isEmpty) {
+      throw Exception('Bill id is required.');
     }
 
     final response = await _apiService.post(
       _url(_sendWhatsAppInvoicePath).toString(),
       body: {
-        'bill_id': billId,
+        'bill_id': normalizedBillId,
       },
     );
 
-    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return (decoded['whatsapp_status'] ?? 'sent').toString();
+        }
+      } catch (_) {
+        // ignore parse errors; treat as sent on 2xx
+      }
+      return 'sent';
+    }
 
     final message = _errorMessageFromResponse(response);
     throw Exception(message.isEmpty ? 'Bill send failed.' : message);
@@ -102,6 +117,7 @@ class BillingService {
     }
 
     for (final item in items) {
+      if (item.isReturn) continue;
       final maxQuantity = item.availableQuantity;
       if (maxQuantity == null) continue;
       if (maxQuantity <= 0) {
@@ -132,11 +148,17 @@ class BillingService {
         'quantity': item.quantity,
       };
 
+      if (item.isReturn) {
+        row['is_return'] = true;
+      }
+
       if (item.discountPercent > 0) {
         row['discount_percent'] = money(item.discountPercent);
-      } else if (item.isUnitPriceOverride || item.unitPrice != item.originalUnitPrice) {
+      } else if (item.isUnitPriceOverride ||
+          item.unitPrice != item.originalUnitPrice) {
         // custom_amount is the per-unit final price; backend multiplies by qty.
-        final customUnitPrice = item.unitPrice.clamp(0, double.infinity).toDouble();
+        final customUnitPrice =
+            item.unitPrice.clamp(0, double.infinity).toDouble();
         if (customUnitPrice > 0.0001) {
           row['custom_amount'] = money(customUnitPrice);
         }
@@ -145,9 +167,11 @@ class BillingService {
       lineItems.add(row);
     }
 
-  final customBillAmount = (finalAmount - calculatedFinalAmount).abs() > 0.0001
-    ? finalAmount.clamp(0, double.infinity).toDouble()
-    : 0.0;
+    final hasReturnItems = items.any((item) => item.isReturn);
+    final customBillAmount =
+        hasReturnItems || (finalAmount - calculatedFinalAmount).abs() > 0.0001
+            ? finalAmount
+            : 0.0;
 
     final paymentMethodValue = switch (paymentMethod) {
       BillingPaymentMethod.cash => 'cash',
