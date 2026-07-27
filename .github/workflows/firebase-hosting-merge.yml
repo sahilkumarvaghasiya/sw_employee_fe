@@ -32,12 +32,6 @@ jobs:
           --build-number=${{ github.run_number }}
           --dart-define=BUILD_ID=${{ github.sha }}
 
-      - name: Prepare web deploy artifacts
-        env:
-          BUILD_ID: ${{ github.sha }}
-          BUILD_NUMBER: ${{ github.run_number }}
-        run: dart run tool/prepare_web_deploy.dart
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
