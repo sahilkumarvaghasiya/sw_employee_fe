@@ -6,6 +6,18 @@ import '../../../core/config/api_config.dart';
 import '../../auth/services/api_service.dart';
 import '../models/sales_bill.dart';
 
+class SalesHistoryPage {
+  const SalesHistoryPage({
+    required this.bills,
+    required this.hasNext,
+    required this.count,
+  });
+
+  final List<SalesBill> bills;
+  final bool hasNext;
+  final int count;
+}
+
 class SalesHistoryService {
   SalesHistoryService({ApiService? apiService})
     : _apiService = apiService ?? ApiService();
@@ -34,13 +46,17 @@ class SalesHistoryService {
     return '$dd-$mm-$yyyy';
   }
 
-  Future<List<SalesBill>> fetchSalesHistoryList({
+  /// One page from BE (`SalesHistoryPagination`, default page_size=20).
+  Future<SalesHistoryPage> fetchSalesHistoryPage({
     String? search,
     DateTime? startDate,
     DateTime? endDate,
     double? maxTotal,
+    int page = 1,
   }) async {
-    final qp = <String, String>{};
+    final qp = <String, String>{
+      'page': page.toString(),
+    };
 
     final query = (search ?? '').trim();
     if (query.isNotEmpty) qp['search'] = query;
@@ -62,21 +78,35 @@ class SalesHistoryService {
     final decoded = jsonDecode(response.body);
 
     List<dynamic>? rows;
+    var hasNext = false;
+    var count = 0;
+
     if (decoded is List) {
       rows = decoded;
+      count = decoded.length;
     } else if (decoded is Map<String, dynamic>) {
       final data = decoded['results'] ?? decoded['data'] ?? decoded['items'];
       if (data is List) rows = data;
+      final next = decoded['next'];
+      hasNext = next != null && next.toString().trim().isNotEmpty;
+      final countRaw = decoded['count'];
+      if (countRaw is int) {
+        count = countRaw;
+      } else {
+        count = int.tryParse(countRaw?.toString() ?? '') ?? (rows?.length ?? 0);
+      }
     }
 
     if (rows == null) {
       throw const FormatException('Invalid sales history list response');
     }
 
-    return rows
+    final bills = rows
         .whereType<Map>()
         .map((e) => SalesBill.fromHistoryListJson(e.cast<String, dynamic>()))
         .toList(growable: false);
+
+    return SalesHistoryPage(bills: bills, hasNext: hasNext, count: count);
   }
 
   Future<SalesBill> fetchSalesHistoryDetails(String billId) async {

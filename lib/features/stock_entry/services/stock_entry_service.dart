@@ -229,14 +229,12 @@ class StockEntryService {
   Future<({List<StockEntry> items, bool hasMore})> fetchStockEntryHistoryPage({
     required Vendor vendor,
     required int page,
-    int pageSize = 20,
     String? status,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
     final qp = <String, String>{
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
 
     if (status != null && status.trim().isNotEmpty) {
@@ -362,22 +360,18 @@ class StockEntryService {
     return [map];
   }
 
-  bool _brandHasMore(dynamic decoded, int itemCount, int pageSize, int page) {
-    if (decoded is! Map) return itemCount >= pageSize;
+  bool _paginatedHasMore(dynamic decoded, int page) {
+    if (decoded is! Map) return false;
     final map = Map<String, dynamic>.from(decoded);
-    if (map['next'] != null) return true;
+    final next = map['next'];
+    if (next != null && next.toString().trim().isNotEmpty) return true;
 
     final totalPages = int.tryParse('${map['total_pages'] ?? ''}');
     if (totalPages != null && totalPages > 0) {
       return page < totalPages;
     }
 
-    final count = map['count'];
-    if (count is num) {
-      return page * pageSize < count.toInt();
-    }
-
-    return itemCount >= pageSize;
+    return false;
   }
 
   StockBrandOption? _brandFromMap(Map<String, dynamic> map) {
@@ -394,52 +388,11 @@ class StockEntryService {
     return StockItemTypeOption(id: id, name: name);
   }
 
-  bool _itemTypeHasMore(
-    dynamic decoded,
-    int itemCount,
-    int pageSize,
-    int page,
-  ) {
-    if (decoded is! Map) return itemCount >= pageSize;
-    final map = Map<String, dynamic>.from(decoded);
-    if (map['next'] != null) return true;
-
-    final totalPages = int.tryParse('${map['total_pages'] ?? ''}');
-    if (totalPages != null && totalPages > 0) {
-      return page < totalPages;
-    }
-
-    final count = map['count'];
-    if (count is num) {
-      return page * pageSize < count.toInt();
-    }
-
-    return itemCount >= pageSize;
-  }
-
   StockSizeOption? _sizeFromMap(Map<String, dynamic> map) {
     final id = map['id'];
     final name = (map['name'] ?? '').toString().trim();
     if (id is! int || name.isEmpty) return null;
     return StockSizeOption(id: id, name: formatProductSize(name));
-  }
-
-  bool _sizeHasMore(dynamic decoded, int itemCount, int pageSize, int page) {
-    if (decoded is! Map) return itemCount >= pageSize;
-    final map = Map<String, dynamic>.from(decoded);
-    if (map['next'] != null) return true;
-
-    final totalPages = int.tryParse('${map['total_pages'] ?? ''}');
-    if (totalPages != null && totalPages > 0) {
-      return page < totalPages;
-    }
-
-    final count = map['count'];
-    if (count is num) {
-      return page * pageSize < count.toInt();
-    }
-
-    return itemCount >= pageSize;
   }
 
   StockColourOption? _colourFromMap(Map<String, dynamic> map) {
@@ -449,35 +402,15 @@ class StockEntryService {
     return StockColourOption(id: id, name: name);
   }
 
-  bool _colourHasMore(dynamic decoded, int itemCount, int pageSize, int page) {
-    if (decoded is! Map) return itemCount >= pageSize;
-    final map = Map<String, dynamic>.from(decoded);
-    if (map['next'] != null) return true;
-
-    final totalPages = int.tryParse('${map['total_pages'] ?? ''}');
-    if (totalPages != null && totalPages > 0) {
-      return page < totalPages;
-    }
-
-    final count = map['count'];
-    if (count is num) {
-      return page * pageSize < count.toInt();
-    }
-
-    return itemCount >= pageSize;
-  }
-
   Future<StockOptionPage> fetchStockOptionPage({
     required String option,
     required int page,
-    int pageSize = 30,
     String? search,
   }) async {
     final query = (search ?? '').trim();
     final qp = <String, String>{
       'option': option,
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
     if (query.isNotEmpty) {
       qp['search'] = query;
@@ -500,7 +433,7 @@ class StockEntryService {
 
     if (decoded is List) {
       list = _extractOptionStrings(decoded);
-      hasMore = list.length >= pageSize;
+      hasMore = false;
     } else if (decoded is Map<String, dynamic>) {
       final topLevel =
           decoded['results'] ??
@@ -519,17 +452,7 @@ class StockEntryService {
         list = _extractOptionStrings(nested);
       }
 
-      final next = decoded['next'];
-      if (next != null) {
-        hasMore = true;
-      } else {
-        final totalPages = int.tryParse('${decoded['total_pages'] ?? ''}');
-        if (totalPages != null && totalPages > 0) {
-          hasMore = page < totalPages;
-        } else {
-          hasMore = list.length >= pageSize;
-        }
-      }
+      hasMore = _paginatedHasMore(decoded, page);
     }
 
     return StockOptionPage(items: list, hasMore: hasMore);
@@ -537,13 +460,11 @@ class StockEntryService {
 
   Future<StockBrandPage> fetchBrandOptionsPage({
     required int page,
-    int pageSize = 30,
     String? search,
   }) async {
     final query = (search ?? '').trim();
     final qp = <String, String>{
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
     if (query.isNotEmpty) {
       qp['search'] = query;
@@ -566,20 +487,18 @@ class StockEntryService {
         .where((item) => item != null)
         .cast<StockBrandOption>()
         .toList();
-    final hasMore = _brandHasMore(decoded, items.length, pageSize, page);
+    final hasMore = _paginatedHasMore(decoded, page);
 
     return StockBrandPage(items: items, hasMore: hasMore);
   }
 
   Future<StockItemTypePage> fetchItemTypeOptionsPage({
     required int page,
-    int pageSize = 30,
     String? search,
   }) async {
     final query = (search ?? '').trim();
     final qp = <String, String>{
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
     if (query.isNotEmpty) {
       qp['search'] = query;
@@ -602,20 +521,18 @@ class StockEntryService {
         .where((item) => item != null)
         .cast<StockItemTypeOption>()
         .toList();
-    final hasMore = _itemTypeHasMore(decoded, items.length, pageSize, page);
+    final hasMore = _paginatedHasMore(decoded, page);
 
     return StockItemTypePage(items: items, hasMore: hasMore);
   }
 
   Future<StockSizePage> fetchSizeOptionsPage({
     required int page,
-    int pageSize = 30,
     String? search,
   }) async {
     final query = (search ?? '').trim();
     final qp = <String, String>{
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
     if (query.isNotEmpty) {
       qp['search'] = query;
@@ -638,20 +555,18 @@ class StockEntryService {
         .where((item) => item != null)
         .cast<StockSizeOption>()
         .toList();
-    final hasMore = _sizeHasMore(decoded, items.length, pageSize, page);
+    final hasMore = _paginatedHasMore(decoded, page);
 
     return StockSizePage(items: items, hasMore: hasMore);
   }
 
   Future<StockColourPage> fetchColourOptionsPage({
     required int page,
-    int pageSize = 30,
     String? search,
   }) async {
     final query = (search ?? '').trim();
     final qp = <String, String>{
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
     if (query.isNotEmpty) {
       qp['search'] = query;
@@ -674,7 +589,7 @@ class StockEntryService {
         .where((item) => item != null)
         .cast<StockColourOption>()
         .toList();
-    final hasMore = _colourHasMore(decoded, items.length, pageSize, page);
+    final hasMore = _paginatedHasMore(decoded, page);
 
     return StockColourPage(items: items, hasMore: hasMore);
   }
@@ -728,11 +643,9 @@ class StockEntryService {
     required String vendorId,
     required String search,
     int page = 1,
-    int pageSize = 30,
   }) async {
     final qp = <String, String>{
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
     final trimmed = search.trim();
     if (trimmed.isNotEmpty) {
@@ -762,11 +675,11 @@ class StockEntryService {
         hasMore = decoded['next'] != null;
       } else if (decoded['data'] is List) {
         list = decoded['data'] as List<dynamic>;
-        hasMore = list.length >= pageSize;
+        hasMore = decoded['next'] != null;
       }
     } else if (decoded is List) {
       list = decoded;
-      hasMore = list.length >= pageSize;
+      hasMore = false;
     }
 
     final items = <Product>[];

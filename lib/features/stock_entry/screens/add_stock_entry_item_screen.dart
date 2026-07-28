@@ -271,7 +271,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
       final result = await _stockEntryService.fetchStockOptionPage(
         option: option,
         page: page,
-        pageSize: 30,
         search: state.searchQuery,
       );
 
@@ -320,7 +319,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     try {
       final result = await _stockEntryService.fetchBrandOptionsPage(
         page: nextPage,
-        pageSize: 30,
         search: _brandSearchQuery,
       );
 
@@ -387,7 +385,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     try {
       final result = await _stockEntryService.fetchItemTypeOptionsPage(
         page: nextPage,
-        pageSize: 30,
         search: _itemTypeSearchQuery,
       );
 
@@ -454,7 +451,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     try {
       final result = await _stockEntryService.fetchSizeOptionsPage(
         page: nextPage,
-        pageSize: 30,
         search: _sizeSearchQuery,
       );
 
@@ -513,7 +509,6 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     try {
       final result = await _stockEntryService.fetchColourOptionsPage(
         page: nextPage,
-        pageSize: 30,
         search: _colourSearchQuery,
       );
 

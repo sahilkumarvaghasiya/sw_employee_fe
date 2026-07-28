@@ -8,13 +8,12 @@ import '../models/product_color.dart';
 import '../services/products_service.dart';
 
 class ProductsProvider extends ChangeNotifier {
-  ProductsProvider({this.pageSize = 10, ProductsService? service})
+  ProductsProvider({ProductsService? service})
     : _service = service ?? ProductsService() {
     _priceBounds = (0, 5000);
     _selectedPriceRange = RangeValues(_priceBounds.$1, _priceBounds.$2);
   }
 
-  final int pageSize;
   final ProductsService _service;
 
   late final (double, double) _priceBounds;
@@ -313,7 +312,6 @@ class ProductsProvider extends ChangeNotifier {
 
     final page = await _service.fetchProductVariants(
       page: _page,
-      pageSize: pageSize,
       filters: _buildApiFilters(),
     );
 
