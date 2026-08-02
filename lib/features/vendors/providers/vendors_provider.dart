@@ -11,8 +11,6 @@ class VendorsProvider extends ChangeNotifier {
 
   final VendorsPaymentsService _service;
 
-  static const int _pageSize = 15;
-
   VendorPaymentSummary _summary = VendorPaymentSummary.empty;
   List<VendorPayableGroup> _vendors = const <VendorPayableGroup>[];
   bool _isLoading = false;
@@ -50,7 +48,6 @@ class VendorsProvider extends ChangeNotifier {
         _service.fetchPayableVendorsPage(
           search: _searchQuery,
           page: 1,
-          pageSize: _pageSize,
         ),
       ]);
 
@@ -85,7 +82,6 @@ class VendorsProvider extends ChangeNotifier {
       final page = await _service.fetchPayableVendorsPage(
         search: _searchQuery,
         page: _page,
-        pageSize: _pageSize,
       );
 
       if (requestGeneration != _requestGeneration) return;

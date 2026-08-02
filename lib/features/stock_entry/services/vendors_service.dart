@@ -7,6 +7,18 @@ import '../../../core/config/api_config.dart';
 import '../../auth/services/api_service.dart';
 import '../models/vendor.dart';
 
+class VendorsPage {
+  const VendorsPage({
+    required this.vendors,
+    required this.hasNext,
+    required this.count,
+  });
+
+  final List<Vendor> vendors;
+  final bool hasNext;
+  final int count;
+}
+
 class VendorsService {
   VendorsService({ApiService? apiService})
     : _apiService = apiService ?? ApiService();
@@ -27,15 +39,25 @@ class VendorsService {
     return uri.replace(queryParameters: queryParameters);
   }
 
-  Future<List<Vendor>> fetchVendors() async {
-    final url = _url(vendorsListPath).toString();
+  /// One page from BE (`VendorListPagination`, default page_size=20).
+  Future<VendorsPage> fetchVendorsPage({
+    String? search,
+    int page = 1,
+  }) async {
+    final qp = <String, String>{
+      'page': page.toString(),
+    };
+    final query = (search ?? '').trim();
+    if (query.isNotEmpty) qp['search'] = query;
+
+    final url = _url(vendorsListPath, queryParameters: qp).toString();
     http.Response response;
     try {
       response = await _apiService.get(url);
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('VendorsService.fetchVendors error: $e');
-        debugPrint('VendorsService.fetchVendors url: $url');
+        debugPrint('VendorsService.fetchVendorsPage error: $e');
+        debugPrint('VendorsService.fetchVendorsPage url: $url');
       }
       throw http.ClientException(
         'Cannot connect to backend. Check API URL (${ApiConfig.baseUrl}). '
@@ -45,7 +67,7 @@ class VendorsService {
 
     if (kDebugMode) {
       debugPrint(
-        'VendorsService.fetchVendors ${response.statusCode} (${response.bodyBytes.length} bytes)',
+        'VendorsService.fetchVendorsPage ${response.statusCode} (${response.bodyBytes.length} bytes)',
       );
     }
 
@@ -76,26 +98,39 @@ class VendorsService {
 
     final decoded = jsonDecode(response.body);
 
-    List<dynamic>? list;
+    List<dynamic>? rows;
+    var hasNext = false;
+    var count = 0;
+
     if (decoded is List) {
-      list = decoded;
+      rows = decoded;
+      count = decoded.length;
     } else if (decoded is Map<String, dynamic>) {
       final data = decoded['data'] ?? decoded['results'] ?? decoded['items'];
-      if (data is List) list = data;
+      if (data is List) rows = data;
+      final next = decoded['next'];
+      hasNext = next != null && next.toString().trim().isNotEmpty;
+      final countRaw = decoded['count'];
+      if (countRaw is int) {
+        count = countRaw;
+      } else {
+        count = int.tryParse(countRaw?.toString() ?? '') ?? (rows?.length ?? 0);
+      }
     }
 
-    if (list == null) {
+    if (rows == null) {
       throw const FormatException('Invalid vendor list response');
     }
 
     final out = <Vendor>[];
-    for (final row in list) {
+    for (final row in rows) {
       if (row is Map<String, dynamic>) {
         out.add(Vendor.fromJson(row));
+      } else if (row is Map) {
+        out.add(Vendor.fromJson(row.cast<String, dynamic>()));
       }
     }
 
-    out.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return out;
+    return VendorsPage(vendors: out, hasNext: hasNext, count: count);
   }
 }

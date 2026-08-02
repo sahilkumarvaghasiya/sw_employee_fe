@@ -271,7 +271,6 @@ class _ExistingProductScanScreenState extends State<ExistingProductScanScreen> {
         vendorId: widget.vendor.id,
         search: trimmed,
         page: 1,
-        pageSize: 30,
       );
       if (!mounted || requestId != _searchRequestId) return;
 

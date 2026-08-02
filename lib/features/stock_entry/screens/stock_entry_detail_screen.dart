@@ -64,11 +64,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
   (String, Color, IconData) _statusUi(StockEntryStatus status) {
     switch (status) {
       case StockEntryStatus.paid:
-        return (
-          'Paid',
-          AppColors.emerald,
-          Icons.check_circle_outline_rounded,
-        );
+        return ('Paid', AppColors.emerald, Icons.check_circle_outline_rounded);
       case StockEntryStatus.partial:
         return ('Half paid', AppColors.warning, Icons.timelapse_outlined);
       case StockEntryStatus.unpaid:
@@ -143,6 +139,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
 
   Widget _paymentCard({
     required BuildContext context,
+    required double gst,
     required double total,
     required double paid,
     required double pending,
@@ -155,12 +152,18 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
         children: [
           Text(
             'Payment',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
           BillingSummaryLine(label: 'Total', value: _money(total)),
+          BillingSummaryLine(
+            label: 'GST',
+            value: gst > 0
+                ? '${gst.toStringAsFixed(gst % 1 == 0 ? 0 : 2)}%'
+                : '—',
+          ),
           BillingSummaryLine(label: 'Paid', value: _money(paid)),
           BillingSummaryLine(
             label: 'Pending',
@@ -194,10 +197,8 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
 
     final size = variant.size.trim();
     final color = variant.color.trim();
-    final sizeLabel =
-        (size.isNotEmpty && size != '—') ? 'Size $size' : null;
-    final colorLabel =
-        (color.isNotEmpty && color != '—') ? color : null;
+    final sizeLabel = (size.isNotEmpty && size != '—') ? 'Size $size' : null;
+    final colorLabel = (color.isNotEmpty && color != '—') ? color : null;
     final title = [
       if (sizeLabel != null) sizeLabel,
       if (colorLabel != null) colorLabel,
@@ -299,8 +300,9 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
 
     final isExpanded = _expandedProducts[index] ?? false;
     final variants = product.variants;
-    final visibleVariants =
-        isExpanded ? variants : variants.take(3).toList(growable: false);
+    final visibleVariants = isExpanded
+        ? variants
+        : variants.take(3).toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -353,9 +355,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
                   });
                 },
                 child: Text(
-                  isExpanded
-                      ? 'Show less'
-                      : 'Show ${variants.length - 3} more',
+                  isExpanded ? 'Show less' : 'Show ${variants.length - 3} more',
                 ),
               ),
             ),
@@ -425,6 +425,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
         const SizedBox(height: 12),
         _paymentCard(
           context: context,
+          gst: details.gst,
           total: details.totalAmount,
           paid: details.paidAmount,
           pending: details.pendingAmount,
@@ -454,8 +455,8 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
     final (statusText, statusColor, statusIcon) = remaining <= 0
         ? ('Paid', AppColors.emerald, Icons.check_circle_outline_rounded)
         : entry.payment.paidAmount > 0.0001
-            ? ('Half paid', AppColors.warning, Icons.timelapse_outlined)
-            : ('Unpaid', AppColors.error, Icons.warning_amber_rounded);
+        ? ('Half paid', AppColors.warning, Icons.timelapse_outlined)
+        : ('Unpaid', AppColors.error, Icons.warning_amber_rounded);
 
     final deadlineLabel = entry.payment.deadline == null
         ? '—'
@@ -493,6 +494,7 @@ class _StockEntryDetailScreenState extends State<StockEntryDetailScreen> {
         const SizedBox(height: 12),
         _paymentCard(
           context: context,
+          gst: 0,
           total: entry.payment.totalPayment,
           paid: entry.payment.paidAmount,
           pending: entry.payment.remainingAmount,

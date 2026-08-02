@@ -1787,7 +1787,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       try {
         final page = await _productsService.fetchProductVariants(
           page: 1,
-          pageSize: 30,
           filters: filters,
         );
         return page.items;
@@ -1795,7 +1794,6 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         if (filters.isEmpty) rethrow;
         final page = await _productsService.fetchProductVariants(
           page: 1,
-          pageSize: 30,
           filters: const <String, String>{},
         );
         return page.items;

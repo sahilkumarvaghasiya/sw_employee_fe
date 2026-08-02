@@ -43,6 +43,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
   final TextEditingController _totalPaymentController = TextEditingController();
   final TextEditingController _paidAmountController = TextEditingController();
+  final TextEditingController _gstPercentageController =
+      TextEditingController();
 
   final List<_EditableDraftItem> _items = [];
   final Set<String> _expandedBarcodes = <String>{};
@@ -73,6 +75,7 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
 
     _totalPaymentController.dispose();
     _paidAmountController.dispose();
+    _gstPercentageController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -465,7 +468,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
           for (final it in items)
             {
               'size': it.draft.sizeId ?? it.draft.size,
-              'colour': it.draft.colourId ??
+              'colour':
+                  it.draft.colourId ??
                   (it.draft.colour.trim().isEmpty
                       ? null
                       : it.draft.colour.trim()),
@@ -481,6 +485,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
       'total_amount': moneyString(_totalStockValue),
       'paid_amount': moneyString(_paidAmount),
       'paymentdeadlinedate': deadlineString(_deadline),
+      if (_gstPercentageController.text.trim().isNotEmpty)
+        'gst': _gstPercentageController.text.trim(),
       'notes': null,
       'products': products,
     };
@@ -736,6 +742,8 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                           _totalPaymentController,
                                       paidAmountController:
                                           _paidAmountController,
+                                      gstPercentageController:
+                                          _gstPercentageController,
                                       remainingAmount: _remainingAmount,
                                       deadline: _deadline,
                                       onPickDeadline: () async {
@@ -749,6 +757,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                                       },
                                       onPaidAmountChanged: (_) {
                                         _syncTotalsFromControllers();
+                                        setModalState(() {});
+                                      },
+                                      onGstPercentageChanged: (_) {
                                         setModalState(() {});
                                       },
                                     ),
@@ -847,6 +858,15 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
     if (parsedPaid < 0) {
       _showSnack('Paid amount cannot be negative.');
       return false;
+    }
+
+    final gstRaw = _gstPercentageController.text.trim();
+    if (gstRaw.isNotEmpty) {
+      final parsedGst = double.tryParse(gstRaw);
+      if (parsedGst == null || parsedGst < 0 || parsedGst > 100) {
+        _showSnack('Enter a valid GST percentage between 0 and 100.');
+        return false;
+      }
     }
 
     if ((_totalStockValue - parsedTotal).abs() > 0.0001 ||
@@ -1560,9 +1580,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
             IconButton(
               tooltip: 'Vendor history',
               onPressed: () {
-                Navigator.of(context).push(
-                  StockEntryHistoryScreen.route(vendor: widget.vendor),
-                );
+                Navigator.of(
+                  context,
+                ).push(StockEntryHistoryScreen.route(vendor: widget.vendor));
               },
               icon: const Icon(Icons.history_rounded),
             ),
@@ -1618,7 +1638,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                     Icon(
                       Icons.inventory_2_outlined,
                       size: 40,
-                      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.35,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -1632,7 +1654,9 @@ class _StockScanningScreenState extends State<StockScanningScreen> {
                     Text(
                       'Tap Scan, Existing, or New above',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                        color: colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.7,
+                        ),
                       ),
                     ),
                   ],

@@ -35,13 +35,11 @@ class ProductsService {
 
   Future<ProductsPage> fetchProductVariants({
     required int page,
-    required int pageSize,
     required Map<String, String> filters,
   }) async {
     final qp = <String, String>{
       ...filters,
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
 
     final response = await _apiService.get(
@@ -65,17 +63,17 @@ class ProductsService {
         hasMore = decoded['next'] != null;
       } else if (decoded['data'] is List) {
         list = decoded['data'] as List<dynamic>;
-        hasMore = list.length >= pageSize;
+        hasMore = decoded['next'] != null;
       } else if (decoded['items'] is List) {
         list = decoded['items'] as List<dynamic>;
-        hasMore = decoded['next'] != null || list.length >= pageSize;
+        hasMore = decoded['next'] != null;
       } else {
         list = const [];
         hasMore = false;
       }
     } else if (decoded is List) {
       list = decoded;
-      hasMore = list.length >= pageSize;
+      hasMore = false;
     } else {
       list = const [];
       hasMore = false;

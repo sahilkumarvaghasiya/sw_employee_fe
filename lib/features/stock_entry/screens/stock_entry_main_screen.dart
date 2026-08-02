@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -27,20 +29,48 @@ class StockEntryMainScreen extends StatefulWidget {
 
 class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        context.read<StockEntryProvider>().refreshVendors();
-      }
+      if (!mounted) return;
+      final provider = context.read<StockEntryProvider>();
+      unawaited(provider.refreshVendors().then((_) {
+        if (!mounted) return;
+        _maybeLoadMore(provider);
+      }));
     });
+  }
+
+  void _onScroll() {
+    if (!mounted) return;
+    _maybeLoadMore(context.read<StockEntryProvider>());
+  }
+
+  void _maybeLoadMore(StockEntryProvider provider) {
+    if (!provider.vendorsHasMore) return;
+    if (provider.isLoadingVendors || provider.isLoadingMoreVendors) return;
+    if (!_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+    final shouldLoad = position.pixels >= (position.maxScrollExtent - 240);
+    if (!shouldLoad) return;
+
+    unawaited(provider.loadMoreVendors().then((_) {
+      if (!mounted) return;
+      _maybeLoadMore(context.read<StockEntryProvider>());
+    }));
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     super.dispose();
   }
 
@@ -52,17 +82,8 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
 
     final provider = context.watch<StockEntryProvider>();
     final vendors = provider.vendors;
-
-    final query = _searchController.text.trim().toLowerCase();
-    final filtered = query.isEmpty
-        ? vendors
-        : vendors
-              .where((v) {
-                return v.name.toLowerCase().contains(query) ||
-                    (v.address ?? '').toLowerCase().contains(query) ||
-                    v.phone.toLowerCase().contains(query);
-              })
-              .toList(growable: false);
+    final showFooterLoader = provider.isLoadingMoreVendors;
+    final query = provider.vendorsSearchQuery;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -79,6 +100,7 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
         onRefresh: provider.refreshVendors,
         color: colorScheme.primary,
         child: CustomScrollView(
+          controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
@@ -141,10 +163,10 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
                     StockEntrySearchField(
                       controller: _searchController,
                       hint: 'Search by name or phone…',
-                      onChanged: (_) => setState(() {}),
+                      onChanged: provider.setVendorsSearchQuery,
                       onClear: () {
                         _searchController.clear();
-                        setState(() {});
+                        provider.setVendorsSearchQuery('');
                       },
                     ),
                   ],
@@ -175,7 +197,7 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
                   ),
                 ),
               )
-            else if (filtered.isEmpty)
+            else if (vendors.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
@@ -202,10 +224,23 @@ class _StockEntryMainScreenState extends State<StockEntryMainScreen> {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
                 sliver: SliverList.separated(
-                  itemCount: filtered.length,
+                  itemCount: vendors.length + (showFooterLoader ? 1 : 0),
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
-                    final vendor = filtered[index];
+                    if (index >= vendors.length) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2.4),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final vendor = vendors[index];
                     return StockEntryVendorTile(
                       name: vendor.name,
                       subtitle: _vendorSubtitle(vendor),
