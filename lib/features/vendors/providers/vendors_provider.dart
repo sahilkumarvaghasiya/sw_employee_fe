@@ -199,6 +199,19 @@ class VendorsProvider extends ChangeNotifier {
     return bytes;
   }
 
+  Future<List<int>> fetchStatementPdf({
+    required int vendorId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final bytes = await _service.fetchStatementPdf(
+      vendorId: vendorId,
+      startDate: startDate,
+      endDate: endDate,
+    );
+    return bytes;
+  }
+
   @override
   void dispose() {
     _disposed = true;

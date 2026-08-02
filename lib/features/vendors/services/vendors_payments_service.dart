@@ -574,6 +574,28 @@ class VendorsPaymentsService {
     return response.bodyBytes;
   }
 
+  Future<Uint8List> fetchStatementPdf({
+    required int vendorId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final qp = <String, String>{'export': 'pdf'};
+    if (startDate != null) qp['start_date'] = ddMMyyyyDash(startDate);
+    if (endDate != null) qp['end_date'] = ddMMyyyyDash(endDate);
+
+    final response = await _apiService.get(
+      _url(_payableVendorStatementPath(vendorId), queryParameters: qp).toString(),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw http.ClientException(
+        'Failed to download statement PDF (${response.statusCode})',
+      );
+    }
+
+    return response.bodyBytes;
+  }
+
   String? _extractErrorMessage(http.Response response) {
     try {
       final decoded = jsonDecode(response.body);
