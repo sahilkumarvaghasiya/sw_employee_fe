@@ -52,12 +52,15 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   DateTimeRange? _dateRange;
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _maxTotalController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   Timer? _searchDebounce;
+  bool _postFramePaginationScheduled = false;
   static final NumberFormat _inrFormat = NumberFormat('#,##,##0.00', 'en_IN');
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // Safety: if Sales is locked, leave immediately (button should already block).
@@ -70,7 +73,10 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         Navigator.of(context).maybePop();
         return;
       }
-      context.read<SalesHistoryProvider>().refresh();
+      unawaited(context.read<SalesHistoryProvider>().refresh().then((_) {
+        if (!mounted) return;
+        _maybeLoadMore(context.read<SalesHistoryProvider>());
+      }));
     });
   }
 
@@ -79,7 +85,31 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     _searchDebounce?.cancel();
     _searchController.dispose();
     _maxTotalController.dispose();
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!mounted) return;
+    _maybeLoadMore(context.read<SalesHistoryProvider>());
+  }
+
+  void _maybeLoadMore(SalesHistoryProvider provider) {
+    if (!provider.hasMore) return;
+    if (provider.isLoading || provider.isLoadingMore) return;
+    if (!_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+    final shouldLoad = position.maxScrollExtent <= 0 ||
+        position.pixels >= (position.maxScrollExtent - 240);
+    if (!shouldLoad) return;
+
+    unawaited(provider.loadMore().then((_) {
+      if (!mounted) return;
+      _maybeLoadMore(context.read<SalesHistoryProvider>());
+    }));
   }
 
   void _onSearchChanged(String value) {
@@ -494,10 +524,30 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final bills = provider.bills;
     final filterCount = _activeFilterCount();
 
+    // Products-style: keep loading pages until the viewport fills (or no more).
+    if (!_postFramePaginationScheduled &&
+        bills.isNotEmpty &&
+        provider.hasMore &&
+        !provider.isLoading &&
+        !provider.isLoadingMore &&
+        _scrollController.hasClients &&
+        _scrollController.position.maxScrollExtent <= 0) {
+      _postFramePaginationScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _postFramePaginationScheduled = false;
+        if (!mounted) return;
+        _maybeLoadMore(context.read<SalesHistoryProvider>());
+      });
+    }
+
     final hasAnyFilter =
         _dateRange != null ||
         _maxTotalController.text.trim().isNotEmpty ||
         _searchController.text.trim().isNotEmpty;
+
+    final countLabel = provider.totalCount > 0
+        ? '${provider.totalCount} bill${provider.totalCount == 1 ? '' : 's'}'
+        : '${bills.length} bill${bills.length == 1 ? '' : 's'}';
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.slate950 : AppColors.slate50,
@@ -517,9 +567,15 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: provider.refresh,
+        onRefresh: () async {
+          await provider.refresh();
+          if (!mounted) return;
+          _maybeLoadMore(context.read<SalesHistoryProvider>());
+        },
         color: AppColors.emerald,
         child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
@@ -601,7 +657,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
                   child: Text(
-                    '${bills.length} bill${bills.length == 1 ? '' : 's'}',
+                    countLabel,
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: colorScheme.onSurfaceVariant,
@@ -637,9 +693,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                   onAction: hasAnyFilter ? _clearFilters : null,
                 ),
               )
-            else
+            else ...[
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 sliver: SliverList.separated(
                   itemCount: bills.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -668,11 +724,61 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                   },
                 ),
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  child: _SalesHistoryPaginationFooter(
+                    isLoadingMore: provider.isLoadingMore,
+                    hasMore: provider.hasMore,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+class _SalesHistoryPaginationFooter extends StatelessWidget {
+  const _SalesHistoryPaginationFooter({
+    required this.isLoadingMore,
+    required this.hasMore,
+  });
+
+  final bool isLoadingMore;
+  final bool hasMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    if (isLoadingMore) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (!hasMore) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            'All bills loaded',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }
 

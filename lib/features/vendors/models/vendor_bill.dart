@@ -230,6 +230,18 @@ class VendorBillsPage {
   final int count;
 }
 
+class VendorStatementPage {
+  const VendorStatementPage({
+    required this.entries,
+    required this.hasNext,
+    required this.count,
+  });
+
+  final List<VendorStatementEntry> entries;
+  final bool hasNext;
+  final int count;
+}
+
 class VendorPayableVendorsPage {
   const VendorPayableVendorsPage({
     required this.vendors,

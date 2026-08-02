@@ -73,15 +73,13 @@ class VendorsPaymentsService {
     return VendorPaymentSummary.fromJson(decoded);
   }
 
-  /// Pay Vendor hub list — one page (default 15).
+  /// Pay Vendor hub list — one page (size from BE `VendorPayableVendorsPagination`).
   Future<VendorPayableVendorsPage> fetchPayableVendorsPage({
     String? search,
     int page = 1,
-    int pageSize = 15,
   }) async {
     final qp = <String, String>{
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
     final query = (search ?? '').trim();
     if (query.isNotEmpty) qp['search'] = query;
@@ -155,65 +153,63 @@ class VendorsPaymentsService {
     return decoded;
   }
 
-  /// Pending bills for one vendor (due date ASC). Optional bill-date range.
-  Future<List<VendorBill>> fetchPayablePendingBills({
+  /// One page of pending bills (page size from BE, currently 20).
+  Future<VendorBillsPage> fetchPayablePendingBillsPage({
     required int vendorId,
     DateTime? startDate,
     DateTime? endDate,
+    int page = 1,
   }) async {
-    final bills = <VendorBill>[];
-    var page = 1;
+    final qp = <String, String>{
+      'page': page.toString(),
+    };
+    if (startDate != null) qp['start_date'] = ddMMyyyyDash(startDate);
+    if (endDate != null) qp['end_date'] = ddMMyyyyDash(endDate);
 
-    while (true) {
-      final qp = <String, String>{
-        'page': page.toString(),
-        'page_size': '15',
-      };
-      if (startDate != null) qp['start_date'] = ddMMyyyyDash(startDate);
-      if (endDate != null) qp['end_date'] = ddMMyyyyDash(endDate);
+    final response = await _apiService.get(
+      _url(
+        _payableVendorPendingPath(vendorId),
+        queryParameters: qp,
+      ).toString(),
+    );
 
-      final response = await _apiService.get(
-        _url(
-          _payableVendorPendingPath(vendorId),
-          queryParameters: qp,
-        ).toString(),
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw http.ClientException(
+        'Failed to load pending bills (${response.statusCode})',
       );
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw http.ClientException(
-          'Failed to load pending bills (${response.statusCode})',
-        );
-      }
-
-      final decoded = jsonDecode(response.body);
-      List<dynamic>? rows;
-      bool hasNext = false;
-
-      if (decoded is List) {
-        rows = decoded;
-      } else if (decoded is Map<String, dynamic>) {
-        final data = decoded['results'] ?? decoded['data'] ?? decoded['items'];
-        if (data is List) rows = data;
-        final next = decoded['next'];
-        hasNext = next != null && next.toString().trim().isNotEmpty;
-      }
-
-      if (rows == null) {
-        throw const FormatException('Invalid pending bills response');
-      }
-
-      bills.addAll(
-        rows
-            .whereType<Map>()
-            .map((e) => VendorBill.fromJson(e.cast<String, dynamic>())),
-      );
-
-      if (!hasNext) break;
-      page += 1;
-      if (page > 50) break;
     }
 
-    return bills;
+    final decoded = jsonDecode(response.body);
+    List<dynamic>? rows;
+    var hasNext = false;
+    var count = 0;
+
+    if (decoded is List) {
+      rows = decoded;
+      count = decoded.length;
+    } else if (decoded is Map<String, dynamic>) {
+      final data = decoded['results'] ?? decoded['data'] ?? decoded['items'];
+      if (data is List) rows = data;
+      final next = decoded['next'];
+      hasNext = next != null && next.toString().trim().isNotEmpty;
+      final countRaw = decoded['count'];
+      if (countRaw is int) {
+        count = countRaw;
+      } else {
+        count = int.tryParse(countRaw?.toString() ?? '') ?? (rows?.length ?? 0);
+      }
+    }
+
+    if (rows == null) {
+      throw const FormatException('Invalid pending bills response');
+    }
+
+    final bills = rows
+        .whereType<Map>()
+        .map((e) => VendorBill.fromJson(e.cast<String, dynamic>()))
+        .toList(growable: false);
+
+    return VendorBillsPage(bills: bills, hasNext: hasNext, count: count);
   }
 
   Future<VendorBillsPage> fetchBills({
@@ -223,11 +219,9 @@ class VendorsPaymentsService {
     DateTime? endDate,
     String sort = 'newest',
     int page = 1,
-    int pageSize = 10,
   }) async {
     final qp = <String, String>{
       'page': page.toString(),
-      'page_size': pageSize.toString(),
     };
 
     final query = (search ?? '').trim();
@@ -302,7 +296,6 @@ class VendorsPaymentsService {
         endDate: endDate,
         sort: 'newest',
         page: page,
-        pageSize: 100,
       );
       bills.addAll(result.bills);
       if (!result.hasNext) break;
@@ -388,12 +381,16 @@ class VendorsPaymentsService {
     );
   }
 
-  Future<List<VendorStatementEntry>> fetchPayableStatement({
+  /// One page of statement rows (page size from BE, currently 20).
+  Future<VendorStatementPage> fetchPayableStatementPage({
     required int vendorId,
     DateTime? startDate,
     DateTime? endDate,
+    int page = 1,
   }) async {
-    final qp = <String, String>{};
+    final qp = <String, String>{
+      'page': page.toString(),
+    };
     if (startDate != null) qp['start_date'] = ddMMyyyyDash(startDate);
     if (endDate != null) qp['end_date'] = ddMMyyyyDash(endDate);
 
@@ -412,11 +409,23 @@ class VendorsPaymentsService {
 
     final decoded = jsonDecode(response.body);
     List<dynamic>? rows;
+    var hasNext = false;
+    var count = 0;
+
     if (decoded is List) {
       rows = decoded;
+      count = decoded.length;
     } else if (decoded is Map<String, dynamic>) {
       final data = decoded['results'] ?? decoded['data'];
       if (data is List) rows = data;
+      final next = decoded['next'];
+      hasNext = next != null && next.toString().trim().isNotEmpty;
+      final countRaw = decoded['count'];
+      if (countRaw is int) {
+        count = countRaw;
+      } else {
+        count = int.tryParse(countRaw?.toString() ?? '') ?? (rows?.length ?? 0);
+      }
     }
     if (rows == null) {
       throw const FormatException('Invalid statement response');
@@ -455,7 +464,11 @@ class VendorsPaymentsService {
         );
       }
     }
-    return entries;
+    return VendorStatementPage(
+      entries: List.unmodifiable(entries),
+      hasNext: hasNext,
+      count: count,
+    );
   }
 
   Future<VendorStatementPayment> fetchPayablePaymentDetail(int paymentId) async {

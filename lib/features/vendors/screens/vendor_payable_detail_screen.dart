@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -55,10 +56,16 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
 
   List<VendorBill> _pendingBills = const [];
   bool _loadingPending = true;
+  bool _loadingMorePending = false;
+  bool _pendingHasMore = false;
+  int _pendingPage = 1;
   String? _pendingError;
 
   List<VendorStatementEntry> _statementEntries = const [];
   bool _loadingStatement = true;
+  bool _loadingMoreStatement = false;
+  bool _statementHasMore = false;
+  int _statementPage = 1;
   String? _statementError;
   bool _downloadingStatementPdf = false;
   DateTimeRange? _pendingDateRange;
@@ -122,59 +129,105 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
     }
   }
 
-  Future<void> _loadPendingBills() async {
-    setState(() {
-      _loadingPending = true;
-      _pendingError = null;
-    });
+  Future<void> _loadPendingBills({bool reset = true}) async {
+    if (reset) {
+      setState(() {
+        _loadingPending = true;
+        _pendingError = null;
+        _pendingPage = 1;
+        _pendingHasMore = false;
+      });
+    } else {
+      if (_loadingMorePending || !_pendingHasMore || _loadingPending) return;
+      setState(() => _loadingMorePending = true);
+    }
+
     try {
       final vendorId = _vendorId;
       if (vendorId == null) {
         throw StateError('Missing vendor id');
       }
 
-      final bills = await VendorsPaymentsService().fetchPayablePendingBills(
+      final page = await VendorsPaymentsService().fetchPayablePendingBillsPage(
         vendorId: vendorId,
         startDate: _pendingDateRange?.start,
         endDate: _pendingDateRange?.end,
+        page: reset ? 1 : _pendingPage,
       );
       if (!mounted) return;
       setState(() {
-        _pendingBills = bills;
+        if (reset) {
+          _pendingBills = page.bills;
+          _pendingPage = 2;
+        } else {
+          _pendingBills = [..._pendingBills, ...page.bills];
+          _pendingPage += 1;
+        }
+        _pendingHasMore = page.hasNext;
         _loadingPending = false;
+        _loadingMorePending = false;
+        _pendingError = null;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _pendingError = 'Couldn’t load pending bills';
+        if (reset) {
+          _pendingError = 'Couldn’t load pending bills';
+          _pendingBills = const [];
+        }
         _loadingPending = false;
+        _loadingMorePending = false;
       });
     }
   }
 
-  Future<void> _loadStatement() async {
-    setState(() {
-      _loadingStatement = true;
-      _statementError = null;
-    });
+  Future<void> _loadStatement({bool reset = true}) async {
+    if (reset) {
+      setState(() {
+        _loadingStatement = true;
+        _statementError = null;
+        _statementPage = 1;
+        _statementHasMore = false;
+      });
+    } else {
+      if (_loadingMoreStatement || !_statementHasMore || _loadingStatement) {
+        return;
+      }
+      setState(() => _loadingMoreStatement = true);
+    }
+
     try {
       final vendorId = _vendorId;
       if (vendorId == null) {
         throw StateError('Missing vendor id');
       }
-      final entries = await VendorsPaymentsService().fetchPayableStatement(
+      final page = await VendorsPaymentsService().fetchPayableStatementPage(
         vendorId: vendorId,
+        page: reset ? 1 : _statementPage,
       );
       if (!mounted) return;
       setState(() {
-        _statementEntries = entries;
+        if (reset) {
+          _statementEntries = page.entries;
+          _statementPage = 2;
+        } else {
+          _statementEntries = [..._statementEntries, ...page.entries];
+          _statementPage += 1;
+        }
+        _statementHasMore = page.hasNext;
         _loadingStatement = false;
+        _loadingMoreStatement = false;
+        _statementError = null;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _statementError = 'Couldn’t load statement';
+        if (reset) {
+          _statementError = 'Couldn’t load statement';
+          _statementEntries = const [];
+        }
         _loadingStatement = false;
+        _loadingMoreStatement = false;
       });
     }
   }
@@ -796,11 +849,14 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
           _PendingPaymentsTab(
             bills: bills,
             loading: _loadingPending,
+            loadingMore: _loadingMorePending,
+            hasMore: _pendingHasMore,
             error: _pendingError,
             selectedIds: _selectedIds,
             hasDateFilter: hasPendingDateFilter,
             onPickDateRange: _pickPendingDateRange,
-            onRetry: _loadPendingBills,
+            onRetry: () => _loadPendingBills(reset: true),
+            onLoadMore: () => _loadPendingBills(reset: false),
             onToggle: _toggle,
             onOpenDetails: (bill) async {
               await Navigator.of(context).push(
@@ -810,15 +866,18 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
                 ),
               );
               if (!mounted) return;
-              await _loadPendingBills();
+              await _loadPendingBills(reset: true);
             },
           ),
           _StatementTab(
             entries: _statementEntries,
             loading: _loadingStatement,
+            loadingMore: _loadingMoreStatement,
+            hasMore: _statementHasMore,
             error: _statementError,
             downloadingPdf: _downloadingStatementPdf,
-            onRetry: _loadStatement,
+            onRetry: () => _loadStatement(reset: true),
+            onLoadMore: () => _loadStatement(reset: false),
             onOpenPurchase: (bill) async {
               await Navigator.of(context).push(
                 VendorBillDetailScreen.route(
@@ -950,35 +1009,101 @@ class _InformationTab extends StatelessWidget {
   }
 }
 
-class _PendingPaymentsTab extends StatelessWidget {
+class _PendingPaymentsTab extends StatefulWidget {
   const _PendingPaymentsTab({
     required this.bills,
     required this.loading,
+    required this.loadingMore,
+    required this.hasMore,
     required this.error,
     required this.selectedIds,
     required this.hasDateFilter,
     required this.onPickDateRange,
     required this.onRetry,
+    required this.onLoadMore,
     required this.onToggle,
     required this.onOpenDetails,
   });
 
   final List<VendorBill> bills;
   final bool loading;
+  final bool loadingMore;
+  final bool hasMore;
   final String? error;
   final Set<int> selectedIds;
   final bool hasDateFilter;
   final VoidCallback onPickDateRange;
   final VoidCallback onRetry;
+  final Future<void> Function() onLoadMore;
   final ValueChanged<int> onToggle;
   final ValueChanged<VendorBill> onOpenDetails;
+
+  @override
+  State<_PendingPaymentsTab> createState() => _PendingPaymentsTabState();
+}
+
+class _PendingPaymentsTabState extends State<_PendingPaymentsTab> {
+  final ScrollController _scrollController = ScrollController();
+  bool _postFramePaginationScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoadMore());
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onScroll() => _maybeLoadMore();
+
+  void _maybeLoadMore() {
+    if (!mounted) return;
+    if (!widget.hasMore || widget.loading || widget.loadingMore) return;
+    if (!_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+    final shouldLoad = position.maxScrollExtent <= 0 ||
+        position.pixels >= (position.maxScrollExtent - 240);
+    if (!shouldLoad) return;
+
+    unawaited(widget.onLoadMore());
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final bills = widget.bills;
+    final loading = widget.loading;
+    final error = widget.error;
+    final hasDateFilter = widget.hasDateFilter;
+
+    // Products-style: if first page doesn't fill viewport, keep fetching.
+    if (!_postFramePaginationScheduled &&
+        bills.isNotEmpty &&
+        widget.hasMore &&
+        !loading &&
+        !widget.loadingMore &&
+        _scrollController.hasClients &&
+        _scrollController.position.maxScrollExtent <= 0) {
+      _postFramePaginationScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _postFramePaginationScheduled = false;
+        if (!mounted) return;
+        _maybeLoadMore();
+      });
+    }
 
     return ListView(
+      controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
         Row(
@@ -1006,7 +1131,7 @@ class _PendingPaymentsTab extends StatelessWidget {
             ),
             IconButton(
               tooltip: hasDateFilter ? 'Change date filter' : 'Filter by date',
-              onPressed: onPickDateRange,
+              onPressed: widget.onPickDateRange,
               icon: Badge(
                 isLabelVisible: hasDateFilter,
                 smallSize: 8,
@@ -1033,7 +1158,7 @@ class _PendingPaymentsTab extends StatelessWidget {
               title: 'Couldn’t load pending bills',
               subtitle: 'Pull or tap retry',
               actionLabel: 'Retry',
-              onAction: onRetry,
+              onAction: widget.onRetry,
               icon: Icons.error_outline_rounded,
             ),
           )
@@ -1049,30 +1174,39 @@ class _PendingPaymentsTab extends StatelessWidget {
                   : 'All bills for this vendor are settled',
             ),
           )
-        else
+        else ...[
           ...bills.map(
             (bill) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: VendorBillSelectTile(
                 bill: bill,
-                selected: selectedIds.contains(bill.id),
-                onToggle: () => onToggle(bill.id),
-                onOpenDetails: () => onOpenDetails(bill),
+                selected: widget.selectedIds.contains(bill.id),
+                onToggle: () => widget.onToggle(bill.id),
+                onOpenDetails: () => widget.onOpenDetails(bill),
               ),
             ),
           ),
+          _ListPaginationFooter(
+            isLoadingMore: widget.loadingMore,
+            hasMore: widget.hasMore,
+            doneLabel: 'All bills loaded',
+          ),
+        ],
       ],
     );
   }
 }
 
-class _StatementTab extends StatelessWidget {
+class _StatementTab extends StatefulWidget {
   const _StatementTab({
     required this.entries,
     required this.loading,
+    required this.loadingMore,
+    required this.hasMore,
     required this.error,
     required this.downloadingPdf,
     required this.onRetry,
+    required this.onLoadMore,
     required this.onOpenPurchase,
     required this.onOpenPayment,
     required this.onDownloadPdf,
@@ -1080,19 +1214,78 @@ class _StatementTab extends StatelessWidget {
 
   final List<VendorStatementEntry> entries;
   final bool loading;
+  final bool loadingMore;
+  final bool hasMore;
   final String? error;
   final bool downloadingPdf;
   final VoidCallback onRetry;
+  final Future<void> Function() onLoadMore;
   final ValueChanged<VendorBill> onOpenPurchase;
   final ValueChanged<VendorStatementPayment> onOpenPayment;
   final VoidCallback onDownloadPdf;
 
+  @override
+  State<_StatementTab> createState() => _StatementTabState();
+}
+
+class _StatementTabState extends State<_StatementTab> {
+  final ScrollController _scrollController = ScrollController();
   static final DateFormat _paymentDateFmt = DateFormat('dd MMM yyyy · hh:mm a');
+  bool _postFramePaginationScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoadMore());
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onScroll() => _maybeLoadMore();
+
+  void _maybeLoadMore() {
+    if (!mounted) return;
+    if (!widget.hasMore || widget.loading || widget.loadingMore) return;
+    if (!_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+    final shouldLoad = position.maxScrollExtent <= 0 ||
+        position.pixels >= (position.maxScrollExtent - 240);
+    if (!shouldLoad) return;
+
+    unawaited(widget.onLoadMore());
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final entries = widget.entries;
+    final loading = widget.loading;
+    final error = widget.error;
+    final downloadingPdf = widget.downloadingPdf;
+
+    if (!_postFramePaginationScheduled &&
+        entries.isNotEmpty &&
+        widget.hasMore &&
+        !loading &&
+        !widget.loadingMore &&
+        _scrollController.hasClients &&
+        _scrollController.position.maxScrollExtent <= 0) {
+      _postFramePaginationScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _postFramePaginationScheduled = false;
+        if (!mounted) return;
+        _maybeLoadMore();
+      });
+    }
 
     if (loading) {
       return const Center(child: CircularProgressIndicator());
@@ -1100,10 +1293,10 @@ class _StatementTab extends StatelessWidget {
 
     if (error != null && entries.isEmpty) {
       return VendorsEmptyState(
-        title: error!,
+        title: error,
         subtitle: 'Pull to retry or tap below',
         actionLabel: 'Retry',
-        onAction: onRetry,
+        onAction: widget.onRetry,
         icon: Icons.error_outline_rounded,
       );
     }
@@ -1123,7 +1316,7 @@ class _StatementTab extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: _StatementPdfButton(
                 downloading: downloadingPdf,
-                onPressed: onDownloadPdf,
+                onPressed: widget.onDownloadPdf,
               ),
             ),
           ),
@@ -1135,8 +1328,10 @@ class _StatementTab extends StatelessWidget {
       children: [
         Expanded(
           child: ListView.separated(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            itemCount: entries.length + 1,
+            itemCount: entries.length + 2,
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               if (index == 0) {
@@ -1145,6 +1340,14 @@ class _StatementTab extends StatelessWidget {
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
+                );
+              }
+
+              if (index == entries.length + 1) {
+                return _ListPaginationFooter(
+                  isLoadingMore: widget.loadingMore,
+                  hasMore: widget.hasMore,
+                  doneLabel: 'All statement entries loaded',
                 );
               }
 
@@ -1167,7 +1370,7 @@ class _StatementTab extends StatelessWidget {
                   trailingLabel: adjustmentBits.isEmpty
                       ? billLabel
                       : '$billLabel · ${adjustmentBits.join(' · ')}',
-                  onTap: () => onOpenPayment(payment),
+                  onTap: () => widget.onOpenPayment(payment),
                 );
               }
 
@@ -1180,7 +1383,7 @@ class _StatementTab extends StatelessWidget {
                 ].join(' · '),
                 amountDisplay: bill.totalDisplay,
                 kind: StatementEntryKind.purchase,
-                onTap: () => onOpenPurchase(bill),
+                onTap: () => widget.onOpenPurchase(bill),
               );
             },
           ),
@@ -1191,12 +1394,59 @@ class _StatementTab extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: _StatementPdfButton(
               downloading: downloadingPdf,
-              onPressed: onDownloadPdf,
+              onPressed: widget.onDownloadPdf,
             ),
           ),
         ),
       ],
     );
+  }
+}
+
+class _ListPaginationFooter extends StatelessWidget {
+  const _ListPaginationFooter({
+    required this.isLoadingMore,
+    required this.hasMore,
+    required this.doneLabel,
+  });
+
+  final bool isLoadingMore;
+  final bool hasMore;
+  final String doneLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    if (isLoadingMore) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+        ),
+      );
+    }
+
+    if (!hasMore) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            doneLabel,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }
 
