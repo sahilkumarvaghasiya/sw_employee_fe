@@ -325,21 +325,6 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
     }
   }
 
-  DateTime _parseBillSortDate(String raw) {
-    final formats = [
-      DateFormat('yyyy-MM-dd'),
-      DateFormat('dd-MM-yyyy'),
-      DateFormat('dd/MM/yyyy'),
-      DateFormat('dd MMM yyyy'),
-    ];
-    for (final format in formats) {
-      try {
-        return format.parse(raw);
-      } catch (_) {}
-    }
-    return DateTime.fromMillisecondsSinceEpoch(0);
-  }
-
   String _ddMMyyyy(DateTime d) {
     final dd = d.day.toString().padLeft(2, '0');
     final mm = d.month.toString().padLeft(2, '0');
@@ -641,10 +626,10 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
 
     setState(() => _downloadingStatementPdf = true);
     try {
-      final bytes = await context.read<VendorsProvider>().fetchReportPdf(
+      final bytes = await context.read<VendorsProvider>().fetchStatementPdf(
+            vendorId: vendorId,
             startDate: startDate,
             endDate: endDate,
-            vendorId: vendorId,
           );
       if (!mounted) return;
 
@@ -895,7 +880,7 @@ class _VendorPayableDetailScreenState extends State<VendorPayableDetailScreen>
                       .fetchPayablePaymentDetail(paymentId);
                 } catch (_) {}
               }
-              if (!mounted) return;
+              if (!context.mounted) return;
               showStatementPaymentDetailSheet(
                 context: context,
                 payment: detail,
