@@ -8,10 +8,12 @@ class PaymentSection extends StatelessWidget {
     super.key,
     required this.totalPaymentController,
     required this.paidAmountController,
+    required this.gstPercentageController,
     required this.remainingAmount,
     required this.deadline,
     required this.onPickDeadline,
     this.onPaidAmountChanged,
+    this.onGstPercentageChanged,
     this.totalPaymentEditable = false,
     this.onTotalPaymentChanged,
     this.deadlineErrorText,
@@ -19,12 +21,14 @@ class PaymentSection extends StatelessWidget {
 
   final TextEditingController totalPaymentController;
   final TextEditingController paidAmountController;
+  final TextEditingController gstPercentageController;
 
   final double remainingAmount;
   final DateTime? deadline;
 
   final VoidCallback onPickDeadline;
   final ValueChanged<String>? onPaidAmountChanged;
+  final ValueChanged<String>? onGstPercentageChanged;
 
   final bool totalPaymentEditable;
   final ValueChanged<String>? onTotalPaymentChanged;
@@ -83,7 +87,10 @@ class PaymentSection extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: dueColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
@@ -142,6 +149,28 @@ class PaymentSection extends StatelessWidget {
               final parsed = double.tryParse(v.trim());
               if (parsed == null) return 'Enter a valid amount';
               if (parsed < 0) return 'Amount cannot be negative';
+              return null;
+            },
+          ),
+          const SizedBox(height: 14),
+
+          TextFormField(
+            controller: gstPercentageController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: onGstPercentageChanged,
+            decoration: const InputDecoration(
+              labelText: 'GST %',
+              hintText: 'Optional',
+              suffixText: '%',
+              prefixIcon: Icon(Icons.percent_rounded),
+            ),
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return null;
+              final parsed = double.tryParse(v.trim());
+              if (parsed == null) return 'Enter a valid GST percentage';
+              if (parsed < 0 || parsed > 100) {
+                return 'GST must be between 0 and 100';
+              }
               return null;
             },
           ),

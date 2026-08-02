@@ -49,6 +49,8 @@ double _toDouble(Object? value) {
   var raw = (value ?? '').toString().trim();
   if (raw.isEmpty) return 0;
   raw = raw.replaceAll(',', '');
+  raw = raw.replaceAll('%', '');
+  raw = raw.replaceAll('₹', '');
   return double.tryParse(raw) ?? 0;
 }
 
@@ -78,7 +80,8 @@ class StockEntryDetailVariant {
   factory StockEntryDetailVariant.fromJson(Map<String, dynamic> json) {
     final actualRaw = json['actual_price'];
     final actual = actualRaw == null ? null : _toDouble(actualRaw);
-    final sellRaw = json['sell_price'] ?? json['selling_price'] ?? json['price'];
+    final sellRaw =
+        json['sell_price'] ?? json['selling_price'] ?? json['price'];
     final sell = sellRaw == null ? null : _toDouble(sellRaw);
 
     return StockEntryDetailVariant(
@@ -133,6 +136,7 @@ class StockEntryDetail {
     required this.stknumber,
     required this.createdDate,
     required this.vendorName,
+    required this.gst,
     required this.totalAmount,
     required this.paidAmount,
     required this.pendingAmount,
@@ -144,6 +148,7 @@ class StockEntryDetail {
   final String stknumber;
   final DateTime createdDate;
   final String vendorName;
+  final double gst;
 
   final double totalAmount;
   final double paidAmount;
@@ -171,6 +176,9 @@ class StockEntryDetail {
       stknumber: (json['stk_number'] ?? '').toString(),
       createdDate: created,
       vendorName: (json['vendor_name'] ?? '').toString(),
+      gst: _toDouble(
+        json['gst'] ?? json['gst_percentage'] ?? json['gst_percent'],
+      ),
       totalAmount: _toDouble(json['total_amount']),
       paidAmount: _toDouble(json['paid_amount']),
       pendingAmount: _toDouble(json['pending_amount']),
