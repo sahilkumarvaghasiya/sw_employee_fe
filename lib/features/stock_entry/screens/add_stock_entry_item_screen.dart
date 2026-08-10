@@ -70,6 +70,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
   final List<_VariantEntry> _entries = <_VariantEntry>[];
 
   final FocusNode _sellFocusNode = FocusNode();
+  final FocusNode _purchaseFocusNode = FocusNode();
   bool _programmaticSellTextUpdate = false;
   double? _sellUnitPrice;
   double? _purchaseUnitPrice;
@@ -587,6 +588,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     _draftRow.purchaseController.addListener(_onPurchaseTextChanged);
     _draftRow.qtyController.addListener(_onQtyChanged);
     _sellFocusNode.addListener(_onSellFocusChanged);
+    _purchaseFocusNode.addListener(_onPurchaseFocusChanged);
     _attachOptionScrollListeners();
   }
 
@@ -639,7 +641,9 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     _draftRow.purchaseController.removeListener(_onPurchaseTextChanged);
     _draftRow.qtyController.removeListener(_onQtyChanged);
     _sellFocusNode.removeListener(_onSellFocusChanged);
+    _purchaseFocusNode.removeListener(_onPurchaseFocusChanged);
     _sellFocusNode.dispose();
+    _purchaseFocusNode.dispose();
     _brandPaged.scrollController.dispose();
     _itemTypePaged.scrollController.dispose();
     _sizePaged.scrollController.dispose();
@@ -744,6 +748,21 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     final total = _currentSellTotal();
     _setSellText(_formatPriceValue(total));
     setState(() {});
+  }
+
+  void _onPurchaseFocusChanged() {
+    if (!mounted || !_purchaseFocusNode.hasFocus) return;
+    final controller = _draftRow.purchaseController;
+    final raw = controller.text.trim();
+    final parsed = double.tryParse(raw);
+    if (parsed != null && parsed == 0) {
+      controller.clear();
+      return;
+    }
+    controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: controller.text.length,
+    );
   }
 
   Future<bool> _addItemToTable() async {
@@ -2570,6 +2589,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
                                   height: gridHeight,
                                   child: TextFormField(
                                     controller: _draftRow.purchaseController,
+                                    focusNode: _purchaseFocusNode,
                                     keyboardType:
                                         const TextInputType.numberWithOptions(
                                           decimal: true,
