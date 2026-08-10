@@ -26,6 +26,14 @@ class StockBarcodeScannerScreen extends StatefulWidget {
 
 class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
   static final _profile = BarcodeScanProfile.stockEntry;
+  static const _cameraRestartIdleDelay = Duration(seconds: 4);
+  static const _cameraRestartCooldown = Duration(seconds: 8);
+  static const _scanHints = [
+    'Move farther if bars look blurred',
+    'Move closer if bars look very small',
+    'Tilt label to remove glare / reflection',
+    'Align barcode bars in the green frame',
+  ];
 
   late final MobileScannerController _controller = MobileScannerController(
     autoStart: false,
@@ -44,17 +52,35 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
 
   bool _isClosing = false;
   double _zoom = 0;
+  bool _torchOn = false;
   String? _lastShownPending;
   int _lastShownProgress = 0;
+  int _hintIndex = 0;
+  Timer? _hintTimer;
+  Timer? _cameraHealthTimer;
+  DateTime? _lastDetectAt;
+  DateTime? _lastRestartAt;
+  bool _restartInFlight = false;
 
   @override
   void initState() {
     super.initState();
     unawaited(_controller.start());
+    _hintTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || _isClosing) return;
+      setState(() {
+        _hintIndex = (_hintIndex + 1) % _scanHints.length;
+      });
+    });
+    _cameraHealthTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_maybeRestartCamera());
+    });
   }
 
   @override
   void dispose() {
+    _hintTimer?.cancel();
+    _cameraHealthTimer?.cancel();
     unawaited(_controller.dispose());
     _manualController.dispose();
     _manualFocus.dispose();
@@ -96,8 +122,50 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
     } catch (_) {}
   }
 
+  Future<void> _toggleTorch() async {
+    try {
+      await _controller.toggleTorch();
+      if (mounted) {
+        setState(() => _torchOn = !_torchOn);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _maybeRestartCamera() async {
+    if (_isClosing || _restartInFlight) return;
+    final pending = _validator.pendingValue;
+    if (pending != null && _validator.consecutiveCount > 0) return;
+
+    final idleSince = _lastDetectAt;
+    if (idleSince == null ||
+        DateTime.now().difference(idleSince) < _cameraRestartIdleDelay) {
+      return;
+    }
+
+    if (_lastRestartAt != null &&
+        DateTime.now().difference(_lastRestartAt!) < _cameraRestartCooldown) {
+      return;
+    }
+
+    _restartInFlight = true;
+    _lastRestartAt = DateTime.now();
+    try {
+      await _controller.stop();
+      if (_isClosing || !mounted) return;
+      _validator.reset();
+      _lastShownPending = null;
+      _lastShownProgress = 0;
+      await _controller.start();
+    } catch (_) {
+      // Keep scanner usable even if restart fails on device.
+    } finally {
+      _restartInFlight = false;
+    }
+  }
+
   void _onDetect(BarcodeCapture capture, Size layoutSize, Rect scanWindow) {
     if (_isClosing) return;
+    _lastDetectAt = DateTime.now();
 
     final value = pickStockBarcodeValue(
       capture.barcodes,
@@ -133,7 +201,7 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
       return 'Hold steady… $progress/$required';
     }
 
-    return 'Align barcode bars in the green frame — move closer if small';
+    return _scanHints[_hintIndex];
   }
 
   @override
@@ -159,6 +227,15 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
                   onPressed:
                       _isClosing ? null : () => unawaited(_adjustZoom(0.12)),
                   icon: const Icon(Icons.zoom_in_rounded),
+                ),
+                IconButton(
+                  tooltip: _torchOn ? 'Turn flash off' : 'Turn flash on',
+                  onPressed: _isClosing ? null : () => unawaited(_toggleTorch()),
+                  icon: Icon(
+                    _torchOn
+                        ? Icons.flash_on_rounded
+                        : Icons.flash_off_rounded,
+                  ),
                 ),
               ],
       ),

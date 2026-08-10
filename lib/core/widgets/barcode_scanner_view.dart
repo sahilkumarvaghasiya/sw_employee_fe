@@ -41,6 +41,8 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   static const _secondaryDecodeCooldown = Duration(milliseconds: 900);
   static const _secondaryDecodeTimeout = Duration(seconds: 3);
   static const _scanWarmupDuration = Duration(milliseconds: 700);
+  static const _cameraRestartIdleDelay = Duration(seconds: 4);
+  static const _cameraRestartCooldown = Duration(seconds: 8);
 
   late final BarcodeScanValidator _validator = BarcodeScanValidator(
     profile: widget.profile,
@@ -57,15 +59,18 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   bool _hasDeliveredBarcode = false;
   bool _isDisposing = false;
   Timer? _secondaryDecodeTimer;
+  Timer? _cameraHealthTimer;
   int _hintIndex = 0;
   Timer? _hintTimer;
   Uint8List? _latestFrameBytes;
   Size? _layoutSize;
+  bool _cameraRestartInFlight = false;
+  DateTime? _lastCameraRestartAt;
+  bool _torchOn = false;
+  double _zoom = 0;
 
-  bool get _useStockWebHints =>
-      kIsWeb &&
-      widget.profile.usesRobust1dPipeline &&
-      _awaitingConfirmValue == null;
+  bool get _useGuidanceHints =>
+      widget.profile.usesRobust1dPipeline && _awaitingConfirmValue == null;
 
   @override
   void initState() {
@@ -77,6 +82,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
         : now.add(_scanWarmupDuration);
     _startHintRotation();
     _scheduleSecondaryDecode();
+    _scheduleCameraHealthCheck();
   }
 
   @override
@@ -84,6 +90,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     super.didUpdateWidget(oldWidget);
     if (!widget.enabled && oldWidget.enabled) {
       _stopSecondaryDecode();
+      _stopCameraHealthCheck();
       _resetScanState();
     }
     if (widget.enabled && !oldWidget.enabled) {
@@ -92,6 +99,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
       _hasDeliveredBarcode = false;
       _resetScanState();
       _scheduleSecondaryDecode();
+      _scheduleCameraHealthCheck();
       _startHintRotation();
     }
     if (widget.profile != oldWidget.profile) {
@@ -103,6 +111,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   void dispose() {
     _isDisposing = true;
     _secondaryDecodeTimer?.cancel();
+    _cameraHealthTimer?.cancel();
     _hintTimer?.cancel();
     super.dispose();
   }
@@ -129,13 +138,12 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
 
   void _startHintRotation() {
     _hintTimer?.cancel();
-    if (!_useStockWebHints) return;
+    if (!_useGuidanceHints) return;
 
     _hintTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || _awaitingConfirmValue != null) return;
       setState(() {
-        _hintIndex =
-            (_hintIndex + 1) % widget.profile.webScanHints.length;
+        _hintIndex = (_hintIndex + 1) % widget.profile.scanGuidanceHints.length;
       });
     });
   }
@@ -146,6 +154,18 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
 
     _secondaryDecodeTimer = Timer.periodic(_secondaryDecodeInterval, (_) {
       unawaited(_maybeRunSecondaryDecode());
+    });
+  }
+
+  void _stopCameraHealthCheck() {
+    _cameraHealthTimer?.cancel();
+    _cameraHealthTimer = null;
+  }
+
+  void _scheduleCameraHealthCheck() {
+    _stopCameraHealthCheck();
+    _cameraHealthTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_maybeRestartCamera());
     });
   }
 
@@ -162,6 +182,45 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     final lastDetect = _lastSuccessfulDetectAt;
     final idleSince = lastDetect ?? startedAt;
     return DateTime.now().difference(idleSince) >= _secondaryDecodeIdleDelay;
+  }
+
+  Future<void> _maybeRestartCamera() async {
+    if (!_canAcceptScans ||
+        _isWarmingUp ||
+        _cameraRestartInFlight ||
+        _awaitingConfirmValue != null ||
+        _secondaryDecodeInFlight) {
+      return;
+    }
+
+    final startedAt = _scanSessionStartedAt;
+    if (startedAt == null) return;
+
+    final lastDetect = _lastSuccessfulDetectAt;
+    final idleSince = lastDetect ?? startedAt;
+    if (DateTime.now().difference(idleSince) < _cameraRestartIdleDelay) {
+      return;
+    }
+
+    final lastRestart = _lastCameraRestartAt;
+    if (lastRestart != null &&
+        DateTime.now().difference(lastRestart) < _cameraRestartCooldown) {
+      return;
+    }
+
+    _cameraRestartInFlight = true;
+    _lastCameraRestartAt = DateTime.now();
+    try {
+      await widget.controller.stop();
+      if (!_canAcceptScans) return;
+      await widget.controller.start();
+      _scanSessionStartedAt = DateTime.now();
+      _lastSuccessfulDetectAt = null;
+    } catch (_) {
+      // Keep scanning flow alive even if restart is not supported on device.
+    } finally {
+      _cameraRestartInFlight = false;
+    }
   }
 
   void _resetScanState() {
@@ -371,10 +430,6 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
       return _confirmSourceLabel ?? 'Confirm the barcode below.';
     }
 
-    if (_useStockWebHints) {
-      return widget.profile.webScanHints[_hintIndex];
-    }
-
     final pending = _validator.pendingValue;
     final progress = _validator.consecutiveCount;
     final required = _validator.requiredConsecutiveReads;
@@ -384,6 +439,10 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     }
     if (pending != null && progress >= required) {
       return 'Barcode detected';
+    }
+
+    if (_useGuidanceHints) {
+      return widget.profile.scanGuidanceHints[_hintIndex];
     }
 
     return widget.hintText;
@@ -424,6 +483,11 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
               onDetect: (capture) => _handleDetect(capture, layoutSize),
             ),
             Positioned(
+              top: 10,
+              right: 10,
+              child: _buildCameraControls(colorScheme),
+            ),
+            Positioned(
               left: 12,
               right: 12,
               bottom: 12,
@@ -442,6 +506,63 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
         );
       },
     );
+  }
+
+  Widget _buildCameraControls(ColorScheme colorScheme) {
+    if (kIsWeb) return const SizedBox.shrink();
+
+    return Card(
+      margin: EdgeInsets.zero,
+      color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.94),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Zoom out',
+              onPressed: _cameraRestartInFlight
+                  ? null
+                  : () => unawaited(_adjustZoom(-0.12)),
+              icon: const Icon(Icons.zoom_out_rounded),
+            ),
+            IconButton(
+              tooltip: 'Zoom in',
+              onPressed: _cameraRestartInFlight
+                  ? null
+                  : () => unawaited(_adjustZoom(0.12)),
+              icon: const Icon(Icons.zoom_in_rounded),
+            ),
+            IconButton(
+              tooltip: _torchOn ? 'Turn flash off' : 'Turn flash on',
+              onPressed: _cameraRestartInFlight
+                  ? null
+                  : () => unawaited(_toggleTorch()),
+              icon: Icon(
+                _torchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _adjustZoom(double delta) async {
+    final next = (_zoom + delta).clamp(0.0, 1.0);
+    try {
+      await widget.controller.setZoomScale(next);
+      if (!mounted) return;
+      setState(() => _zoom = next);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleTorch() async {
+    try {
+      await widget.controller.toggleTorch();
+      if (!mounted) return;
+      setState(() => _torchOn = !_torchOn);
+    } catch (_) {}
   }
 
   Widget _buildBottomPanel(ThemeData theme, ColorScheme colorScheme) {

@@ -69,8 +69,8 @@ class BarcodeScanProfile {
     scanWindowCenterYFactor: 0.58,
     detectionSpeed: DetectionSpeed.unrestricted,
     detectionTimeoutMs: 300,
-    enableSecondaryDecode: false,
-    returnImage: false,
+    enableSecondaryDecode: true,
+    returnImage: true,
   );
 
   static BarcodeScanProfile get stockEntry {
@@ -85,8 +85,8 @@ class BarcodeScanProfile {
       scanWindowCenterYFactor: 0.58,
       detectionSpeed: DetectionSpeed.unrestricted,
       detectionTimeoutMs: kIsWeb ? 400 : 300,
-      enableSecondaryDecode: false,
-      returnImage: false,
+      enableSecondaryDecode: true,
+      returnImage: true,
     );
   }
 
@@ -97,10 +97,10 @@ class BarcodeScanProfile {
       kind == BarcodeScanProfileKind.billing ||
       kind == BarcodeScanProfileKind.stockEntry;
 
-  List<String> get webScanHints => const [
-        'Horizontal or vertical barcode — any angle works',
-        'Tilt the label to remove glare',
-        'Move closer until the barcode fills the frame',
+  List<String> get scanGuidanceHints => const [
+        'Move farther if bars look blurred',
+        'Move closer if bars look very small',
+        'Tilt label to remove glare / reflection',
         'Hold steady for about one second',
       ];
 }

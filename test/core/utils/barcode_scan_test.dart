@@ -15,7 +15,8 @@ void main() {
       expect(profile.minBarcodeHeightRatio, 0.0);
       expect(profile.detectionSpeed, DetectionSpeed.unrestricted);
       expect(profile.detectionTimeoutMs, 300);
-      expect(profile.enableSecondaryDecode, isFalse);
+      expect(profile.enableSecondaryDecode, isTrue);
+      expect(profile.returnImage, isTrue);
       expect(profile.usesRobust1dPipeline, isTrue);
     });
 
@@ -48,6 +49,8 @@ void main() {
       ]));
       expect(profile.formats, isNot(contains(BarcodeFormat.qrCode)));
       expect(profile.requiredConsecutiveReads, 2);
+      expect(profile.enableSecondaryDecode, isTrue);
+      expect(profile.returnImage, isTrue);
       expect(profile.usesRobust1dPipeline, isTrue);
     });
 

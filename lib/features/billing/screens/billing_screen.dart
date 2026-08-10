@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/utils/barcode_scan_validator.dart';
+import '../../../core/widgets/barcode_scanner_view.dart';
 import '../services/billing_service.dart';
 import '../models/billing_models.dart';
 import '../providers/billing_provider.dart';
@@ -32,13 +34,15 @@ class BillingScreen extends StatefulWidget {
 }
 
 class _BillingScreenState extends State<BillingScreen> {
-  final MobileScannerController _scannerController = MobileScannerController();
+  final MobileScannerController _scannerController =
+      createBarcodeScannerController(
+    autoStart: true,
+    profile: BarcodeScanProfile.billing,
+  );
   final BillingService _billingService = BillingService();
 
   late final Future<List<BillingQrConfig>> _qrConfigsFuture;
 
-  String? _lastBarcode;
-  DateTime? _lastBarcodeAt;
   bool _handlingBarcode = false;
 
   @override
@@ -62,7 +66,11 @@ class _BillingScreenState extends State<BillingScreen> {
 
   Future<void> _handleBarcode(String barcode) async {
     if (_handlingBarcode) return;
-    _handlingBarcode = true;
+    if (mounted) {
+      setState(() => _handlingBarcode = true);
+    } else {
+      _handlingBarcode = true;
+    }
 
     try {
       final product = _findProductByBarcode(barcode);
@@ -78,7 +86,11 @@ class _BillingScreenState extends State<BillingScreen> {
     } finally {
       // Small cooldown to avoid rapid repeats from the camera.
       await Future<void>.delayed(const Duration(milliseconds: 400));
-      _handlingBarcode = false;
+      if (mounted) {
+        setState(() => _handlingBarcode = false);
+      } else {
+        _handlingBarcode = false;
+      }
     }
   }
 
@@ -557,6 +569,7 @@ class _BillingScreenState extends State<BillingScreen> {
 
   @override
   void dispose() {
+    unawaited(_scannerController.stop());
     _scannerController.dispose();
     super.dispose();
   }
@@ -667,29 +680,13 @@ class _BillingScreenState extends State<BillingScreen> {
                   children: [
                     AspectRatio(
                       aspectRatio: 16 / 9,
-                      child: MobileScanner(
+                      child: BarcodeScannerView(
                         controller: _scannerController,
-                        fit: BoxFit.cover,
-                        onDetect: (capture) {
-                          final barcodes = capture.barcodes;
-                          if (barcodes.isEmpty) return;
-
-                          final raw = barcodes.first.rawValue;
-                          final value = raw?.trim();
-                          if (value == null || value.isEmpty) return;
-
-                          final now = DateTime.now();
-                          final last = _lastBarcodeAt;
-                          final same = _lastBarcode == value;
-                          final tooSoon =
-                              last != null &&
-                              now.difference(last) <
-                                  const Duration(milliseconds: 1200);
-                          if (same && tooSoon) return;
-
-                          _lastBarcode = value;
-                          _lastBarcodeAt = now;
-
+                        profile: BarcodeScanProfile.billing,
+                        enabled: !_handlingBarcode,
+                        hintText:
+                            'Align barcode in frame, use zoom/flash if needed',
+                        onBarcodeConfirmed: (value) {
                           unawaited(_handleBarcode(value));
                         },
                       ),
@@ -710,11 +707,18 @@ class _BillingScreenState extends State<BillingScreen> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Keep scanning products one by one. The bill updates automatically.',
+                                'Keep scanning products one by one. Or add manually if barcode is damaged.',
                                 style: theme.textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: _handlingBarcode
+                                  ? null
+                                  : () => unawaited(_addUnknownProduct()),
+                              child: const Text('Manual add'),
                             ),
                           ],
                         ),
