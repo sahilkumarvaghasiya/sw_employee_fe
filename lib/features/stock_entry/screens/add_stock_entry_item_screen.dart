@@ -186,6 +186,18 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
     return lines;
   }
 
+  /// Sell price printed on the barcode label. A single barcode can cover
+  /// several variants, so distinct prices are listed together.
+  String? _buildBarcodeLabelPrice() {
+    final prices = <String>{};
+    for (final entry in _entries) {
+      if (entry.sellUnit <= 0) continue;
+      prices.add('₹${_formatPriceValue(entry.sellUnit)}');
+    }
+    if (prices.isEmpty) return null;
+    return prices.join(' / ');
+  }
+
   String _normalizeOptionKey(String raw) =>
       raw.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
@@ -1143,6 +1155,7 @@ class _AddStockEntryItemScreenState extends State<AddStockEntryItemScreen> {
             barcode: finalBarcode,
             barcodeUrl: _barcodeUrl,
             headerLines: _buildBarcodeHeaderLines(),
+            price: _buildBarcodeLabelPrice(),
           ),
         );
       } catch (e) {

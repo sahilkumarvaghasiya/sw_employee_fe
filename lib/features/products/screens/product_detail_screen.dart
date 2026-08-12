@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -11,6 +10,7 @@ import '../../../core/printing/pdf_printer_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_surface_card.dart';
 import '../../../core/widgets/barcode_action_buttons.dart';
+import '../../../core/widgets/barcode_label_preview.dart';
 import '../../../core/utils/barcode_saver.dart';
 import '../../../core/utils/inr_format.dart';
 import '../../billing/widgets/billing_ui.dart';
@@ -77,18 +77,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  List<String> _labelSubtitleLines() {
+    final product = widget.product;
+
+    return <String>[
+      if (product.companyName.isNotEmpty) product.companyName,
+      if (product.size.isNotEmpty) 'Size: ${product.size}',
+      if (product.color.isNotEmpty) 'Colour: ${product.color}',
+    ];
+  }
+
+  String _labelPrice() => formatInr(widget.product.price, decimalDigits: 2);
+
   BarcodeLabelData _buildLabelData() {
     final product = widget.product;
 
     return BarcodeLabelData(
       itemName: product.name,
       barcode: product.barcode,
-      price: formatInr(product.price, decimalDigits: 2),
-      subtitleLines: <String>[
-        if (product.companyName.isNotEmpty) product.companyName,
-        if (product.size.isNotEmpty) 'Size: ${product.size}',
-        if (product.color.isNotEmpty) 'Colour: ${product.color}',
-      ],
+      price: _labelPrice(),
+      subtitleLines: _labelSubtitleLines(),
     );
   }
 
@@ -220,21 +228,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 const SizedBox(height: 12),
                 RepaintBoundary(
                   key: _barcodeBoundaryKey,
-                  child: BarcodeWidget(
-                    barcode: Barcode.code128(),
-                    data: product.barcode,
-                    drawText: true,
-                    color: colorScheme.onSurface,
-                    backgroundColor: Colors.transparent,
-                    errorBuilder: (context, error) {
-                      return Text(
-                        'Invalid barcode',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: colorScheme.error,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      );
-                    },
+                  child: BarcodeLabelPreview(
+                    barcode: product.barcode,
+                    headerLines: <String>[
+                      product.name,
+                      ..._labelSubtitleLines(),
+                    ],
+                    price: _labelPrice(),
                   ),
                 ),
                 const SizedBox(height: 12),
