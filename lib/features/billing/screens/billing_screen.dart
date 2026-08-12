@@ -1,9 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/scanner/web_scan_pump.dart';
+import '../../../core/utils/barcode_scan_validator.dart';
+import '../../../core/utils/web_camera_tuner.dart';
+import '../../../core/widgets/scan_camera_controls.dart';
 import '../services/billing_service.dart';
 import '../models/billing_models.dart';
 import '../providers/billing_provider.dart';
@@ -32,7 +37,11 @@ class BillingScreen extends StatefulWidget {
 }
 
 class _BillingScreenState extends State<BillingScreen> {
-  final MobileScannerController _scannerController = MobileScannerController();
+  // Restricted to the shared 1D profile: hang tags often carry a 2D code next
+  // to the product barcode, and an unrestricted controller happily returns that
+  // one instead.
+  final MobileScannerController _scannerController =
+      createBarcodeScannerController(autoStart: true);
   final BillingService _billingService = BillingService();
 
   late final Future<List<BillingQrConfig>> _qrConfigsFuture;
@@ -40,11 +49,47 @@ class _BillingScreenState extends State<BillingScreen> {
   String? _lastBarcode;
   DateTime? _lastBarcodeAt;
   bool _handlingBarcode = false;
+  WebCameraTuning _cameraTuning = const WebCameraTuning.unavailable();
+  WebScanPump? _webScanPump;
 
   @override
   void initState() {
     super.initState();
     _qrConfigsFuture = _billingService.fetchQrPaymentConfigs();
+    unawaited(_tuneCamera());
+
+    if (kIsWeb && kUseWebScanPump) {
+      // No scan window is set: this preview has no green frame, so the whole
+      // frame stays in play rather than silently ignoring barcodes at the edge.
+      _webScanPump = WebScanPump(onBarcode: _acceptBarcode)..start();
+    }
+  }
+
+  /// Shared by the plugin's detector and the web decode pump: drops repeats of
+  /// the same code within the debounce window so one tag is not billed twice.
+  void _acceptBarcode(String raw) {
+    final value = normalizeStockBarcodeValue(raw);
+    if (value.isEmpty || isSuspiciousStockBarcodeMisread(value)) return;
+
+    final now = DateTime.now();
+    final last = _lastBarcodeAt;
+    final tooSoon =
+        last != null &&
+        now.difference(last) < const Duration(milliseconds: 1200);
+    if (_lastBarcode == value && tooSoon) return;
+
+    _lastBarcode = value;
+    _lastBarcodeAt = now;
+
+    unawaited(_handleBarcode(value));
+  }
+
+  /// Web only: the plugin opens the camera at the browser's 640x480 default,
+  /// which cannot carry a small hang-tag barcode. See [tuneWebCameraForScanning].
+  Future<void> _tuneCamera() async {
+    final tuning = await tuneWebCameraForScanning();
+    if (!mounted) return;
+    setState(() => _cameraTuning = tuning);
   }
 
   void _showSnack(String message) {
@@ -558,6 +603,8 @@ class _BillingScreenState extends State<BillingScreen> {
   @override
   void dispose() {
     _scannerController.dispose();
+    _webScanPump?.dispose();
+    releaseWebCameraTuner();
     super.dispose();
   }
 
@@ -671,29 +718,21 @@ class _BillingScreenState extends State<BillingScreen> {
                         controller: _scannerController,
                         fit: BoxFit.cover,
                         onDetect: (capture) {
-                          final barcodes = capture.barcodes;
-                          if (barcodes.isEmpty) return;
-
-                          final raw = barcodes.first.rawValue;
-                          final value = raw?.trim();
+                          final value = capture.barcodes.firstOrNull?.rawValue
+                              ?.trim();
                           if (value == null || value.isEmpty) return;
 
-                          final now = DateTime.now();
-                          final last = _lastBarcodeAt;
-                          final same = _lastBarcode == value;
-                          final tooSoon =
-                              last != null &&
-                              now.difference(last) <
-                                  const Duration(milliseconds: 1200);
-                          if (same && tooSoon) return;
-
-                          _lastBarcode = value;
-                          _lastBarcodeAt = now;
-
-                          unawaited(_handleBarcode(value));
+                          _acceptBarcode(value);
                         },
                       ),
                     ),
+                    if (_cameraTuning.hasControls)
+                      Positioned(
+                        left: 12,
+                        right: 12,
+                        top: 12,
+                        child: ScanCameraControls(tuning: _cameraTuning),
+                      ),
                     Positioned(
                       left: 12,
                       right: 12,
