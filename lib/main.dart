@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
 import 'core/navigation/app_lifecycle_manager.dart';
@@ -15,6 +17,14 @@ import 'features/stock_alerts/providers/stock_alerts_provider.dart';
 import 'features/stock_entry/providers/stock_entry_provider.dart';
 
 void main() {
+  if (kIsWeb) {
+    // mobile_scanner fetches its ZXing decoder from unpkg.com at runtime, so a
+    // slow or blocked CDN silently breaks scanning. Serve our own copy instead.
+    MobileScannerPlatform.instance.setBarcodeLibraryScriptUrl(
+      'js/zxing.min.js',
+    );
+  }
+
   runApp(
     MultiProvider(
       providers: [

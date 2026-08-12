@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../../core/scanner/web_scan_pump.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/barcode_scan_validator.dart';
+import '../../../core/utils/web_camera_tuner.dart';
+import '../../../core/widgets/scan_camera_controls.dart';
 
 /// Stock-entry barcode scanner. Uses [mobile_scanner] with a scan frame so
 /// detection focuses on the barcode inside the green rectangle.
@@ -46,19 +49,36 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
   double _zoom = 0;
   String? _lastShownPending;
   int _lastShownProgress = 0;
+  WebCameraTuning _cameraTuning = const WebCameraTuning.unavailable();
+  WebScanPump? _webScanPump;
 
   @override
   void initState() {
     super.initState();
     unawaited(_controller.start());
+    unawaited(_tuneCamera());
+
+    if (kIsWeb && kUseWebScanPump) {
+      _webScanPump = WebScanPump(onBarcode: _onPumpBarcode)..start();
+    }
   }
 
   @override
   void dispose() {
     unawaited(_controller.dispose());
+    _webScanPump?.dispose();
+    releaseWebCameraTuner();
     _manualController.dispose();
     _manualFocus.dispose();
     super.dispose();
+  }
+
+  /// Web only: the plugin opens the camera at the browser's 640x480 default,
+  /// which cannot carry a small hang-tag barcode. See [tuneWebCameraForScanning].
+  Future<void> _tuneCamera() async {
+    final tuning = await tuneWebCameraForScanning();
+    if (!mounted) return;
+    setState(() => _cameraTuning = tuning);
   }
 
   Future<void> _closeWithValue(String value) async {
@@ -119,6 +139,27 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
 
     _lastShownPending = pending;
     _lastShownProgress = progress;
+    if (mounted) setState(() {});
+  }
+
+  /// Web decode path. The value already comes from a 1D-only decoder, so it
+  /// only needs the shared normalisation and the garbage-read filter before
+  /// going through the same two-reads-agree validator as the native path.
+  void _onPumpBarcode(String raw) {
+    if (_isClosing) return;
+
+    final normalized = normalizeStockBarcodeValue(raw);
+    if (normalized.isEmpty || isSuspiciousStockBarcodeMisread(normalized)) {
+      return;
+    }
+
+    final accepted = _validator.registerRead(normalized);
+    if (accepted != null) {
+      _webScanPump?.setEnabled(false);
+      unawaited(_closeWithValue(accepted));
+      return;
+    }
+
     if (mounted) setState(() {});
   }
 
@@ -204,6 +245,7 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
                 final layoutSize = constraints.biggest;
                 final scanWindow =
                     computeBarcodeScanWindow(layoutSize, _profile);
+                _webScanPump?.setScanWindow(scanWindow, layoutSize);
 
                 return Stack(
                   fit: StackFit.expand,
@@ -244,6 +286,13 @@ class _StockBarcodeScannerScreenState extends State<StockBarcodeScannerScreen> {
                         size: layoutSize,
                       ),
                     ),
+                    if (_cameraTuning.hasControls)
+                      Positioned(
+                        left: 12,
+                        right: 12,
+                        top: 12,
+                        child: ScanCameraControls(tuning: _cameraTuning),
+                      ),
                     Positioned(
                       left: 12,
                       right: 12,

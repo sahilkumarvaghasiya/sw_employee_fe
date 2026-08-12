@@ -4,11 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../scanner/web_scan_pump.dart';
 import '../theme/app_colors.dart';
 import '../utils/barcode_frame_capture.dart';
 import '../utils/barcode_frame_decoder.dart';
 import '../utils/barcode_label_text_reader.dart';
 import '../utils/barcode_scan_validator.dart';
+import '../utils/web_camera_tuner.dart';
+import 'scan_camera_controls.dart';
 
 /// Reusable camera scanner with focus window and stable-read validation.
 class BarcodeScannerView extends StatefulWidget {
@@ -61,6 +64,8 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
   Timer? _hintTimer;
   Uint8List? _latestFrameBytes;
   Size? _layoutSize;
+  WebCameraTuning _cameraTuning = const WebCameraTuning.unavailable();
+  WebScanPump? _webScanPump;
 
   bool get _useStockWebHints =>
       kIsWeb &&
@@ -77,11 +82,55 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
         : now.add(_scanWarmupDuration);
     _startHintRotation();
     _scheduleSecondaryDecode();
+    unawaited(_tuneCamera());
+    _startWebScanPump();
+  }
+
+  /// Layers a real decoder over the plugin's preview on web. See [WebScanPump].
+  void _startWebScanPump() {
+    if (!kIsWeb || !kUseWebScanPump) return;
+
+    _webScanPump = WebScanPump(onBarcode: _handlePumpBarcode)
+      ..setEnabled(widget.enabled)
+      ..start();
+  }
+
+  void _handlePumpBarcode(String raw) {
+    if (!_canAcceptScans || _isWarmingUp) return;
+
+    final normalized = normalizeStockBarcodeValue(raw);
+    // The pump only ever runs 1D symbologies, so trust the payload but still
+    // reject the classic scanner hallucinations (12345678 and friends).
+    if (normalized.isEmpty || isSuspiciousStockBarcodeMisread(normalized)) {
+      return;
+    }
+
+    _lastSuccessfulDetectAt = DateTime.now();
+    final accepted = _validator.registerRead(normalized);
+    if (accepted == null) {
+      if (mounted) setState(() {});
+      return;
+    }
+
+    _presentCandidate(accepted, fromPrintedText: false);
+  }
+
+  /// On web the scanner plugin opens the camera at the browser's 640x480
+  /// default, which is too coarse to decode a small hang-tag barcode. Force a
+  /// 1080p stream with continuous autofocus, and surface zoom/torch where the
+  /// browser exposes them. No-op on native.
+  Future<void> _tuneCamera() async {
+    final tuning = await tuneWebCameraForScanning();
+    if (!mounted || _isDisposing) return;
+    setState(() => _cameraTuning = tuning);
   }
 
   @override
   void didUpdateWidget(covariant BarcodeScannerView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.enabled != oldWidget.enabled) {
+      _webScanPump?.setEnabled(widget.enabled);
+    }
     if (!widget.enabled && oldWidget.enabled) {
       _stopSecondaryDecode();
       _resetScanState();
@@ -104,6 +153,8 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
     _isDisposing = true;
     _secondaryDecodeTimer?.cancel();
     _hintTimer?.cancel();
+    _webScanPump?.dispose();
+    releaseWebCameraTuner();
     super.dispose();
   }
 
@@ -193,6 +244,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
 
     _hasDeliveredBarcode = true;
     _stopSecondaryDecode();
+    _webScanPump?.setEnabled(false);
     _secondaryDecodeInFlight = false;
 
     widget.onBarcodeConfirmed(value);
@@ -399,6 +451,7 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
         final layoutSize = constraints.biggest;
         _layoutSize = layoutSize;
         final scanWindow = computeBarcodeScanWindow(layoutSize, widget.profile);
+        _webScanPump?.setScanWindow(scanWindow, layoutSize);
 
         return Stack(
           fit: StackFit.expand,
@@ -423,6 +476,13 @@ class _BarcodeScannerViewState extends State<BarcodeScannerView> {
               },
               onDetect: (capture) => _handleDetect(capture, layoutSize),
             ),
+            if (_cameraTuning.hasControls)
+              Positioned(
+                left: 12,
+                right: 12,
+                top: 12,
+                child: ScanCameraControls(tuning: _cameraTuning),
+              ),
             Positioned(
               left: 12,
               right: 12,

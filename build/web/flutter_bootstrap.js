@@ -33,38 +33,73 @@ addEventListener("message", eventListener);
 if (!window._flutter) {
   window._flutter = {};
 }
-_flutter.buildConfig = {"engineRevision":"e4b8dca3f1b4ede4c30371002441c88c12187ed6","builds":[{"compileTarget":"dart2js","renderer":"canvaskit","mainJsPath":"main.dart.js"},{}]};
+_flutter.buildConfig = {"engineRevision":"e4b8dca3f1b4ede4c30371002441c88c12187ed6","builds":[{"compileTarget":"dart2js","renderer":"canvaskit","mainJsPath":"main.dart.js"}]};
 
 
-// Clear stale PWA caches / service workers before bootstrapping.
-// Fixes iOS home-screen apps stuck on old Flutter builds after deploy.
+// Do not register a service worker. Flutter re-registers only when one already
+// exists, which traps previously-installed iOS PWAs on old cached builds.
 (async function bootstrapRetailPilot() {
+  var reloadFlag = 'rp_sw_cleanup_reload';
+
   async function clearStaleWebCache() {
     try {
       if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((key) => caches.delete(key)));
+        var keys = await caches.keys();
+        await Promise.all(keys.map(function (key) { return caches.delete(key); }));
       }
-    } catch (e) {
-      console.warn('Failed to clear Cache Storage:', e);
-    }
+    } catch (_) {}
 
     try {
       if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map((registration) => registration.unregister()));
+        var registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(
+          registrations.map(function (registration) {
+            return registration.unregister();
+          }),
+        );
       }
-    } catch (e) {
-      console.warn('Failed to unregister service workers:', e);
-    }
+    } catch (_) {}
   }
+
+  function hardReloadOnce() {
+    try {
+      if (sessionStorage.getItem(reloadFlag) === '1') {
+        sessionStorage.removeItem(reloadFlag);
+        return false;
+      }
+      sessionStorage.setItem(reloadFlag, '1');
+    } catch (_) {}
+
+    try {
+      var url = new URL(window.location.href);
+      url.searchParams.set('_swclear', String(Date.now()));
+      window.location.replace(url.toString());
+    } catch (_) {
+      window.location.reload();
+    }
+    return true;
+  }
+
+  var hadController = false;
+  try {
+    hadController = !!(
+      navigator.serviceWorker && navigator.serviceWorker.controller
+    );
+  } catch (_) {}
 
   await clearStaleWebCache();
 
-  // Do not pass serviceWorkerSettings — avoid re-registering any worker.
+  if (hadController && hardReloadOnce()) {
+    return;
+  }
+
+  try {
+    sessionStorage.removeItem(reloadFlag);
+  } catch (_) {}
+
   _flutter.loader.load({
     onEntrypointLoaded: async function (engineInitializer) {
-      const appRunner = await engineInitializer.initializeEngine();
+      var appRunner = await engineInitializer.initializeEngine();
       await appRunner.runApp();
     },
   });
