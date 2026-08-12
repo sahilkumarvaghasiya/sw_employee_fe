@@ -1,14 +1,11 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/scanner/web_scan_pump.dart';
 import '../../../core/utils/barcode_scan_validator.dart';
-import '../../../core/utils/web_camera_tuner.dart';
-import '../../../core/widgets/scan_camera_controls.dart';
+import '../../../core/widgets/barcode_scanner_view.dart';
 import '../services/billing_service.dart';
 import '../models/billing_models.dart';
 import '../providers/billing_provider.dart';
@@ -49,24 +46,15 @@ class _BillingScreenState extends State<BillingScreen> {
   String? _lastBarcode;
   DateTime? _lastBarcodeAt;
   bool _handlingBarcode = false;
-  WebCameraTuning _cameraTuning = const WebCameraTuning.unavailable();
-  WebScanPump? _webScanPump;
 
   @override
   void initState() {
     super.initState();
     _qrConfigsFuture = _billingService.fetchQrPaymentConfigs();
-    unawaited(_tuneCamera());
-
-    if (kIsWeb && kUseWebScanPump) {
-      // No scan window is set: this preview has no green frame, so the whole
-      // frame stays in play rather than silently ignoring barcodes at the edge.
-      _webScanPump = WebScanPump(onBarcode: _acceptBarcode)..start();
-    }
   }
 
-  /// Shared by the plugin's detector and the web decode pump: drops repeats of
-  /// the same code within the debounce window so one tag is not billed twice.
+  /// Drops repeats of the same code within the debounce window so one tag is
+  /// not billed twice.
   void _acceptBarcode(String raw) {
     final value = normalizeStockBarcodeValue(raw);
     if (value.isEmpty || isSuspiciousStockBarcodeMisread(value)) return;
@@ -84,14 +72,6 @@ class _BillingScreenState extends State<BillingScreen> {
     unawaited(_handleBarcode(value));
   }
 
-  /// Web only: the plugin opens the camera at the browser's 640x480 default,
-  /// which cannot carry a small hang-tag barcode. See [tuneWebCameraForScanning].
-  Future<void> _tuneCamera() async {
-    final tuning = await tuneWebCameraForScanning();
-    if (!mounted) return;
-    setState(() => _cameraTuning = tuning);
-  }
-
   void _showSnack(String message) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
@@ -107,7 +87,9 @@ class _BillingScreenState extends State<BillingScreen> {
 
   Future<void> _handleBarcode(String barcode) async {
     if (_handlingBarcode) return;
-    _handlingBarcode = true;
+    // Drives BarcodeScannerView's `enabled`: scanning pauses while the item
+    // sheet is open, then re-arms for the next product.
+    setState(() => _handlingBarcode = true);
 
     try {
       final product = _findProductByBarcode(barcode);
@@ -123,7 +105,11 @@ class _BillingScreenState extends State<BillingScreen> {
     } finally {
       // Small cooldown to avoid rapid repeats from the camera.
       await Future<void>.delayed(const Duration(milliseconds: 400));
-      _handlingBarcode = false;
+      if (mounted) {
+        setState(() => _handlingBarcode = false);
+      } else {
+        _handlingBarcode = false;
+      }
     }
   }
 
@@ -603,8 +589,6 @@ class _BillingScreenState extends State<BillingScreen> {
   @override
   void dispose() {
     _scannerController.dispose();
-    _webScanPump?.dispose();
-    releaseWebCameraTuner();
     super.dispose();
   }
 
@@ -710,56 +694,19 @@ class _BillingScreenState extends State<BillingScreen> {
                   borderRadius: BorderRadius.circular(22),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: MobileScanner(
-                        controller: _scannerController,
-                        fit: BoxFit.cover,
-                        onDetect: (capture) {
-                          final value = capture.barcodes.firstOrNull?.rawValue
-                              ?.trim();
-                          if (value == null || value.isEmpty) return;
-
-                          _acceptBarcode(value);
-                        },
-                      ),
-                    ),
-                    if (_cameraTuning.hasControls)
-                      Positioned(
-                        left: 12,
-                        right: 12,
-                        top: 12,
-                        child: ScanCameraControls(tuning: _cameraTuning),
-                      ),
-                    Positioned(
-                      left: 12,
-                      right: 12,
-                      bottom: 12,
-                      child: Container(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerLow.withAlpha(235),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.qr_code_scanner),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Keep scanning products one by one. The bill updates automatically.',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                // Same scan pipeline as stock entry: green frame, frames
+                // cropped to it before decoding, and two matching reads before
+                // an item is accepted onto the bill.
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: BarcodeScannerView(
+                    controller: _scannerController,
+                    profile: BarcodeScanProfile.billing,
+                    enabled: !_handlingBarcode,
+                    hintText:
+                        'Align barcode bars in the green frame — keep scanning one by one',
+                    onBarcodeConfirmed: _acceptBarcode,
+                  ),
                 ),
               ),
             ),
