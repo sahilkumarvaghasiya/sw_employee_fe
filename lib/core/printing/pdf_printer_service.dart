@@ -14,7 +14,7 @@ class PdfPrinterService implements PrinterService {
   @override
   Future<void> printBarcodeLabel({
     required BarcodeLabelData data,
-    BarcodeLabelLayout layout = const BarcodeLabelLayout(),
+    BarcodeLabelLayout layout = BarcodeLabelLayout.label50x38,
     String jobName = 'barcode_label',
   }) async {
     final pdf = _builder.buildDocument(data: data, layout: layout);

@@ -9,9 +9,13 @@ class BarcodeLabelBuilder {
 
   pw.Document buildDocument({
     required BarcodeLabelData data,
-    BarcodeLabelLayout layout = const BarcodeLabelLayout(),
+    BarcodeLabelLayout layout = BarcodeLabelLayout.label50x38,
   }) {
     final document = pw.Document();
+    final subtitleLines = layout.mergeSubtitleIntoName
+        ? const <String>[]
+        : data.cappedSubtitleLines(layout.maxSubtitleLines);
+    final name = layout.mergeSubtitleIntoName ? data.mergedName : data.itemName;
 
     document.addPage(
       pw.Page(
@@ -30,36 +34,37 @@ class BarcodeLabelBuilder {
                   crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                   children: [
                     pw.Text(
-                      data.itemName,
-                      maxLines: 2,
+                      name,
+                      maxLines: layout.nameMaxLines,
                       textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
-                        fontSize: 12,
+                        fontSize: layout.nameFontSize,
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
-                    if (data.subtitleLines.isNotEmpty) ...[
+                    if (subtitleLines.isNotEmpty) ...[
                       pw.SizedBox(height: 2),
-                      ...data.subtitleLines.map(
+                      ...subtitleLines.map(
                         (line) => pw.Padding(
                           padding: const pw.EdgeInsets.only(bottom: 1),
                           child: pw.Text(
                             line,
                             textAlign: pw.TextAlign.center,
                             maxLines: 1,
-                            style: const pw.TextStyle(fontSize: 7),
+                            style: pw.TextStyle(
+                              fontSize: layout.subtitleFontSize,
+                            ),
                           ),
                         ),
                       ),
                     ],
-                    if (data.price != null &&
-                        data.price!.trim().isNotEmpty) ...[
+                    if (data.hasPrice) ...[
                       pw.SizedBox(height: 2),
                       pw.Text(
-                        'Price: ${data.price}',
+                        'Price: ${data.trimmedPrice}',
                         textAlign: pw.TextAlign.center,
                         style: pw.TextStyle(
-                          fontSize: 8,
+                          fontSize: layout.priceFontSize,
                           fontWeight: pw.FontWeight.bold,
                         ),
                       ),
@@ -79,7 +84,7 @@ class BarcodeLabelBuilder {
                     pw.Text(
                       data.barcode,
                       textAlign: pw.TextAlign.center,
-                      style: const pw.TextStyle(fontSize: 8),
+                      style: pw.TextStyle(fontSize: layout.codeFontSize),
                     ),
                   ],
                 ),

@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_surface_card.dart';
 import '../../../core/widgets/barcode_action_buttons.dart';
 import '../../../core/widgets/barcode_label_preview.dart';
+import '../../../core/widgets/label_size_selector.dart';
 import '../../../core/utils/barcode_saver.dart';
 import '../../../core/utils/inr_format.dart';
 import '../../billing/widgets/billing_ui.dart';
@@ -29,8 +30,11 @@ class ProductDetailScreen extends StatefulWidget {
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final GlobalKey _barcodeBoundaryKey = GlobalKey();
   final PdfPrinterService _printerService = PdfPrinterService();
+  BarcodeLabelSize _labelSize = BarcodeLabelSize.mm50x38;
   bool _isDownloading = false;
   bool _isPrinting = false;
+
+  BarcodeLabelLayout get _layout => BarcodeLabelLayout.forSize(_labelSize);
 
   String _safeFileName(String input) {
     final cleaned = input.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
@@ -107,7 +111,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     try {
       await _printerService.printBarcodeLabel(
         data: _buildLabelData(),
-        layout: const BarcodeLabelLayout(),
+        layout: _layout,
         jobName: 'barcode_${_safeFileName(widget.product.barcode)}',
       );
     } catch (e) {
@@ -226,15 +230,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                LabelSizeSelector(
+                  onChanged: (size) {
+                    if (!mounted || size == _labelSize) return;
+                    setState(() => _labelSize = size);
+                  },
+                ),
+                const SizedBox(height: 12),
                 RepaintBoundary(
                   key: _barcodeBoundaryKey,
                   child: BarcodeLabelPreview(
-                    barcode: product.barcode,
-                    headerLines: <String>[
-                      product.name,
-                      ..._labelSubtitleLines(),
-                    ],
-                    price: _labelPrice(),
+                    data: _buildLabelData(),
+                    layout: _layout,
                   ),
                 ),
                 const SizedBox(height: 12),

@@ -9,6 +9,7 @@ import '../../../core/printing/barcode_label_layout.dart';
 import '../../../core/printing/pdf_printer_service.dart';
 import '../../../core/widgets/barcode_action_buttons.dart';
 import '../../../core/widgets/barcode_label_preview.dart';
+import '../../../core/widgets/label_size_selector.dart';
 import '../../../core/utils/barcode_saver.dart';
 
 class BarcodePreviewScreen extends StatefulWidget {
@@ -51,8 +52,11 @@ class BarcodePreviewScreen extends StatefulWidget {
 class _BarcodePreviewScreenState extends State<BarcodePreviewScreen> {
   final GlobalKey _barcodeBoundaryKey = GlobalKey();
   final PdfPrinterService _printerService = PdfPrinterService();
+  BarcodeLabelSize _labelSize = BarcodeLabelSize.mm50x38;
   bool _isDownloading = false;
   bool _isPrinting = false;
+
+  BarcodeLabelLayout get _layout => BarcodeLabelLayout.forSize(_labelSize);
 
   String _safeFileName(String input) {
     final cleaned = input.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
@@ -123,7 +127,7 @@ class _BarcodePreviewScreenState extends State<BarcodePreviewScreen> {
     try {
       await _printerService.printBarcodeLabel(
         data: _buildLabelData(),
-        layout: const BarcodeLabelLayout(),
+        layout: _layout,
         jobName: 'barcode_${_safeFileName(widget.barcode)}',
       );
     } catch (e) {
@@ -167,13 +171,19 @@ class _BarcodePreviewScreenState extends State<BarcodePreviewScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
+                  LabelSizeSelector(
+                    onChanged: (size) {
+                      if (!mounted || size == _labelSize) return;
+                      setState(() => _labelSize = size);
+                    },
+                  ),
+                  const SizedBox(height: 14),
                   RepaintBoundary(
                     key: _barcodeBoundaryKey,
                     child: BarcodeLabelPreview(
-                      barcode: widget.barcode,
+                      data: _buildLabelData(),
+                      layout: _layout,
                       barcodeUrl: widget.barcodeUrl,
-                      headerLines: widget.headerLines,
-                      price: widget.price,
                     ),
                   ),
                   const SizedBox(height: 14),
