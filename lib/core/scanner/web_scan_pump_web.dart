@@ -13,13 +13,23 @@ import 'web_scan_pump.dart';
 /// the preview smooth while still feeling instant to a user holding a tag.
 const Duration _pumpInterval = Duration(milliseconds: 90);
 
-/// Pad the scan window before cropping — users rarely centre the barcode
-/// exactly, and a barcode clipped at the edge decodes as nothing.
-const double _cropPadding = 0.28;
+/// Horizontal slack around the scan window. 1D symbologies need a quiet zone
+/// past the last bar, so a crop flush with the barcode decodes as nothing.
+const double _cropPaddingX = 0.12;
 
-/// Upper bound on the crop we hand the decoder. Bigger costs time without
-/// adding pixels per bar, since the crop is already magnified.
-const int _maxCropWidth = 1600;
+/// Vertical slack. Deliberately generous: a barcode of length L held at angle
+/// θ spans L·sin θ vertically, and hang-tag barcodes are long and only a
+/// centimetre tall, so a tilted one leaves a short crop almost immediately.
+const double _cropPaddingY = 0.45;
+
+/// Floor on crop height as a fraction of its width. Without this the crop stays
+/// a letterbox and clips the ends off any tilted barcode — which is the whole
+/// reason tilted tags failed.
+const double _minCropAspect = 0.55;
+
+/// Hard ceiling on the canvas we build, so a pathological layout cannot hand
+/// the decoder an enormous image.
+const int _maxCanvasSide = 3000;
 
 /// BarcodeDetector's names for the 1D symbologies in
 /// `BarcodeScanProfile.stockEntry1dFormats`. 2D formats are deliberately
@@ -55,6 +65,9 @@ class WebScanPumpImpl implements WebScanPump {
   bool _busy = false;
   bool _enabled = true;
   bool _disposed = false;
+  int _tickCount = 0;
+  int _ladderIndex = 0;
+  int? _preferredRotation;
 
   Rect? _scanWindow;
   Size _previewSize = Size.zero;
@@ -103,12 +116,25 @@ class WebScanPumpImpl implements WebScanPump {
       final decoder = _decoder ??= await (_decoderSetup ??= _createDecoder());
       if (decoder == null || _disposed) return;
 
-      final canvas = _captureFrame();
+      final rotation = _nextRotation(decoder.rotationLadder);
+
+      // The full-frame sweep exists to catch a barcode held outside the green
+      // box — an aiming problem, not an angle one — so only spend ticks on it
+      // while we are already scanning upright.
+      final fullFrame = rotation == 0 && _tickCount % 4 == 3;
+      _tickCount++;
+
+      final canvas = _captureFrame(
+        fullFrame: fullFrame,
+        rotationDegrees: rotation,
+        maxWidth: decoder.maxSourceWidth,
+      );
       if (canvas == null || _disposed) return;
 
       final value = await decoder.decode(canvas);
       if (value == null || value.isEmpty || _disposed || !_enabled) return;
 
+      _preferredRotation = rotation;
       onBarcode(value);
     } on Object {
       // Frames without a barcode are the common case, and a transient canvas or
@@ -118,13 +144,65 @@ class WebScanPumpImpl implements WebScanPump {
     }
   }
 
+  /// Angle to un-rotate the frame by before decoding.
+  ///
+  /// ZXing scans axis-aligned lines. `tryRotate` buys it 90°, and a 1D symbol
+  /// reads the same reversed so 180° is free — but a tag held anywhere between
+  /// roughly 15° and 75° decodes as nothing however sharp the image is. Sweeping
+  /// a few angles closes that gap, verified across 0-180°.
+  ///
+  /// The angle that last worked is retried on alternate ticks, so a steady hand
+  /// gets its second confirming read straight away instead of waiting for the
+  /// sweep to come round again.
+  int _nextRotation(List<int> ladder) {
+    if (ladder.length <= 1) return 0;
+
+    final preferred = _preferredRotation;
+    if (preferred != null && _tickCount.isEven) return preferred;
+
+    final angle = ladder[_ladderIndex % ladder.length];
+    _ladderIndex++;
+    return angle;
+  }
+
+  /// Squares up a crop around its centre.
+  ///
+  /// Rotating a letterbox crop about its centre swings the ends of a long
+  /// barcode straight out of frame, which would defeat the whole point.
+  Rect _squareAround(Rect crop, Size videoSize) {
+    final side = math.min(
+      math.max(crop.width, crop.height),
+      math.min(videoSize.width, videoSize.height),
+    );
+    final square = Rect.fromCenter(
+      center: crop.center,
+      width: side,
+      height: side,
+    );
+
+    // Slide it back inside the frame rather than shrinking it, so the side
+    // length — and with it the resolution — is preserved.
+    var dx = 0.0;
+    var dy = 0.0;
+    if (square.left < 0) dx = -square.left;
+    if (square.right > videoSize.width) dx = videoSize.width - square.right;
+    if (square.top < 0) dy = -square.top;
+    if (square.bottom > videoSize.height) dy = videoSize.height - square.bottom;
+
+    return square.shift(Offset(dx, dy));
+  }
+
   /// Draws the scan window region of the preview into a reusable canvas,
   /// magnifying it when the crop is small.
   ///
   /// Cropping is what makes the green frame meaningful: it raises the pixels
   /// per bar the decoder sees and removes the size chart, price and address
   /// text from the image entirely.
-  web.HTMLCanvasElement? _captureFrame() {
+  web.HTMLCanvasElement? _captureFrame({
+    required bool fullFrame,
+    required int rotationDegrees,
+    required int maxWidth,
+  }) {
     final video = findLiveScannerVideo();
     if (video == null) return null;
 
@@ -132,32 +210,60 @@ class WebScanPumpImpl implements WebScanPump {
     final videoHeight = video.videoHeight;
     if (videoWidth <= 0 || videoHeight <= 0) return null;
 
-    final crop = _cropInVideoPixels(
-      Size(videoWidth.toDouble(), videoHeight.toDouble()),
-    );
+    final videoSize = Size(videoWidth.toDouble(), videoHeight.toDouble());
+    var crop = fullFrame
+        ? Rect.fromLTWH(0, 0, videoSize.width, videoSize.height)
+        : _cropInVideoPixels(videoSize);
 
-    final scale = math.min(
-      2.0,
-      _maxCropWidth / math.max(crop.width, 1),
-    ).clamp(1.0, 2.0);
-    final targetWidth = (crop.width * scale).round().clamp(16, _maxCropWidth);
-    final targetHeight = (crop.height * scale).round().clamp(16, _maxCropWidth);
+    if (rotationDegrees != 0) {
+      crop = _squareAround(crop, videoSize);
+    }
+
+    // Magnify the crop, but never upscale a full frame — that spends decode
+    // time on pixels carrying no extra detail.
+    final fit = maxWidth / math.max(crop.width, 1);
+    final scale = fullFrame ? math.min(1.0, fit) : fit.clamp(1.0, 4.0);
+
+    final targetWidth = (crop.width * scale).round().clamp(16, _maxCanvasSide);
+    final targetHeight = (crop.height * scale).round().clamp(16, _maxCanvasSide);
 
     final canvas = _ensureCanvas(targetWidth, targetHeight);
     final context = _context;
     if (context == null) return null;
 
+    if (rotationDegrees == 0) {
+      context.drawImage(
+        video,
+        crop.left,
+        crop.top,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        targetWidth,
+        targetHeight,
+      );
+      return canvas;
+    }
+
+    context.save();
+    // Corners left bare by the rotation must read as quiet zone, not as bars.
+    context.fillStyle = '#ffffff'.toJS;
+    context.fillRect(0, 0, targetWidth.toDouble(), targetHeight.toDouble());
+    context.translate(targetWidth / 2, targetHeight / 2);
+    context.rotate(-rotationDegrees * math.pi / 180);
     context.drawImage(
       video,
       crop.left,
       crop.top,
       crop.width,
       crop.height,
-      0,
-      0,
+      -targetWidth / 2,
+      -targetHeight / 2,
       targetWidth,
       targetHeight,
     );
+    context.restore();
 
     return canvas;
   }
@@ -192,7 +298,17 @@ class WebScanPumpImpl implements WebScanPump {
       (window.bottom - offsetY) / scale,
     );
 
-    final padded = raw.inflate(math.max(raw.width, raw.height) * _cropPadding);
+    // Pad each axis by a fraction of *that* axis. Inflating by the longest side
+    // (as this used to) blows a wide, short window up to the whole frame and
+    // silently cancels the crop.
+    final padded = Rect.fromCenter(
+      center: raw.center,
+      width: raw.width * (1 + 2 * _cropPaddingX),
+      height: math.max(
+        raw.height * (1 + 2 * _cropPaddingY),
+        raw.width * _minCropAspect,
+      ),
+    );
     final clamped = padded.intersect(full);
 
     // A degenerate window (mid-layout) must not produce an empty crop.
@@ -229,6 +345,16 @@ class WebScanPumpImpl implements WebScanPump {
 }
 
 abstract class _Decoder {
+  /// Widest source image worth building for this decoder. More pixels per bar
+  /// is what rescues tilted and small barcodes, but the two tiers pay very
+  /// different prices for it.
+  int get maxSourceWidth;
+
+  /// Angles to sweep looking for a tilted barcode. A single `[0]` means the
+  /// decoder finds rotated symbols by itself and sweeping would only waste
+  /// ticks.
+  List<int> get rotationLadder;
+
   Future<String?> decode(web.HTMLCanvasElement canvas);
   void dispose();
 }
@@ -247,6 +373,16 @@ class _BarcodeDetectorDecoder implements _Decoder {
   _BarcodeDetectorDecoder._(this._detector);
 
   final _JsBarcodeDetector _detector;
+
+  /// The canvas goes straight to native code with no pixel readback, so a
+  /// larger source is close to free here.
+  @override
+  int get maxSourceWidth => 2400;
+
+  /// ML Kit locates and rectifies a barcode at any angle, so sweeping would
+  /// only slow the common upright case down.
+  @override
+  List<int> get rotationLadder => const [0];
 
   static Future<_BarcodeDetectorDecoder?> tryCreate() async {
     // Absent on every browser on iOS, since WebKit does not implement it.
@@ -310,6 +446,18 @@ class _WasmWorkerDecoder implements _Decoder {
   final Map<int, Completer<String?>> _pending = {};
   int _nextId = 0;
   bool _disposed = false;
+
+  /// Every frame is read back via getImageData and transferred to the worker,
+  /// so the source size is paid for in RGBA bytes each tick. 1600 keeps that
+  /// near 6 MB rather than the ~13 MB a 2400-wide frame would cost.
+  @override
+  int get maxSourceWidth => 1600;
+
+  /// Measured against ZXing-C++ itself: upright reads pass, 90° and 180° pass,
+  /// and everything in between fails until the frame is un-rotated first. These
+  /// rungs recover the whole 0-180° range.
+  @override
+  List<int> get rotationLadder => const [0, 20, -20, 40, -40, 60, -60];
 
   static Future<_WasmWorkerDecoder?> tryCreate() async {
     try {
