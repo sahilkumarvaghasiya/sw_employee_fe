@@ -2,6 +2,7 @@ import 'package:barcode/barcode.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'barcode_label_data.dart';
+import 'barcode_label_fonts.dart';
 import 'barcode_label_layout.dart';
 
 class BarcodeLabelBuilder {
@@ -10,8 +11,9 @@ class BarcodeLabelBuilder {
   pw.Document buildDocument({
     required BarcodeLabelData data,
     BarcodeLabelLayout layout = BarcodeLabelLayout.label50x38,
+    BarcodeLabelFonts? fonts,
   }) {
-    final document = pw.Document();
+    final document = pw.Document(theme: fonts?.theme);
     final subtitleLines = layout.mergeSubtitleIntoName
         ? const <String>[]
         : data.cappedSubtitleLines(layout.maxSubtitleLines);

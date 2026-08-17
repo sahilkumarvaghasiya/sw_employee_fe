@@ -93,6 +93,9 @@ flutter:
 
   assets:
     - assets/branding/
+    # Loaded as raw TTFs by the PDF label builder, not registered as Flutter
+    # fonts: the built-in PDF fonts have no rupee glyph and print ₹ as a box.
+    - assets/fonts/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

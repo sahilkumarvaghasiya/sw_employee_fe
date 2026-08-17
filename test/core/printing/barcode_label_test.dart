@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
 
 import 'package:sw_billing_employee_fe/core/printing/barcode_label_builder.dart';
 import 'package:sw_billing_employee_fe/core/printing/barcode_label_data.dart';
+import 'package:sw_billing_employee_fe/core/printing/barcode_label_fonts.dart';
 import 'package:sw_billing_employee_fe/core/printing/barcode_label_layout.dart';
 import 'package:sw_billing_employee_fe/core/widgets/barcode_label_preview.dart';
 
@@ -62,6 +65,35 @@ void main() {
         expect(document.document.pdfPageList.pages, hasLength(1));
       });
     }
+
+    testWidgets('embeds a font that carries the rupee glyph', (tester) async {
+      final fonts = await BarcodeLabelFonts.load();
+      expect(
+        fonts,
+        isNotNull,
+        reason: 'Roboto must be bundled or ₹ prints as a box',
+      );
+
+      // The built-in PDF fonts are WinAnsi and have no ₹ at all. Assert the
+      // bundled font actually maps U+20B9 rather than trusting the filename.
+      const rupee = 0x20B9;
+      for (final asset in <String>[
+        'assets/fonts/Roboto-Regular.ttf',
+        'assets/fonts/Roboto-Bold.ttf',
+      ]) {
+        final parser = TtfParser(await rootBundle.load(asset));
+        expect(
+          parser.charToGlyphIndexMap.containsKey(rupee),
+          isTrue,
+          reason: '$asset has no glyph for ₹ (U+20B9)',
+        );
+      }
+
+      final bytes = await const BarcodeLabelBuilder()
+          .buildDocument(data: _worstCase, fonts: fonts)
+          .save();
+      expect(bytes, isNotEmpty);
+    });
   });
 
   group('BarcodeLabelPreview', () {
