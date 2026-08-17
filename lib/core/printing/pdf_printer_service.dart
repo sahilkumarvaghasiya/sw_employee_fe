@@ -2,6 +2,7 @@ import 'package:printing/printing.dart';
 
 import 'barcode_label_builder.dart';
 import 'barcode_label_data.dart';
+import 'barcode_label_fonts.dart';
 import 'barcode_label_layout.dart';
 import 'printer_service.dart';
 
@@ -17,7 +18,11 @@ class PdfPrinterService implements PrinterService {
     BarcodeLabelLayout layout = BarcodeLabelLayout.label50x38,
     String jobName = 'barcode_label',
   }) async {
-    final pdf = _builder.buildDocument(data: data, layout: layout);
+    final pdf = _builder.buildDocument(
+      data: data,
+      layout: layout,
+      fonts: await BarcodeLabelFonts.load(),
+    );
 
     await Printing.layoutPdf(
       name: jobName,
